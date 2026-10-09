@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ActivityIndicator, FlatList, TouchableOpacity } from "react-native";
-import { router } from "expo-router";
+import { useState, useEffect, useCallback } from "react";
+import { View, Text, StyleSheet, ActivityIndicator, FlatList, TouchableOpacity, Alert, Pressable } from "react-native";
+import { router, useFocusEffect } from "expo-router";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from "../lib/supabase";
-import { getPendingCount, processOutbox, isOnline, getRoomsCache, getUnitsCache, getStaysCache, cacheRooms, cacheUnits, cacheStays } from "../lib/offline";
+import { getPendingCount, processOutbox, isOnline, getRoomsCache, getUnitsCache, getStaysCache, cacheRooms, cacheUnits, cacheStays, saveToOutbox, updateLocalUnitStatus } from "../lib/offline";
+import { useStaff } from "../lib/staff-context";
 
 export default function HomeScreen() {
+  const { activeStaff, logoutStaff } = useStaff();
   // FIX: Added propertyId state here to prevent the crash!
   const [propertyId, setPropertyId] = useState<string | null>(null);
   const [propertyName, setPropertyName] = useState<string>("");
@@ -13,12 +16,56 @@ export default function HomeScreen() {
   const [activeShiftCash, setActiveShiftCash] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
+  const [dutyStartTime, setDutyStartTime] = useState<string | null>(null);
 
-  useEffect(() => { loadDashboard(); }, []);
+  useEffect(() => {
+    let isMounted = true;
+    if (activeStaff?.attendanceId) {
+      // Fetch the clock_in time
+      supabase
+        .from('staff_attendance')
+        .select('clock_in')
+        .eq('id', activeStaff.attendanceId)
+        .single()
+        .then(({ data }) => {
+          if (isMounted && data?.clock_in) {
+            setDutyStartTime(data.clock_in);
+          }
+        });
+    }
+    return () => {
+      isMounted = false;
+      setDutyStartTime(null);
+    };
+  }, [activeStaff?.attendanceId]);
 
-  async function loadDashboard() {
+  const switchStaff = async () => {
+    Alert.alert(
+      "End Shift & Lock Desk",
+      "This will clock you out and lock the screen for the next staff member. Continue?",
+      [
+        { text: "Cancel" },
+        {
+          text: "Lock",
+          onPress: async () => {
+            // Clock out the current staff member
+            if (activeStaff?.attendanceId) {
+              await supabase
+                .from('staff_attendance')
+                .update({ clock_out: new Date().toISOString() })
+                .eq('id', activeStaff.attendanceId);
+            }
+
+            await logoutStaff();
+            router.replace('/staff-login');
+          }
+        }
+      ]
+    );
+  };
+
+  function loadDashboardFromCache() {
     try {
-      // 1. INSTANT LOAD FROM LOCAL CACHE
       const localRooms = getRoomsCache();
       const localUnits = getUnitsCache();
       const localStays = getStaysCache();
@@ -29,19 +76,28 @@ export default function HomeScreen() {
         let status = 'free';
         if (localOccupiedIds.includes(u.id)) status = 'occupied';
         else if (u.housekeeping_status === 'dirty') status = 'dirty';
+        else if (u.housekeeping_status === 'maintenance') status = 'maintenance';
         return { id: u.id, label: `${room?.label || 'Room'} - ${u.label}`, status };
       });
       setRooms(localGrid);
       setActiveGuests(localStays.length);
+      setPendingCount(getPendingCount());
+    } catch (e) {
+      console.error("Error loading cache", e);
+    }
+  }
 
-      // 2. CHECK IF ONLINE
+  async function loadDashboard() {
+    try {
+      // 1. CHECK IF ONLINE
       const online = await isOnline();
       if (!online) {
+        loadDashboardFromCache();
         setPendingCount(getPendingCount());
         return;
       }
 
-      // 3. FETCH FRESH DATA
+      // 2. FETCH FRESH DATA
       const { data: { user } } = await supabase.auth.getUser();
       const { data: memberData } = await supabase.from('members').select('property_id').eq('user_id', user?.id).single();
       if (!memberData) { router.replace("/setup-property"); return; }
@@ -60,22 +116,13 @@ export default function HomeScreen() {
         .eq('property_id', memberData.property_id)
         .eq('status', 'checked_in');
 
-      // 4. UPDATE CACHE
+      // 3. UPDATE CACHE
       if (roomsData) cacheRooms(roomsData);
       if (unitsData) cacheUnits(unitsData);
       if (activeStays) cacheStays(activeStays);
 
-      const occupiedUnitIds = activeStays?.map((s:any) => s.unit_id) || [];
-      const formattedGrid = (unitsData || []).map((u:any) => {
-        const room = roomsData?.find((r:any) => r.id === u.room_id);
-        let status = 'free';
-        if (occupiedUnitIds.includes(u.id)) status = 'occupied';
-        else if (u.housekeeping_status === 'dirty') status = 'dirty';
-        return { id: u.id, label: `${room?.label || 'Room'} - ${u.label}`, status };
-      });
-
-      setRooms(formattedGrid);
-      setActiveGuests(activeStays?.length || 0);
+      // Render updated data from local cache
+      loadDashboardFromCache();
 
       // Fetch shift cash
       const { data: shiftData } = await supabase
@@ -86,7 +133,7 @@ export default function HomeScreen() {
         .single();
       setActiveShiftCash(shiftData ? shiftData.opening_cash : null);
 
-      // 5. SYNC OUTBOX
+      // 4. SYNC OUTBOX
       processOutbox();
       setPendingCount(getPendingCount());
 
@@ -94,6 +141,62 @@ export default function HomeScreen() {
       console.error("Error loading dashboard", error);
     } finally {
       setLoading(false);
+    }
+  }
+
+  useFocusEffect(
+    useCallback(() => {
+      const loadSmart = async () => {
+        // 1. ALWAYS load from local SQLite cache first for instant render
+        loadDashboardFromCache();
+        const localRooms = getRoomsCache();
+        if (localRooms && localRooms.length > 0) {
+          setLoading(false);
+        }
+        
+        // 2. Check if we need to fetch from Supabase
+        const lastFetch = await AsyncStorage.getItem('home_last_fetch');
+        const now = Date.now();
+        const isStale = !lastFetch || now - parseInt(lastFetch) > 60000; // 60 seconds
+
+        if ((await isOnline()) && isStale) {
+          await loadDashboard(); // This fetches from Supabase and updates cache
+          await AsyncStorage.setItem('home_last_fetch', now.toString());
+        } else {
+          setLoading(false);
+        }
+      };
+      
+      loadSmart();
+    }, [])
+  );
+
+  async function markClean(unitId: string) {
+    try {
+      if (await isOnline()) {
+        const { error } = await supabase.rpc('mark_unit_clean', { 
+          p_unit_id: unitId, 
+          p_staff_id: activeStaff?.id 
+        });
+          
+        if (error) {
+          Alert.alert('Error', 'Could not mark bed clean.');
+          return;
+        }
+      } else {
+        // Offline: Queue it (Update payload to include staff_id)
+        await saveToOutbox('mark_clean', { 
+          unit_id: unitId,
+          staff_id: activeStaff?.id 
+        });
+        // Optimistic UI: Update local cache so bed turns green instantly
+        await updateLocalUnitStatus(unitId, 'clean');
+      }
+
+      // Refresh the home screen UI to show the green bed
+      loadDashboard();
+    } catch (e) {
+      console.error("Failed to mark clean", e);
     }
   }
 
@@ -106,16 +209,43 @@ export default function HomeScreen() {
     return <View style={styles.container}><ActivityIndicator size="large" color="#2563eb" /></View>;
   }
 
-  const renderRoomItem = ({ item }: any) => (
-    <View style={[
-      styles.roomCard, 
-      item.status === 'occupied' && styles.roomOccupied,
-      item.status === 'dirty' && styles.roomDirty
-    ]}>
-      <Text style={styles.roomLabel}>{item.label}</Text>
-      <Text style={styles.roomStatus}>{item.status.toUpperCase()}</Text>
-    </View>
-  );
+  const renderRoomItem = ({ item }: any) => {
+    const isDirty = item.status === 'dirty';
+    const isMaintenance = item.status === 'maintenance';
+
+    return (
+      <Pressable 
+        key={item.id} 
+        style={[
+          styles.roomCard, 
+          item.status === 'occupied' && styles.roomOccupied,
+          isDirty && styles.roomDirty,
+          isMaintenance && styles.roomMaintenance
+        ]}
+        onPress={() => router.push(`/room/${item.id}`)}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={styles.roomLabel}>{item.label}</Text>
+          <Text style={styles.roomStatus}>{item.status.toUpperCase()}</Text>
+        </View>
+
+        {isDirty && (
+          <TouchableOpacity 
+            style={styles.quickCleanBtn}
+            onPress={(e) => {
+              e.stopPropagation?.();
+              markClean(item.id);
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.quickCleanText}>Quick Clean</Text>
+          </TouchableOpacity>
+        )}
+
+        <Text style={styles.viewRoomArrow}>›</Text>
+      </Pressable>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -133,6 +263,22 @@ export default function HomeScreen() {
               <Text style={styles.propertyName}>Property: {propertyName}</Text>
             </View>
 
+            {/* Staff On Duty Header */}
+            <View style={styles.staffHeader}>
+              <View>
+                <Text style={styles.dutyLabel}>ON DUTY</Text>
+                <Text style={styles.dutyName}>{activeStaff?.name || 'Unknown'}</Text>
+                {dutyStartTime && (
+                  <Text style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
+                    Since {new Date(dutyStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                )}
+              </View>
+              <Pressable onPress={switchStaff} style={styles.switchBtn}>
+                <Text style={styles.switchText}>Switch Staff</Text>
+              </Pressable>
+            </View>
+
             {pendingCount > 0 && (
               <View style={styles.syncBadge}>
                 <Text style={styles.syncText}>⚠️ {pendingCount} record(s) pending sync</Text>
@@ -141,10 +287,13 @@ export default function HomeScreen() {
 
             {/* Stats Cards */}
             <View style={styles.statsContainer}>
-              <View style={[styles.statCard, { borderLeftColor: "#059669" }]}>
+              <Pressable 
+                style={[styles.statCard, { borderLeftColor: "#059669" }]} 
+                onPress={() => router.push('/guests')}
+              >
                 <Text style={styles.statNumber}>{activeGuests}</Text>
-                <Text style={styles.statLabel}>Active Guests</Text>
-              </View>
+                <Text style={styles.statLabel}>Guests In House</Text>
+              </Pressable>
               <View style={[styles.statCard, { borderLeftColor: "#2563eb" }]}>
                 <Text style={styles.statNumber}>{rooms.length}</Text>
                 <Text style={styles.statLabel}>Rooms Total</Text>
@@ -169,6 +318,13 @@ export default function HomeScreen() {
                   <Text style={styles.actionEmoji}>🚪</Text>
                 </View>
                 <Text style={styles.actionText}>Check-Out</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.actionItem} onPress={() => router.push("/guests")}>
+                <View style={[styles.actionCircle, { backgroundColor: "#0891b2" }]}>
+                  <Text style={styles.actionEmoji}>👥</Text>
+                </View>
+                <Text style={styles.actionText}>Guests</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.actionItem} onPress={() => router.push("/shift")}>
@@ -250,11 +406,22 @@ const styles = StyleSheet.create({
   roomCard: { backgroundColor: "white", padding: 15, borderRadius: 10, marginHorizontal: 20, marginBottom: 10, flexDirection: "row", justifyContent: "space-between", alignItems: "center", shadowColor: "#000", shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   roomOccupied: { backgroundColor: "#fee2e2", borderLeftColor: "#ef4444", borderLeftWidth: 4 },
   roomDirty: { backgroundColor: "#fef3c7", borderLeftColor: "#f59e0b", borderLeftWidth: 4 },
+  roomMaintenance: { backgroundColor: "#fef2f2", borderLeftColor: "#dc2626", borderLeftWidth: 4 },
+  quickCleanBtn: { backgroundColor: '#fef3c7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, marginRight: 8, borderWidth: 1, borderColor: '#fde68a' },
+  quickCleanText: { fontSize: 11, color: '#b45309', fontWeight: 'bold' },
+  viewRoomArrow: { fontSize: 20, color: '#9ca3af', fontWeight: 'bold' },
   roomLabel: { fontSize: 16, fontWeight: "600", color: "#1f2937" },
   roomStatus: { fontSize: 12, fontWeight: "bold", color: "#6b7280" },
   emptyText: { textAlign: "center", color: "#9ca3af", marginTop: 20, fontSize: 16 },
 
   // Logout
   logoutButton: { position: "absolute", bottom: 20, right: 20, backgroundColor: "#ef4444", paddingVertical: 12, paddingHorizontal: 25, borderRadius: 30, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 4, elevation: 5 },
-  logoutText: { color: "white", fontWeight: "bold", fontSize: 16 }
+  logoutText: { color: "white", fontWeight: "bold", fontSize: 16 },
+
+  // Staff Header
+  staffHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, marginHorizontal: 20, backgroundColor: '#fff', padding: 16, borderRadius: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  dutyLabel: { fontSize: 11, color: '#64748b', fontWeight: 'bold' },
+  dutyName: { fontSize: 18, fontWeight: 'bold' },
+  switchBtn: { backgroundColor: '#eff6ff', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+  switchText: { color: '#2563eb', fontWeight: 'bold' }
 });

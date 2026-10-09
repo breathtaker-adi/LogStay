@@ -1,8 +1,12 @@
 import { useState, useEffect } from "react";
 import { View, Text, TextInput, Button, StyleSheet, Alert, FlatList } from "react-native";
+import * as Crypto from 'expo-crypto';
 import { supabase } from "../lib/supabase";
+import { isOnline, saveToOutbox } from "../lib/offline";
+import { useStaff } from "../lib/staff-context";
 
 export default function ShiftScreen() {
+  const { activeStaff } = useStaff();
   const [activeShift, setActiveShift] = useState<any | null>(null);
   const [entries, setEntries] = useState<any[]>([]);
   const [pastShifts, setPastShifts] = useState<any[]>([]);
@@ -70,14 +74,45 @@ export default function ShiftScreen() {
       const { data: memberData } = await supabase.from('members').select('property_id').eq('user_id', user?.id).single();
       if (!memberData) throw new Error("Property not found");
 
-      const { data: newShift, error } = await supabase
-        .from('shifts')
-        .insert([{ property_id: memberData.property_id, opened_by: user?.id, opening_cash: parseFloat(openingCash), status: 'open' }])
-        .select().single();
+      const shiftId = Crypto.randomUUID();
+      const userId = user?.id;
+      const propertyId = memberData.property_id;
+      const amount = parseFloat(openingCash);
 
-      if (error) throw error;
-      setActiveShift(newShift);
+      if (await isOnline()) {
+        const { data, error } = await supabase
+          .from('shifts')
+          .insert({ id: shiftId, property_id: propertyId, opened_by: userId, opening_cash: amount, status: 'open' })
+          .select().single();
+          
+        if (error) { Alert.alert('Error', error.message); return; }
+        setActiveShift(data);
+      } else {
+        await saveToOutbox('shift_open', { 
+          shift_id: shiftId, 
+          property_id: propertyId, 
+          user_id: userId, 
+          opening_cash: amount 
+        });
+        
+        // Optimistic UI: Set local state so the screen updates
+        setActiveShift({ 
+          id: shiftId, 
+          property_id: propertyId, 
+          opened_by: userId, 
+          opening_cash: amount, 
+          status: 'open', 
+          counted_cash: null, 
+          closed_by: null, 
+          closed_at: null, 
+          co_signed: false, 
+          created_at: new Date().toISOString() 
+        });
+      }
+
       setOpeningCash("");
+      Alert.alert('Shift Opened', 'Cash drawer is now active.');
+      fetchShiftData();
     } catch (error: any) {
       Alert.alert("Error", error.message);
     }
@@ -87,21 +122,46 @@ export default function ShiftScreen() {
     if (!pettyAmount) return Alert.alert("Missing Info", "Please enter amount.");
 
     try {
-      const { data: newEntry, error } = await supabase
-        .from('cash_entries')
-        .insert([{ shift_id: activeShift.id, kind: 'petty', amount: parseFloat(pettyAmount), note: pettyNote }])
-        .select().single();
+      const entryId = Crypto.randomUUID();
+      const amount = parseFloat(pettyAmount);
+      const note = pettyNote;
 
-      if (error) throw error;
-      setEntries([...entries, newEntry]);
+      if (await isOnline()) {
+        const { data: newEntry, error } = await supabase
+          .from('cash_entries')
+          .insert({ id: entryId, shift_id: activeShift.id, kind: 'petty', amount, note, staff_id: activeStaff?.id })
+          .select().single();
+          
+        if (error) { Alert.alert('Error', error.message); return; }
+        setEntries([...entries, newEntry || { id: entryId, shift_id: activeShift.id, kind: 'petty', amount, note, staff_id: activeStaff?.id, created_at: new Date().toISOString() }]);
+      } else {
+        await saveToOutbox('petty_cash', { 
+          entry_id: entryId, 
+          shift_id: activeShift.id, 
+          amount, 
+          note,
+          staff_id: activeStaff?.id
+        });
+        
+        // Optimistic UI: Add to local entries array
+        setEntries([...entries, { id: entryId, shift_id: activeShift.id, kind: 'petty', amount, note, staff_id: activeStaff?.id, created_at: new Date().toISOString() }]);
+      }
+
       setPettyAmount("");
       setPettyNote("");
+      Alert.alert('Petty Cash Logged', 'Expense recorded.');
     } catch (error: any) {
       Alert.alert("Error", error.message);
     }
   }
 
   async function closeShift() {
+    // At the very beginning of closeShift():
+    if (!(await isOnline())) {
+      Alert.alert('Internet Required', "You must be online to verify the co-signer's PIN and close the shift.");
+      return;
+    }
+
     if (!countedCash || !coSignPin) {
       return Alert.alert("Missing Info", "Please enter counted cash and incoming staff PIN.");
     }
@@ -154,8 +214,12 @@ export default function ShiftScreen() {
   }
 
   // Calculate expected cash
-  const totalPetty = entries.reduce((sum, e) => sum + e.amount, 0);
-  const expectedCash = activeShift ? (activeShift.opening_cash - totalPetty) : 0;
+  const collections = entries.filter(e => e.kind === 'collection').reduce((sum, e) => sum + Number(e.amount), 0);
+  const petty = entries.filter(e => e.kind === 'petty').reduce((sum, e) => sum + Number(e.amount), 0);
+  const refunds = entries.filter(e => e.kind === 'refund').reduce((sum, e) => sum + Number(e.amount), 0);
+
+  const totalPetty = petty;
+  const expectedCash = activeShift ? (Number(activeShift.opening_cash) + collections - petty - refunds) : 0;
 
   if (loading) {
     return <View style={styles.container}><Text>Loading...</Text></View>;

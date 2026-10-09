@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from "react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router } from "expo-router";
 import { supabase } from "../lib/supabase";
+import { isOnline, saveToOutbox, removeStayFromCache, updateLocalUnitStatus } from "../lib/offline";
 
 export default function CheckoutScreen() {
   const [activeStays, setActiveStays] = useState<any[]>([]);
@@ -41,19 +42,30 @@ export default function CheckoutScreen() {
           text: "Check-Out",
           style: "destructive",
           onPress: async () => {
-            // Call the Atomic Database Function
-            const { error: rpcError } = await supabase.rpc('check_out_guest', {
-              p_stay_id: stayId,
-              p_unit_id: unitId
-            });
+            try {
+              if (await isOnline()) {
+                const { error: rpcError } = await supabase.rpc('check_out_guest', {
+                  p_stay_id: stayId
+                });
 
-            if (rpcError) {
-              Alert.alert("Error", rpcError.message);
-            } else {
-              Alert.alert("Success", "Guest checked out. Bed marked as DIRTY.");
+                if (rpcError) {
+                  Alert.alert("Checkout Failed", rpcError.message);
+                  return;
+                }
+              } else {
+                // Offline: Queue it
+                await saveToOutbox('guest_checkout', { stay_id: stayId });
+                // Optimistic UI: Remove from local cache so bed grid updates instantly
+                await removeStayFromCache(stayId);
+                await updateLocalUnitStatus(unitId, 'dirty');
+              }
+
+              Alert.alert("Checked Out", "Guest has been checked out successfully.");
+              fetchActiveStays(); // Refresh list
+              router.replace('/home');
+            } catch (error: any) {
+              Alert.alert("Error", error.message || "Checkout failed");
             }
-            
-            fetchActiveStays(); // Refresh list
           }
         }
       ]

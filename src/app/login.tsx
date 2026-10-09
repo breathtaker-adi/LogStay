@@ -19,7 +19,7 @@ export default function LoginScreen() {
       Alert.alert("Error", error.message);
     } else {
       // Go to home screen
-      router.replace("/home");
+      router.replace("/staff-login");
     }
     setLoading(false);
   }

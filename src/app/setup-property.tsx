@@ -67,7 +67,7 @@ export default function SetupPropertyScreen() {
         Alert.alert("Success", "Joined property successfully!");
       }
       
-      router.replace("/home");
+      router.replace("/staff-login");
     } catch (error: any) {
       Alert.alert("Error", error.message);
     } finally {
