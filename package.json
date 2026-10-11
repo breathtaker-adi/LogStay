@@ -53,7 +53,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "start:router": "expo-router/entry",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "test:security": "node scripts/attack-tests.mjs"
   },
   "private": true
 }
