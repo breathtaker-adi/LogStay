@@ -41,7 +41,21 @@
           "photosPermission": "LogStay needs access to your camera to take guest ID photos."
         }
       ],
-      "expo-sqlite"
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          }
+        }
+      ]
     ],
     "extra": {
       "eas": {

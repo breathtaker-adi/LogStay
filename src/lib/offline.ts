@@ -9,6 +9,22 @@ import { bytesToHex } from '@noble/hashes/utils.js';
 
 const db = SQLite.openDatabaseSync('logstay.db');
 
+// SQLCipher: set encryption key from hardware-backed SecureStore before any database operation
+try {
+  let dbKey = SecureStore.getItem('db_key');
+  if (!dbKey) {
+    dbKey = Crypto.randomUUID().replace(/-/g, '');
+    SecureStore.setItem('db_key', dbKey);
+  }
+  db.execSync(`PRAGMA key = "x'${dbKey}'";`);
+  const v = db.getFirstSync<{ cipher_version?: string }>('PRAGMA cipher_version;');
+  if (v?.cipher_version) {
+    console.log(`[SQLCipher] Local database encrypted (cipher_version: ${v.cipher_version})`);
+  }
+} catch (e) {
+  console.warn('[SQLCipher] Key setup warning:', e);
+}
+
 export async function getCachedPropertyId(): Promise<string | null> {
   try {
     const cached = await AsyncStorage.getItem('cached_property_id');
@@ -36,6 +52,15 @@ export const getDb = async () => db;
 
 // Initialize ALL local tables (Outbox + Cache)
 export const initOfflineDB = async () => {
+  try {
+    let dbKey = await SecureStore.getItemAsync('db_key');
+    if (!dbKey) {
+      dbKey = Crypto.randomUUID().replace(/-/g, '');
+      await SecureStore.setItemAsync('db_key', dbKey);
+    }
+    db.execSync(`PRAGMA key = "x'${dbKey}'";`);
+  } catch {}
+
   await db.execAsync(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS outbox (id TEXT PRIMARY KEY NOT NULL, entity TEXT, type TEXT, payload TEXT NOT NULL, created_at INTEGER NOT NULL, status TEXT DEFAULT 'pending', attempts INTEGER DEFAULT 0, last_error TEXT);
