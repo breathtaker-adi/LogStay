@@ -129,10 +129,20 @@ export async function getPendingCount(): Promise<number> {
   return result?.count || 0;
 }
 
+const PBKDF2_ROUNDS = 5000;
+
+export async function hashPinWithSalt(pin: string, salt: string, rounds: number = PBKDF2_ROUNDS): Promise<string> {
+  let acc = pin + salt;
+  for (let i = 0; i < rounds; i++) {
+    acc = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, `${acc}:${salt}:${i}`);
+  }
+  return `pbkdf2$${rounds}$${acc}`;
+}
+
 export const saveLocalPinHash = async (staffId: string, pin: string) => {
   const database = await getDb();
   const salt = Crypto.randomUUID();
-  const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, pin + salt);
+  const hash = await hashPinWithSalt(pin, salt, PBKDF2_ROUNDS);
   // OWASP M10/M1: Store sensitive PIN hash in hardware-backed SecureStore, not unencrypted SQLite
   await SecureStore.setItemAsync(`staff_pin_hash_${staffId}`, hash);
   await database.runAsync(
@@ -161,8 +171,24 @@ export const verifyLocalPin = async (staffId: string, pin: string): Promise<bool
   }
   if (!expectedHash) return false;
 
-  const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, pin + staff.salt);
-  if (hash === expectedHash) {
+  let matches = false;
+  if (expectedHash.startsWith('pbkdf2$')) {
+    const parts = expectedHash.split('$');
+    const rounds = parseInt(parts[1], 10) || PBKDF2_ROUNDS;
+    const computed = await hashPinWithSalt(pin, staff.salt, rounds);
+    matches = computed === expectedHash;
+  } else {
+    // Legacy single-round SHA-256 fallback
+    const legacyComputed = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, pin + staff.salt);
+    if (legacyComputed === expectedHash) {
+      matches = true;
+      // Auto-upgrade to PBKDF2 in SecureStore
+      const upgraded = await hashPinWithSalt(pin, staff.salt, PBKDF2_ROUNDS);
+      await SecureStore.setItemAsync(`staff_pin_hash_${staffId}`, upgraded);
+    }
+  }
+
+  if (matches) {
     await database.runAsync('UPDATE cache_staff SET local_failed_tries = 0, local_locked_until = 0 WHERE id = ?', [staffId]);
     return true;
   } else {
