@@ -3,6 +3,9 @@ import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { pbkdf2 } from '@noble/hashes/pbkdf2.js';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { bytesToHex } from '@noble/hashes/utils.js';
 
 const db = SQLite.openDatabaseSync('logstay.db');
 
@@ -129,20 +132,17 @@ export async function getPendingCount(): Promise<number> {
   return result?.count || 0;
 }
 
-const PBKDF2_ROUNDS = 5000;
+const PBKDF2_ROUNDS = 100000;
 
-export async function hashPinWithSalt(pin: string, salt: string, rounds: number = PBKDF2_ROUNDS): Promise<string> {
-  let acc = pin + salt;
-  for (let i = 0; i < rounds; i++) {
-    acc = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, `${acc}:${salt}:${i}`);
-  }
-  return `pbkdf2$${rounds}$${acc}`;
+export function hashPinWithSalt(pin: string, salt: string, rounds: number = PBKDF2_ROUNDS): string {
+  const derived = pbkdf2(sha256, pin, salt, { c: rounds, dkLen: 32 });
+  return `pbkdf2$${rounds}$${bytesToHex(derived)}`;
 }
 
 export const saveLocalPinHash = async (staffId: string, pin: string) => {
   const database = await getDb();
   const salt = Crypto.randomUUID();
-  const hash = await hashPinWithSalt(pin, salt, PBKDF2_ROUNDS);
+  const hash = hashPinWithSalt(pin, salt, PBKDF2_ROUNDS);
   // OWASP M10/M1: Store sensitive PIN hash in hardware-backed SecureStore, not unencrypted SQLite
   await SecureStore.setItemAsync(`staff_pin_hash_${staffId}`, hash);
   await database.runAsync(
@@ -156,7 +156,7 @@ export const verifyLocalPin = async (staffId: string, pin: string): Promise<bool
   const staff = await database.getFirstAsync<any>('SELECT * FROM cache_staff WHERE id = ?', [staffId]);
   if (!staff || !staff.salt) return false;
 
-  // Check local lockout
+  // Check local lockout (5 failed attempts = 5 min lock)
   if (staff.local_locked_until && staff.local_locked_until > Date.now()) {
     throw new Error('Locked locally, try later');
   }
@@ -175,15 +175,15 @@ export const verifyLocalPin = async (staffId: string, pin: string): Promise<bool
   if (expectedHash.startsWith('pbkdf2$')) {
     const parts = expectedHash.split('$');
     const rounds = parseInt(parts[1], 10) || PBKDF2_ROUNDS;
-    const computed = await hashPinWithSalt(pin, staff.salt, rounds);
+    const computed = hashPinWithSalt(pin, staff.salt, rounds);
     matches = computed === expectedHash;
   } else {
     // Legacy single-round SHA-256 fallback
     const legacyComputed = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, pin + staff.salt);
     if (legacyComputed === expectedHash) {
       matches = true;
-      // Auto-upgrade to PBKDF2 in SecureStore
-      const upgraded = await hashPinWithSalt(pin, staff.salt, PBKDF2_ROUNDS);
+      // Auto-upgrade to 100,000 rounds PBKDF2 in SecureStore
+      const upgraded = hashPinWithSalt(pin, staff.salt, PBKDF2_ROUNDS);
       await SecureStore.setItemAsync(`staff_pin_hash_${staffId}`, upgraded);
     }
   }

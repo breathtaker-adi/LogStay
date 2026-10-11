@@ -59,9 +59,20 @@ BEGIN
     IF v_open_shift_id IS NULL THEN RAISE EXCEPTION 'Cannot accept cash without an open shift'; END IF;
   END IF;
 
-  INSERT INTO guests (id, property_id, name, phone, nationality, gender, id_type, id_last4, id_photo_path)
-  VALUES (p_guest_id, p_property_id, p_name, p_phone, p_nationality, p_gender, p_id_type, p_id_last4, p_id_photo_path)
-  ON CONFLICT (id) DO NOTHING;
+  -- Insert guest with explicit 6-month photo retention expiry
+  INSERT INTO guests (
+    id, property_id, name, phone, nationality, gender, id_type, id_last4, id_photo_path, id_photo_expires_at
+  )
+  VALUES (
+    p_guest_id, p_property_id, p_name, p_phone, p_nationality, p_gender, p_id_type, p_id_last4, p_id_photo_path,
+    CASE WHEN p_id_photo_path IS NOT NULL AND p_id_photo_path <> '' THEN now() + interval '6 months' ELSE NULL END
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    id_photo_path = COALESCE(EXCLUDED.id_photo_path, guests.id_photo_path),
+    id_photo_expires_at = CASE 
+      WHEN EXCLUDED.id_photo_path IS NOT NULL AND guests.id_photo_expires_at IS NULL THEN now() + interval '6 months'
+      ELSE guests.id_photo_expires_at 
+    END;
 
   INSERT INTO stays (id, property_id, guest_id, unit_id, status, amount, pay_mode, staff_id)
   VALUES (p_stay_id, p_property_id, p_guest_id, p_unit_id, 'checked_in', p_amount, p_pay_mode, p_staff_id);
