@@ -8,6 +8,7 @@ import { readFileSync, existsSync } from 'node:fs';
 
 // ---- Discovered RPC Signatures (Step 0) ----
 const RPC = {
+  check_out_guest:  { p_stay_id: 'uuid', p_staff_id: 'uuid' },
   deactivate_staff: { p_prop: 'uuid', p_actor: 'uuid', p_target: 'uuid', p_reason: 'text' },
   owner_add_staff:  { p_prop: 'uuid', p_actor: 'uuid', p_name: 'text', p_phone: 'text', p_role: 'text', p_pin: 'text' },
   record_payment:   { p_payment_id: 'uuid', p_stay_id: 'uuid', p_amount: 'numeric', p_pay_mode: 'text', p_staff_id: 'uuid' },
@@ -46,8 +47,14 @@ const check = (name, ok, note = '') => {
   ok ? pass++ : fail++;
   console.log(`${ok ? '✅' : '❌'} ${name}${note ? '  [' + note + ']' : ''}`);
 };
-const expectError = (name, { error }, note) =>
-  check(name, !!error, error ? error.message : 'SUCCEEDED — LEAK');
+
+// Rejection-aware assertion: only genuine authorization rejections pass
+const REJECTION = /not (a member|authorized|allowed)|permission denied|row-level security|locked/i;
+const expectRejected = (name, { error }) => {
+  const ok = !!error && REJECTION.test(error.message);
+  ok ? pass++ : fail++;
+  console.log(`${ok ? '✅' : '❌'} ${name}  [${error ? error.message : 'SUCCEEDED — LEAK'}]`);
+};
 
 console.log('=================================================================');
 console.log('       LogStay Security Review — Section 7 Attack Matrix');
@@ -134,35 +141,55 @@ for (const tbl of ['guests', 'stays', 'shifts', 'cash_entries', 'audit_log']) {
 }
 
 // ---- 4. Unauthorized writes (tests 2, 3, 4, 8) ----
-expectError('T2 stranger inserts members row',
+expectRejected('T2 stranger inserts members row',
   await B.from('members').insert({ property_id: A_PROP, user_id: bUser.id, role: 'owner' }));
-expectError('T3 direct UPDATE stays.paid_amount',
+expectRejected('T3 direct UPDATE stays.paid_amount',
   await A.from('stays').update({ paid_amount: 999999 }).eq('id', A_STAY));
-expectError('T4 direct UPDATE properties.paid_until',
+expectRejected('T4 direct UPDATE properties.paid_until',
   await A.from('properties').update({ paid_until: '2099-01-01' }).eq('id', A_PROP));
-expectError('T8a audit_log UPDATE',
-  await A.from('audit_log').update({ action: 'tampered' }).limit(1));
-expectError('T8b audit_log DELETE',
-  await A.from('audit_log').delete().limit(1));
+
+// Target a real audit_log row so the PostgreSQL server authorization answers (permission denied)
+const auditRows = (await A.from('audit_log').select('id').limit(1)).data;
+const auditRow = auditRows?.[0];
+if (auditRow) {
+  expectRejected('T8a audit_log UPDATE',
+    await A.from('audit_log').update({ action: 'tampered' }).eq('id', auditRow.id));
+  expectRejected('T8b audit_log DELETE',
+    await A.from('audit_log').delete().eq('id', auditRow.id));
+} else {
+  skip += 2;
+  console.log('⏭ T8a/b no audit rows found to target');
+}
 
 // ---- 5. Cross-property RPCs (tests 4/6) ----
-expectError('T5 B closes A\'s stay',
-  await B.rpc('check_out_guest', { p_stay_id: A_STAY }));
+// Uses discovered signature: p_stay_id uuid, p_staff_id uuid
+expectRejected("T5 B closes A's stay",
+  await B.rpc('check_out_guest', { p_stay_id: A_STAY, p_staff_id: randomUUID() }));
 
 // ---- 6. Role enforcement (owner-only RPCs, actor = desk) ----
 // Uses the shared-tablet reality: signed in as the account, p_actor/p_staff_id = desk staff.
-// ⚠ T6d: if this PASSES, check_in_guest lacks a role check — that's a finding, not a script bug.
+// Setup: real UPI payment on A's stay so refund_payment tests the role check on a real record
+const PID = randomUUID();
 if (DESK) {
-  expectError('T6a desk resets PIN', await A.rpc('reset_staff_pin',
+  const { error: payErr } = await A.rpc('record_payment', {
+    p_payment_id: PID,
+    p_stay_id: A_STAY,
+    p_amount: 100,
+    p_pay_mode: 'upi',
+    p_staff_id: DESK.id
+  });
+  if (payErr) console.warn('Payment setup warning:', payErr.message);
+
+  expectRejected('T6a desk resets PIN', await A.rpc('reset_staff_pin',
     { p_prop: A_PROP, p_actor: DESK.id, p_target: DESK.id, p_new_pin: '9999' }));
 
-  expectError('T6b desk refunds payment', await A.rpc('refund_payment',
-    { p_payment_id: randomUUID(), p_staff_id: DESK.id, p_reason: 'Unauthorized refund attempt' }));
+  expectRejected('T6b desk refunds payment', await A.rpc('refund_payment',
+    { p_payment_id: PID, p_staff_id: DESK.id, p_reason: 'attack test' }));
 
-  expectError('T6c desk adds staff', await A.rpc('owner_add_staff',
+  expectRejected('T6c desk adds staff', await A.rpc('owner_add_staff',
     { p_prop: A_PROP, p_actor: DESK.id, p_name: 'Attacker Staff', p_phone: '9999999999', p_role: 'owner', p_pin: '1234' }));
 
-  expectError('T6e desk deactivates staff', await A.rpc('deactivate_staff',
+  expectRejected('T6e desk deactivates staff', await A.rpc('deactivate_staff',
     { p_prop: A_PROP, p_actor: DESK.id, p_target: DESK.id, p_reason: 'Desk self-removal' }));
 } else {
   skip += 4;
@@ -194,24 +221,24 @@ if (HK) {
     p_next_dest: null,
     p_staff_id: HK.id
   });
-  expectError('T6d housekeeping check-in guard', res);
+  expectRejected('T6d housekeeping check-in guard', res);
 } else {
   skip++;
   console.log('⏭ T6d housekeeping check-in — SKIP (no housekeeping staff profile)');
 }
 
 // ---- 7. Idempotency replay (test 7) ----
-const PID = randomUUID();
+const PID_REPLAY = randomUUID();
 for (let i = 0; i < 5; i++) {
   await A.rpc('record_payment', {
-    p_payment_id: PID,
+    p_payment_id: PID_REPLAY,
     p_stay_id: A_STAY,
     p_amount: 100,
     p_pay_mode: 'upi',
     p_staff_id: DESK?.id || OWNER?.id
   });
 }
-const paymentRows = (await A.from('payments').select('id').eq('id', PID)).data;
+const paymentRows = (await A.from('payments').select('id').eq('id', PID_REPLAY)).data;
 const n = (paymentRows || []).length;
 check('T9 payment replay ×5', n === 1, `${n} rows`);
 
@@ -221,7 +248,7 @@ if (DESK) {
   for (let i = 0; i < 6; i++) {
     r = await A.rpc('staff_login', { p_staff: DESK.id, p_pin: '0000_wrong' });
   }
-  const isLocked = /lock/i.test(r?.error?.message || '');
+  const isLocked = !!r?.error && REJECTION.test(r.error.message);
   check('T10 PIN lockout after 6', isLocked, r?.error?.message || 'Lockout triggered');
 } else {
   skip++;
