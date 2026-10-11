@@ -383,6 +383,15 @@ export default function HomeScreen() {
                   <Text style={styles.actionText}>Settings</Text>
                 </TouchableOpacity>
               )}
+
+              {activeStaff?.role === 'owner' && (
+                <TouchableOpacity style={styles.actionItem} onPress={() => router.push("/digest")}>
+                  <View style={[styles.actionCircle, { backgroundColor: "#0f172a" }]}>
+                    <Text style={styles.actionEmoji}>📊</Text>
+                  </View>
+                  <Text style={styles.actionText}>Digest</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <Text style={styles.sectionTitle}>Room Grid</Text>

@@ -105,6 +105,7 @@ export default function RootLayout() {
         <Stack.Screen name="privacy" />
         <Stack.Screen name="outbox" />
         <Stack.Screen name="audit-log" />
+        <Stack.Screen name="digest" />
       </Stack>
       </StaffProvider>
     </ErrorBoundary>
