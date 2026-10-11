@@ -5,10 +5,11 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useStaff } from '@/lib/staff-context';
 import { isOnline, saveToOutbox, updateLocalUnitStatus } from '@/lib/offline';
+import * as Crypto from 'expo-crypto';
 
 export default function RoomDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { activeStaff } = useStaff();
+  const { activeStaff, can } = useStaff();
   
   const [loading, setLoading] = useState(true);
   const [unit, setUnit] = useState<any>(null);
@@ -109,13 +110,13 @@ export default function RoomDetailScreen() {
 
   const handleSetMaintenance = async () => {
     if (await isOnline()) {
-      const { error } = await supabase
-        .from('units')
-        .update({ housekeeping_status: 'maintenance' })
-        .eq('id', id);
+      const { error } = await supabase.rpc('set_unit_maintenance', {
+        p_unit_id: id,
+        p_staff_id: activeStaff?.id || null
+      });
       if (error) return Alert.alert('Error', error.message);
     } else {
-      await saveToOutbox('set_maintenance', { unit_id: id });
+      await saveToOutbox('set_maintenance', { unit_id: id, staff_id: activeStaff?.id || null });
       await updateLocalUnitStatus(id, 'maintenance');
     }
     Alert.alert('Success', 'Room set to maintenance.');
@@ -124,28 +125,28 @@ export default function RoomDetailScreen() {
 
   const handleReportIssue = async () => {
     if (!activeStaff) return;
+    const issueId = Crypto.randomUUID();
     
     if (await isOnline()) {
-      const { error } = await supabase
-        .from('issues')
-        .insert({
-          property_id: unit.property_id,
-          unit_id: id,
-          stay_id: currentStay?.id || null,
-          category: issueCategory,
-          note: issueNote,
-          reported_by: activeStaff.id
-        });
+      const { error } = await supabase.rpc('report_issue', {
+        p_issue_id: issueId,
+        p_unit_id: id,
+        p_stay_id: currentStay?.id || null,
+        p_category: issueCategory,
+        p_note: issueNote || null,
+        p_staff_id: activeStaff.id
+      });
       if (error) return Alert.alert('Error', error.message);
     } else {
-      // For offline issues, we'll just queue a generic insert
       await saveToOutbox('report_issue', {
+        id: issueId,
+        issue_id: issueId,
         property_id: unit.property_id,
         unit_id: id,
         stay_id: currentStay?.id || null,
         category: issueCategory,
-        note: issueNote,
-        reported_by: activeStaff.id
+        note: issueNote || null,
+        staff_id: activeStaff.id
       });
     }
     
@@ -218,12 +219,12 @@ export default function RoomDetailScreen() {
             </Text>
             
             <View style={styles.btnRow}>
-              {unit.housekeeping_status !== 'clean' && (
+              {unit.housekeeping_status !== 'clean' && can('mark_clean') && (
                 <Pressable style={styles.actionBtn} onPress={handleMarkClean}>
                   <Text style={styles.actionBtnText}>Mark Clean</Text>
                 </Pressable>
               )}
-              {unit.housekeeping_status !== 'maintenance' && (
+              {unit.housekeeping_status !== 'maintenance' && can('set_maintenance') && (
                 <Pressable style={[styles.actionBtn, styles.maintBtn]} onPress={handleSetMaintenance}>
                   <Text style={styles.actionBtnText}>Set Maintenance</Text>
                 </Pressable>

@@ -2,14 +2,16 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, Pressable, Alert, StyleSheet, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
-import { supabase } from '../lib/supabase';
+import { supabase } from '@/lib/supabase';
+import { useStaff } from '@/lib/staff-context';
 
 export default function AddStaffScreen() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState<'desk' | 'housekeeping'>('desk');
+  const [role, setRole] = useState<'owner' | 'desk' | 'housekeeping'>('desk');
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
+  const { activeStaff } = useStaff();
 
   const handleSave = async () => {
     if (!name || pin.length < 4) {
@@ -32,28 +34,17 @@ export default function AddStaffScreen() {
 
       if (!member) throw new Error('No property found for this user');
 
-      // 2. Insert staff profile with a temporary pin hash
-      const { data: newStaff, error: insertError } = await supabase
-        .from('staff_profiles')
-        .insert({
-          property_id: member.property_id,
-          name,
-          phone,
-          role,
-          pin_hash: 'temp' // Placeholder, will be updated securely via RPC
-        })
-        .select()
-        .single();
-
-      if (insertError) throw insertError;
-
-      // 3. Set the actual PIN securely using the RPC
-      const { error: pinError } = await supabase.rpc('set_staff_pin', {
-        p_staff_id: newStaff.id,
+      // 2. Call owner_add_staff RPC
+      const { error: insertError } = await supabase.rpc('owner_add_staff', {
+        p_prop: member.property_id,
+        p_actor: activeStaff?.id || null, // null if creating the very first owner
+        p_name: name,
+        p_phone: phone,
+        p_role: role,
         p_pin: pin
       });
 
-      if (pinError) throw pinError;
+      if (insertError) throw insertError;
 
       Alert.alert('Success', 'Staff member added successfully.');
       router.back();
@@ -78,6 +69,11 @@ export default function AddStaffScreen() {
 
       <Text style={styles.label}>Role</Text>
       <View style={styles.roleContainer}>
+        <Pressable 
+          style={[styles.roleBtn, role === 'owner' && styles.roleBtnActive]} 
+          onPress={() => setRole('owner')}>
+          <Text style={[styles.roleText, role === 'owner' && styles.roleTextActive]}>Owner</Text>
+        </Pressable>
         <Pressable 
           style={[styles.roleBtn, role === 'desk' && styles.roleBtnActive]} 
           onPress={() => setRole('desk')}>

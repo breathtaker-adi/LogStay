@@ -1,11 +1,13 @@
-// src/lib/staff-context.tsx
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState } from 'react-native';
+import { router } from 'expo-router';
+import { can as checkPermission, Action, Role } from './permissions';
 
 interface StaffProfile {
   id: string;
   name: string;
-  role: string;
+  role: Role | string;
   attendanceId: string | null;
 }
 
@@ -14,6 +16,7 @@ interface StaffContextType {
   loadingStaff: boolean;
   setActiveStaff: (staff: StaffProfile | null) => void;
   logoutStaff: () => void;
+  can: (action: Action) => boolean;
 }
 
 const StaffContext = createContext<StaffContextType | undefined>(undefined);
@@ -21,8 +24,21 @@ const StaffContext = createContext<StaffContextType | undefined>(undefined);
 export const StaffProvider = ({ children }: { children: React.ReactNode }) => {
   const [activeStaff, setActiveStaffState] = useState<StaffProfile | null>(null);
   const [loadingStaff, setLoadingStaff] = useState(true);
+  const appState = useRef(AppState.currentState);
+  const backgroundTime = useRef<number | null>(null);
+  const activeStaffRef = useRef<StaffProfile | null>(null);
 
-  // Load active staff from AsyncStorage on app start
+  useEffect(() => {
+    activeStaffRef.current = activeStaff;
+  }, [activeStaff]);
+
+  const logoutStaff = async () => {
+    // Optional: You could trigger staff_attendance clock_out here later
+    await AsyncStorage.removeItem('activeStaff');
+    setActiveStaffState(null);
+  };
+
+  // Load active staff from AsyncStorage on app start and listen for auto-lock
   useEffect(() => {
     const loadStaff = async () => {
       try {
@@ -37,6 +53,31 @@ export const StaffProvider = ({ children }: { children: React.ReactNode }) => {
       }
     };
     loadStaff();
+
+    // Auto-Lock Listener
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      if (
+        (appState.current === 'active' && (nextAppState === 'inactive' || nextAppState === 'background')) ||
+        (nextAppState === 'background' && !backgroundTime.current)
+      ) {
+        // App went to background
+        backgroundTime.current = Date.now();
+      } else if (nextAppState === 'active' && backgroundTime.current) {
+        // App returned to foreground
+        const idleTime = (Date.now() - backgroundTime.current) / 1000; // in seconds
+        if (idleTime > 180 && activeStaffRef.current) { // 3 minutes & staff logged in
+          console.log('Auto-locking due to inactivity');
+          await logoutStaff();
+          router.replace('/staff-login');
+        }
+        backgroundTime.current = null;
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
   }, []);
 
   const setActiveStaff = async (staff: StaffProfile | null) => {
@@ -48,14 +89,10 @@ export const StaffProvider = ({ children }: { children: React.ReactNode }) => {
     setActiveStaffState(staff);
   };
 
-  const logoutStaff = async () => {
-    // Optional: You could trigger staff_attendance clock_out here later
-    await AsyncStorage.removeItem('activeStaff');
-    setActiveStaffState(null);
-  };
+  const can = (action: Action) => checkPermission(activeStaff?.role as Role, action);
 
   return (
-    <StaffContext.Provider value={{ activeStaff, loadingStaff, setActiveStaff, logoutStaff }}>
+    <StaffContext.Provider value={{ activeStaff, loadingStaff, setActiveStaff, logoutStaff, can }}>
       {children}
     </StaffContext.Provider>
   );

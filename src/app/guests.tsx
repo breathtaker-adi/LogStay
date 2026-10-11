@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { isOnline, getGuestsCache, cacheGuests } from '@/lib/offline';
 
 export default function GuestsScreen() {
   const [loading, setLoading] = useState(true);
@@ -12,38 +13,54 @@ export default function GuestsScreen() {
 
   const fetchGuests = async () => {
     setLoading(true);
-    
-    const { data: userData } = await supabase.auth.getUser();
-    const { data: member } = await supabase
-      .from('members')
-      .select('property_id')
-      .eq('user_id', userData.user?.id)
-      .single();
 
-    if (!member) { setLoading(false); return; }
-
-    let query = supabase
-      .from('stays')
-      .select(`*, guests ( id, name, phone, nationality )`)
-      .eq('property_id', member.property_id);
-
+    // 1. Read from local cache first (for in-house tab)
     if (tab === 'in_house') {
-      query = query.eq('status', 'checked_in');
-    } else {
-      query = query.eq('status', 'checked_out').order('check_out', { ascending: false }).limit(50);
+      const localGuests = await getGuestsCache();
+      if (localGuests.length > 0) {
+        // Map local cache to look like Supabase response
+        const mapped = localGuests.map(g => ({
+          id: g.id,
+          guests: { id: g.id, name: g.name, phone: g.phone, nationality: g.nationality },
+          status: 'checked_in', // We only cache active stays
+          amount: 0
+        }));
+        setGuests(mapped);
+        setLoading(false);
+      }
     }
 
-    const { data, error } = await query;
-    
-    if (!error && data) {
-      let filtered = data;
-      if (search) {
-        filtered = data.filter(s => 
-          s.guests?.name?.toLowerCase().includes(search.toLowerCase()) ||
-          s.guests?.phone?.includes(search)
-        );
+    // 2. If online, fetch from Supabase and update cache
+    if (await isOnline()) {
+      const { data: userData } = await supabase.auth.getUser();
+      const { data: member } = await supabase
+        .from('members')
+        .select('property_id')
+        .eq('user_id', userData.user?.id)
+        .single();
+
+      if (member) {
+        let query = supabase
+          .from('stays')
+          .select(`*, guests ( id, name, phone, nationality )`)
+          .eq('property_id', member.property_id);
+
+        if (tab === 'in_house') {
+          query = query.eq('status', 'checked_in');
+        } else {
+          query = query.eq('status', 'checked_out').order('check_out', { ascending: false }).limit(50);
+        }
+
+        const { data, error } = await query;
+        
+        if (!error && data) {
+          setGuests(data);
+          // Update local cache (only for in-house guests)
+          if (tab === 'in_house') {
+            await cacheGuests(data.map(s => s.guests).filter(Boolean));
+          }
+        }
       }
-      setGuests(filtered);
     }
     setLoading(false);
   };
@@ -51,6 +68,13 @@ export default function GuestsScreen() {
   useEffect(() => {
     fetchGuests();
   }, [tab]);
+
+  const displayGuests = search 
+    ? guests.filter(s => 
+        s.guests?.name?.toLowerCase().includes(search.toLowerCase()) ||
+        s.guests?.phone?.includes(search)
+      ) 
+    : guests;
 
   return (
     <View style={styles.container}>
@@ -78,14 +102,14 @@ export default function GuestsScreen() {
         style={styles.searchInput}
         placeholder="Search by name or phone..."
         value={search}
-        onChangeText={(text) => { setSearch(text); fetchGuests(); }}
+        onChangeText={setSearch}
       />
 
-      {loading ? (
+      {loading && guests.length === 0 ? (
         <ActivityIndicator size="large" color="#2563eb" style={{ marginTop: 40 }} />
       ) : (
         <FlatList
-          data={guests}
+          data={displayGuests}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <Pressable 

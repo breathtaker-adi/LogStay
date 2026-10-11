@@ -3,8 +3,10 @@ import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity,
 import { router } from "expo-router";
 import { supabase } from "../lib/supabase";
 import { isOnline, saveToOutbox, removeStayFromCache, updateLocalUnitStatus } from "../lib/offline";
+import { useStaff } from "../lib/staff-context";
 
 export default function CheckoutScreen() {
+  const { activeStaff } = useStaff();
   const [activeStays, setActiveStays] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -20,7 +22,7 @@ export default function CheckoutScreen() {
 
       const { data: staysData } = await supabase
         .from('stays')
-        .select('id, check_in, unit_id, guests(name), units(label)')
+        .select('id, guest_id, check_in, unit_id, guests(name), units(label)')
         .eq('property_id', memberData.property_id)
         .eq('status', 'checked_in');
 
@@ -32,7 +34,40 @@ export default function CheckoutScreen() {
     }
   }
 
-  async function handleCheckout(stayId: string, unitId: string) {
+  async function handleCheckout(stay: any) {
+    const stayId = stay.id;
+    const unitId = stay.unit_id;
+
+    if (await isOnline()) {
+      // 1. Fetch stay balance
+      const { data: stayData } = await supabase
+        .from('stays')
+        .select('amount, paid_amount')
+        .eq('id', stayId)
+        .single();
+
+      const { data: chargesData } = await supabase
+        .from('charges')
+        .select('unit_price, qty')
+        .eq('stay_id', stayId);
+
+      const totalCharges = (chargesData || []).reduce((sum, c) => sum + Number(c.unit_price) * c.qty, 0);
+      const balance = (Number(stayData?.amount || 0) + totalCharges) - Number(stayData?.paid_amount || 0);
+
+      // 2. Check balance
+      if (balance > 0) {
+        Alert.alert(
+          'Balance Due',
+          `This guest has an unpaid balance of ₹${balance.toFixed(2)}. Please collect payment or authorize write-off.`,
+          [
+            { text: 'Cancel' },
+            { text: 'Go to Folio', onPress: () => router.push(`/guest/${stay.guest_id}?stayId=${stay.id}`) }
+          ]
+        );
+        return; // Block checkout
+      }
+    }
+
     Alert.alert(
       "Confirm Check-Out",
       "Are you sure you want to check out this guest?",
@@ -45,7 +80,8 @@ export default function CheckoutScreen() {
             try {
               if (await isOnline()) {
                 const { error: rpcError } = await supabase.rpc('check_out_guest', {
-                  p_stay_id: stayId
+                  p_stay_id: stayId,
+                  p_staff_id: activeStaff?.id
                 });
 
                 if (rpcError) {
@@ -54,7 +90,10 @@ export default function CheckoutScreen() {
                 }
               } else {
                 // Offline: Queue it
-                await saveToOutbox('guest_checkout', { stay_id: stayId });
+                await saveToOutbox('guest_checkout', { 
+                  stay_id: stayId,
+                  staff_id: activeStaff?.id
+                });
                 // Optimistic UI: Remove from local cache so bed grid updates instantly
                 await removeStayFromCache(stayId);
                 await updateLocalUnitStatus(unitId, 'dirty');
@@ -90,7 +129,7 @@ export default function CheckoutScreen() {
               <Text style={styles.bedLabel}>Bed: {item.units?.label || 'N/A'}</Text>
               <Text style={styles.dateText}>In: {new Date(item.check_in).toLocaleDateString()}</Text>
             </View>
-            <TouchableOpacity style={styles.checkoutBtn} onPress={() => handleCheckout(item.id, item.unit_id)}>
+            <TouchableOpacity style={styles.checkoutBtn} onPress={() => handleCheckout(item)}>
               <Text style={styles.btnText}>Check-Out</Text>
             </TouchableOpacity>
           </View>

@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert } from "react-native";
-import { router } from "expo-router";
 import { supabase } from "../lib/supabase";
 
 export default function FormCScreen() {
@@ -35,10 +34,10 @@ export default function FormCScreen() {
 
   async function markAsFiled(stayId: string) {
     try {
-      const { error } = await supabase
-        .from('foreign_details')
-        .update({ form_c_filed: true })
-        .eq('stay_id', stayId);
+      const { error } = await supabase.rpc('mark_form_c_filed', {
+        p_stay_id: stayId,
+        p_staff_id: null
+      });
 
       if (error) throw error;
       Alert.alert("Success", "Form C marked as filed!");

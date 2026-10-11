@@ -14,7 +14,14 @@ export default class ErrorBoundary extends Component<{ children: React.ReactNode
   handleWhatsAppSupport = () => {
     // Replace with your actual WhatsApp number
     const phone = "919999999999"; 
-    const message = encodeURIComponent(`LogStay Crashed: ${this.state.errorText}`);
+    // OWASP M6: Scrub PII (phones, IDs, UUIDs, tokens) from crash logs before sending
+    const sanitizedError = (this.state.errorText || "")
+      .replace(/eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/g, '[REDACTED_TOKEN]')
+      .replace(/\b\d{10,12}\b/g, '[REDACTED_NUMBER]')
+      .replace(/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g, '[REDACTED_ID]')
+      .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '[REDACTED_EMAIL]');
+
+    const message = encodeURIComponent(`LogStay Crashed: ${sanitizedError}`);
     Linking.openURL(`https://wa.me/${phone}?text=${message}`);
   };
 
@@ -23,7 +30,7 @@ export default class ErrorBoundary extends Component<{ children: React.ReactNode
       return (
         <View style={styles.container}>
           <Text style={styles.emoji}>😵‍💫</Text>
-          <Text style={styles.title}>Don't Panic!</Text>
+          <Text style={styles.title}>{"Don't Panic!"}</Text>
           <Text style={styles.subtitle}>LogStay hit a snag. The desk staff can still take manual bookings.</Text>
           
           <Text style={styles.errorText} selectable>{this.state.errorText}</Text>

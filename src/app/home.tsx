@@ -3,11 +3,11 @@ import { View, Text, StyleSheet, ActivityIndicator, FlatList, TouchableOpacity, 
 import { router, useFocusEffect } from "expo-router";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from "../lib/supabase";
-import { getPendingCount, processOutbox, isOnline, getRoomsCache, getUnitsCache, getStaysCache, cacheRooms, cacheUnits, cacheStays, saveToOutbox, updateLocalUnitStatus } from "../lib/offline";
+import { getPendingCount, processOutbox, isOnline, getRoomsCache, getUnitsCache, getStaysCache, cacheRooms, cacheUnits, cacheStays, saveToOutbox, updateLocalUnitStatus, setCachedPropertyId } from "../lib/offline";
 import { useStaff } from "../lib/staff-context";
 
 export default function HomeScreen() {
-  const { activeStaff, logoutStaff } = useStaff();
+  const { activeStaff, logoutStaff, can } = useStaff();
   // FIX: Added propertyId state here to prevent the crash!
   const [propertyId, setPropertyId] = useState<string | null>(null);
   const [propertyName, setPropertyName] = useState<string>("");
@@ -48,12 +48,11 @@ export default function HomeScreen() {
         {
           text: "Lock",
           onPress: async () => {
-            // Clock out the current staff member
+            // Clock out the current staff member via secure RPC
             if (activeStaff?.attendanceId) {
-              await supabase
-                .from('staff_attendance')
-                .update({ clock_out: new Date().toISOString() })
-                .eq('id', activeStaff.attendanceId);
+              await supabase.rpc('clock_out_staff', {
+                p_attendance_id: activeStaff.attendanceId
+              });
             }
 
             await logoutStaff();
@@ -64,7 +63,7 @@ export default function HomeScreen() {
     );
   };
 
-  function loadDashboardFromCache() {
+  async function loadDashboardFromCache() {
     try {
       const localRooms = getRoomsCache();
       const localUnits = getUnitsCache();
@@ -81,7 +80,8 @@ export default function HomeScreen() {
       });
       setRooms(localGrid);
       setActiveGuests(localStays.length);
-      setPendingCount(getPendingCount());
+      const count = await getPendingCount();
+      setPendingCount(count);
     } catch (e) {
       console.error("Error loading cache", e);
     }
@@ -92,8 +92,7 @@ export default function HomeScreen() {
       // 1. CHECK IF ONLINE
       const online = await isOnline();
       if (!online) {
-        loadDashboardFromCache();
-        setPendingCount(getPendingCount());
+        await loadDashboardFromCache();
         return;
       }
 
@@ -102,6 +101,7 @@ export default function HomeScreen() {
       const { data: memberData } = await supabase.from('members').select('property_id').eq('user_id', user?.id).single();
       if (!memberData) { router.replace("/setup-property"); return; }
       setPropertyId(memberData.property_id);
+      await setCachedPropertyId(memberData.property_id);
 
       const { data: property } = await supabase.from('properties').select('name').eq('id', memberData.property_id).single();
       setPropertyName(property?.name || "Unknown");
@@ -134,8 +134,9 @@ export default function HomeScreen() {
       setActiveShiftCash(shiftData ? shiftData.opening_cash : null);
 
       // 4. SYNC OUTBOX
-      processOutbox();
-      setPendingCount(getPendingCount());
+      await processOutbox();
+      const count = await getPendingCount();
+      setPendingCount(count);
 
     } catch (error) {
       console.error("Error loading dashboard", error);
@@ -148,7 +149,9 @@ export default function HomeScreen() {
     useCallback(() => {
       const loadSmart = async () => {
         // 1. ALWAYS load from local SQLite cache first for instant render
-        loadDashboardFromCache();
+        await loadDashboardFromCache();
+        const initialCount = await getPendingCount();
+        setPendingCount(initialCount);
         const localRooms = getRoomsCache();
         if (localRooms && localRooms.length > 0) {
           setLoading(false);
@@ -280,9 +283,12 @@ export default function HomeScreen() {
             </View>
 
             {pendingCount > 0 && (
-              <View style={styles.syncBadge}>
-                <Text style={styles.syncText}>⚠️ {pendingCount} record(s) pending sync</Text>
-              </View>
+              <Pressable 
+                style={[styles.syncBadge, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]} 
+                onPress={() => router.push('/outbox')}
+              >
+                <Text style={styles.syncText}>⚠️ {pendingCount} Pending Sync • View Queue ›</Text>
+              </Pressable>
             )}
 
             {/* Stats Cards */}
@@ -306,61 +312,77 @@ export default function HomeScreen() {
 
             {/* Action Grid */}
             <View style={styles.actionGrid}>
-              <TouchableOpacity style={styles.actionItem} onPress={() => router.push("/checkin")}>
-                <View style={[styles.actionCircle, { backgroundColor: "#059669" }]}>
-                  <Text style={styles.actionEmoji}>✅</Text>
-                </View>
-                <Text style={styles.actionText}>Check-In</Text>
-              </TouchableOpacity>
+              {can('check_in') && (
+                <TouchableOpacity style={styles.actionItem} onPress={() => router.push("/checkin")}>
+                  <View style={[styles.actionCircle, { backgroundColor: "#059669" }]}>
+                    <Text style={styles.actionEmoji}>✅</Text>
+                  </View>
+                  <Text style={styles.actionText}>Check-In</Text>
+                </TouchableOpacity>
+              )}
 
-              <TouchableOpacity style={styles.actionItem} onPress={() => router.push("/checkout")}>
-                <View style={[styles.actionCircle, { backgroundColor: "#6b7280" }]}>
-                  <Text style={styles.actionEmoji}>🚪</Text>
-                </View>
-                <Text style={styles.actionText}>Check-Out</Text>
-              </TouchableOpacity>
+              {can('check_out') && (
+                <TouchableOpacity style={styles.actionItem} onPress={() => router.push("/checkout")}>
+                  <View style={[styles.actionCircle, { backgroundColor: "#6b7280" }]}>
+                    <Text style={styles.actionEmoji}>🚪</Text>
+                  </View>
+                  <Text style={styles.actionText}>Check-Out</Text>
+                </TouchableOpacity>
+              )}
 
-              <TouchableOpacity style={styles.actionItem} onPress={() => router.push("/guests")}>
-                <View style={[styles.actionCircle, { backgroundColor: "#0891b2" }]}>
-                  <Text style={styles.actionEmoji}>👥</Text>
-                </View>
-                <Text style={styles.actionText}>Guests</Text>
-              </TouchableOpacity>
+              {can('guests') && (
+                <TouchableOpacity style={styles.actionItem} onPress={() => router.push("/guests")}>
+                  <View style={[styles.actionCircle, { backgroundColor: "#0891b2" }]}>
+                    <Text style={styles.actionEmoji}>👥</Text>
+                  </View>
+                  <Text style={styles.actionText}>Guests</Text>
+                </TouchableOpacity>
+              )}
 
-              <TouchableOpacity style={styles.actionItem} onPress={() => router.push("/shift")}>
-                <View style={[styles.actionCircle, { backgroundColor: "#dc2626" }]}>
-                  <Text style={styles.actionEmoji}>💰</Text>
-                </View>
-                <Text style={styles.actionText}>Shift</Text>
-              </TouchableOpacity>
+              {can('shift') && (
+                <TouchableOpacity style={styles.actionItem} onPress={() => router.push("/shift")}>
+                  <View style={[styles.actionCircle, { backgroundColor: "#dc2626" }]}>
+                    <Text style={styles.actionEmoji}>💰</Text>
+                  </View>
+                  <Text style={styles.actionText}>Shift</Text>
+                </TouchableOpacity>
+              )}
 
-              <TouchableOpacity style={styles.actionItem} onPress={() => router.push("/add-room")}>
-                <View style={[styles.actionCircle, { backgroundColor: "#2563eb" }]}>
-                  <Text style={styles.actionEmoji}>🛏️</Text>
-                </View>
-                <Text style={styles.actionText}>Add Room</Text>
-              </TouchableOpacity>
+              {can('add_room') && (
+                <TouchableOpacity style={styles.actionItem} onPress={() => router.push("/add-room")}>
+                  <View style={[styles.actionCircle, { backgroundColor: "#2563eb" }]}>
+                    <Text style={styles.actionEmoji}>🛏️</Text>
+                  </View>
+                  <Text style={styles.actionText}>Add Room</Text>
+                </TouchableOpacity>
+              )}
 
-              <TouchableOpacity style={styles.actionItem} onPress={() => router.push("/exports")}>
-                <View style={[styles.actionCircle, { backgroundColor: "#f59e0b" }]}>
-                  <Text style={styles.actionEmoji}>📜</Text>
-                </View>
-                <Text style={styles.actionText}>Export</Text>
-              </TouchableOpacity>
+              {can('export') && (
+                <TouchableOpacity style={styles.actionItem} onPress={() => router.push("/exports")}>
+                  <View style={[styles.actionCircle, { backgroundColor: "#f59e0b" }]}>
+                    <Text style={styles.actionEmoji}>📜</Text>
+                  </View>
+                  <Text style={styles.actionText}>Export</Text>
+                </TouchableOpacity>
+              )}
 
-              <TouchableOpacity style={styles.actionItem} onPress={() => router.push("/form-c")}>
-                <View style={[styles.actionCircle, { backgroundColor: "#7c3aed" }]}>
-                  <Text style={styles.actionEmoji}>📋</Text>
-                </View>
-                <Text style={styles.actionText}>Form C</Text>
-              </TouchableOpacity>
+              {can('form_c') && (
+                <TouchableOpacity style={styles.actionItem} onPress={() => router.push("/form-c")}>
+                  <View style={[styles.actionCircle, { backgroundColor: "#7c3aed" }]}>
+                    <Text style={styles.actionEmoji}>📋</Text>
+                  </View>
+                  <Text style={styles.actionText}>Form C</Text>
+                </TouchableOpacity>
+              )}
 
-              <TouchableOpacity style={styles.actionItem} onPress={() => router.push("/settings")}>
-                <View style={[styles.actionCircle, { backgroundColor: "#374151" }]}>
-                  <Text style={styles.actionEmoji}>⚙️</Text>
-                </View>
-                <Text style={styles.actionText}>Settings</Text>
-              </TouchableOpacity>
+              {can('settings') && (
+                <TouchableOpacity style={styles.actionItem} onPress={() => router.push("/settings")}>
+                  <View style={[styles.actionCircle, { backgroundColor: "#374151" }]}>
+                    <Text style={styles.actionEmoji}>⚙️</Text>
+                  </View>
+                  <Text style={styles.actionText}>Settings</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <Text style={styles.sectionTitle}>Room Grid</Text>

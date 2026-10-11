@@ -1,20 +1,90 @@
 import * as SQLite from 'expo-sqlite';
+import * as Crypto from 'expo-crypto';
+import * as SecureStore from 'expo-secure-store';
 import NetInfo from '@react-native-community/netinfo';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const db = SQLite.openDatabaseSync('logstay.db');
 
+export async function getCachedPropertyId(): Promise<string | null> {
+  try {
+    const cached = await AsyncStorage.getItem('cached_property_id');
+    if (cached) return cached;
+    const res = db.getFirstSync<{ property_id: string }>('SELECT property_id FROM cache_rooms WHERE property_id IS NOT NULL LIMIT 1');
+    if (res?.property_id) {
+      await AsyncStorage.setItem('cached_property_id', res.property_id);
+      return res.property_id;
+    }
+  } catch (e) {
+    console.error('Error getting cached property ID:', e);
+  }
+  return null;
+}
+
+export async function setCachedPropertyId(propId: string | null | undefined): Promise<void> {
+  if (propId) {
+    try {
+      await AsyncStorage.setItem('cached_property_id', propId);
+    } catch {}
+  }
+}
+
+export const getDb = async () => db;
+
 // Initialize ALL local tables (Outbox + Cache)
+export const initOfflineDB = async () => {
+  await db.execAsync(`
+    PRAGMA journal_mode = WAL;
+    CREATE TABLE IF NOT EXISTS outbox (id TEXT PRIMARY KEY NOT NULL, entity TEXT, type TEXT, payload TEXT NOT NULL, created_at INTEGER NOT NULL, status TEXT DEFAULT 'pending', attempts INTEGER DEFAULT 0, last_error TEXT);
+    CREATE TABLE IF NOT EXISTS cache_rooms (id TEXT PRIMARY KEY, property_id TEXT, label TEXT, kind TEXT);
+    CREATE TABLE IF NOT EXISTS cache_units (id TEXT PRIMARY KEY, room_id TEXT, label TEXT, gender_rule TEXT, housekeeping_status TEXT);
+    CREATE TABLE IF NOT EXISTS cache_stays (id TEXT PRIMARY KEY, property_id TEXT, unit_id TEXT, guest_name TEXT, status TEXT);
+    CREATE TABLE IF NOT EXISTS cache_guests (id TEXT PRIMARY KEY, name TEXT, phone TEXT, nationality TEXT);
+    CREATE TABLE IF NOT EXISTS cache_staff (
+      id TEXT PRIMARY KEY, name TEXT, role TEXT, active INTEGER,
+      pin_hash_local TEXT, salt TEXT, local_failed_tries INTEGER DEFAULT 0, local_locked_until INTEGER DEFAULT 0
+    );
+  `);
+  try { db.execSync("ALTER TABLE outbox ADD COLUMN status TEXT DEFAULT 'pending'"); } catch {}
+  try { db.execSync("ALTER TABLE outbox ADD COLUMN attempts INTEGER DEFAULT 0"); } catch {}
+  try { db.execSync("ALTER TABLE outbox ADD COLUMN last_error TEXT"); } catch {}
+  try { db.execSync("ALTER TABLE outbox ADD COLUMN type TEXT"); } catch {}
+  try { db.execSync("ALTER TABLE cache_stays ADD COLUMN guest_name TEXT"); } catch {}
+  try { db.execSync("ALTER TABLE cache_staff ADD COLUMN pin_hash_local TEXT"); } catch {}
+  try { db.execSync("ALTER TABLE cache_staff ADD COLUMN salt TEXT"); } catch {}
+  try { db.execSync("ALTER TABLE cache_staff ADD COLUMN local_failed_tries INTEGER DEFAULT 0"); } catch {}
+  try { db.execSync("ALTER TABLE cache_staff ADD COLUMN local_locked_until INTEGER DEFAULT 0"); } catch {}
+};
+
 db.execSync(`
   CREATE TABLE IF NOT EXISTS outbox (
     id TEXT PRIMARY KEY NOT NULL,
     entity TEXT NOT NULL,
+    type TEXT,
     payload TEXT NOT NULL,
-    created_at INTEGER NOT NULL
+    created_at INTEGER NOT NULL,
+    status TEXT DEFAULT 'pending',
+    attempts INTEGER DEFAULT 0,
+    last_error TEXT
   );
   CREATE TABLE IF NOT EXISTS cache_rooms (id TEXT PRIMARY KEY, property_id TEXT, label TEXT, kind TEXT);
   CREATE TABLE IF NOT EXISTS cache_units (id TEXT PRIMARY KEY, room_id TEXT, label TEXT, gender_rule TEXT, housekeeping_status TEXT);
-  CREATE TABLE IF NOT EXISTS cache_stays (id TEXT PRIMARY KEY, property_id TEXT, unit_id TEXT, status TEXT);
+  CREATE TABLE IF NOT EXISTS cache_stays (id TEXT PRIMARY KEY, property_id TEXT, unit_id TEXT, guest_name TEXT, status TEXT);
+  CREATE TABLE IF NOT EXISTS cache_guests (id TEXT PRIMARY KEY, name TEXT, phone TEXT, nationality TEXT);
+  CREATE TABLE IF NOT EXISTS cache_staff (
+    id TEXT PRIMARY KEY, name TEXT, role TEXT, active INTEGER,
+    pin_hash_local TEXT, salt TEXT, local_failed_tries INTEGER DEFAULT 0, local_locked_until INTEGER DEFAULT 0
+  );
 `);
+try { db.execSync("ALTER TABLE outbox ADD COLUMN status TEXT DEFAULT 'pending'"); } catch {}
+try { db.execSync("ALTER TABLE outbox ADD COLUMN attempts INTEGER DEFAULT 0"); } catch {}
+try { db.execSync("ALTER TABLE outbox ADD COLUMN last_error TEXT"); } catch {}
+try { db.execSync("ALTER TABLE outbox ADD COLUMN type TEXT"); } catch {}
+try { db.execSync("ALTER TABLE cache_stays ADD COLUMN guest_name TEXT"); } catch {}
+try { db.execSync("ALTER TABLE cache_staff ADD COLUMN pin_hash_local TEXT"); } catch {}
+try { db.execSync("ALTER TABLE cache_staff ADD COLUMN salt TEXT"); } catch {}
+try { db.execSync("ALTER TABLE cache_staff ADD COLUMN local_failed_tries INTEGER DEFAULT 0"); } catch {}
+try { db.execSync("ALTER TABLE cache_staff ADD COLUMN local_locked_until INTEGER DEFAULT 0"); } catch {}
 
 // --- OUTBOX FUNCTIONS ---
 export async function saveToOutbox(typeOrObj: string | { type: string; payload: any }, payloadObj?: any) {
@@ -34,8 +104,8 @@ export async function saveToOutbox(typeOrObj: string | { type: string; payload: 
   const now = Date.now();
 
   db.runSync(
-    'INSERT INTO outbox (id, entity, payload, created_at) VALUES (?, ?, ?, ?)',
-    [id, type, payloadString, now]
+    "INSERT INTO outbox (id, entity, type, payload, created_at, status, attempts) VALUES (?, ?, ?, ?, ?, 'pending', 0)",
+    [id, type, type, payloadString, now]
   );
   console.log('Saved to outbox:', id, type);
 }
@@ -54,16 +124,60 @@ export async function isOnline() {
   return netInfo.isConnected && Boolean(netInfo.isInternetReachable);
 }
 
-export function getPendingCount() {
-  const result = db.getFirstSync<{ count: number }>('SELECT COUNT(*) as count FROM outbox');
+export async function getPendingCount(): Promise<number> {
+  const result = db.getFirstSync<{ count: number }>("SELECT COUNT(*) as count FROM outbox WHERE status = 'pending' OR status IS NULL");
   return result?.count || 0;
 }
+
+export const saveLocalPinHash = async (staffId: string, pin: string) => {
+  const database = await getDb();
+  const salt = Crypto.randomUUID();
+  const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, pin + salt);
+  // OWASP M10/M1: Store sensitive PIN hash in hardware-backed SecureStore, not unencrypted SQLite
+  await SecureStore.setItemAsync(`staff_pin_hash_${staffId}`, hash);
+  await database.runAsync(
+    'UPDATE cache_staff SET salt = ?, pin_hash_local = NULL, local_failed_tries = 0, local_locked_until = 0 WHERE id = ?',
+    [salt, staffId]
+  );
+};
+
+export const verifyLocalPin = async (staffId: string, pin: string): Promise<boolean> => {
+  const database = await getDb();
+  const staff = await database.getFirstAsync<any>('SELECT * FROM cache_staff WHERE id = ?', [staffId]);
+  if (!staff || !staff.salt) return false;
+
+  // Check local lockout
+  if (staff.local_locked_until && staff.local_locked_until > Date.now()) {
+    throw new Error('Locked locally, try later');
+  }
+
+  // Retrieve hash from hardware-backed SecureStore (with fallback migration for legacy SQLite rows)
+  let expectedHash = await SecureStore.getItemAsync(`staff_pin_hash_${staffId}`);
+  if (!expectedHash && staff.pin_hash_local) {
+    const legacyHash = staff.pin_hash_local as string;
+    expectedHash = legacyHash;
+    await SecureStore.setItemAsync(`staff_pin_hash_${staffId}`, legacyHash);
+    await database.runAsync('UPDATE cache_staff SET pin_hash_local = NULL WHERE id = ?', [staffId]);
+  }
+  if (!expectedHash) return false;
+
+  const hash = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, pin + staff.salt);
+  if (hash === expectedHash) {
+    await database.runAsync('UPDATE cache_staff SET local_failed_tries = 0, local_locked_until = 0 WHERE id = ?', [staffId]);
+    return true;
+  } else {
+    const newTries = (staff.local_failed_tries || 0) + 1;
+    const lockUntil = newTries >= 5 ? Date.now() + (5 * 60 * 1000) : 0;
+    await database.runAsync('UPDATE cache_staff SET local_failed_tries = ?, local_locked_until = ? WHERE id = ?', [newTries, lockUntil, staffId]);
+    return false;
+  }
+};
 
 export async function processOutbox() {
   const online = await isOnline();
   if (!online) return;
 
-  const rows = db.getAllSync<any>('SELECT * FROM outbox ORDER BY created_at ASC');
+  const rows = db.getAllSync<any>("SELECT * FROM outbox WHERE status = 'pending' OR status IS NULL ORDER BY created_at ASC");
   
   for (const item of rows) {
     const payload = JSON.parse(item.payload);
@@ -75,10 +189,12 @@ export async function processOutbox() {
         case 'guest_checkin': {
           let photoPath = '';
           if (payload.photoUri) {
-            const response = await fetch(payload.photoUri);
-            const blob = await response.blob();
-            photoPath = `${payload.property_id}/id_${Date.now()}.jpg`;
-            await (await import('./supabase')).supabase.storage.from('id_photos').upload(photoPath, blob);
+            const { uploadIdPhoto } = await import('./photo');
+            photoPath = await uploadIdPhoto(
+              payload.property_id,
+              payload.guest_id || payload.id,
+              payload.photoUri
+            );
           }
 
           const { error: rpcError } = await (await import('./supabase')).supabase.rpc('check_in_guest', {
@@ -94,7 +210,7 @@ export async function processOutbox() {
             p_id_photo_path: photoPath,
             p_unit_id: payload.selectedUnit,
             p_amount: parseFloat(payload.amount),
-            p_pay_mode: payload.payMode,
+            p_pay_mode: payload.pay_mode !== undefined ? payload.pay_mode : (payload.payMode !== undefined ? payload.payMode : null),
             p_is_foreign: payload.isForeign,
             p_passport_no: payload.passportNo,
             p_visa_no: payload.visaNo,
@@ -110,12 +226,24 @@ export async function processOutbox() {
           if (error && (error.message.includes('Bed is already occupied') || (error as any).code === '23505')) {
             error = null; // Treat as success
           }
+
+          // Cleanup local photo ONLY after upload AND RPC both succeed
+          if (!error && payload.photoUri) {
+            try {
+              const { File } = await import('expo-file-system');
+              const f = new File(payload.photoUri);
+              if (f.exists) f.delete();
+            } catch {
+              // Best-effort cleanup
+            }
+          }
           break;
         }
 
         case 'guest_checkout': {
           const { error: rpcError } = await (await import('./supabase')).supabase.rpc('check_out_guest', {
-            p_stay_id: payload.stay_id
+            p_stay_id: payload.stay_id,
+            p_staff_id: payload.staff_id
           });
           error = rpcError;
           break;
@@ -131,79 +259,67 @@ export async function processOutbox() {
         }
 
         case 'shift_open': {
-          const { error: insertError } = await (await import('./supabase')).supabase
-            .from('shifts')
-            .insert({
-              id: payload.shift_id,
-              property_id: payload.property_id,
-              opened_by: payload.user_id,
-              opening_cash: payload.opening_cash,
-              status: 'open'
-            });
-          error = insertError;
+          const { error: rpcError } = await (await import('./supabase')).supabase.rpc('open_shift', {
+            p_shift_id: payload.shift_id || payload.id,
+            p_opening_cash: payload.opening_cash,
+            p_staff_id: payload.staff_id || null,
+          });
+          error = rpcError;
           break;
         }
 
         case 'petty_cash': {
-          const { error: insertError } = await (await import('./supabase')).supabase
-            .from('cash_entries')
-            .insert({
-              id: payload.entry_id,
-              shift_id: payload.shift_id,
-              kind: 'petty',
-              amount: payload.amount,
-              note: payload.note,
-              staff_id: payload.staff_id
-            });
-          error = insertError;
+          const { error: rpcError } = await (await import('./supabase')).supabase.rpc('add_petty_cash', {
+            p_entry_id: payload.entry_id || payload.id,
+            p_shift_id: payload.shift_id,
+            p_amount: payload.amount,
+            p_note: payload.note || null,
+            p_staff_id: payload.staff_id || null,
+          });
+          error = rpcError;
           break;
         }
 
         case 'set_maintenance': {
-          const { error: updateError } = await (await import('./supabase')).supabase
-            .from('units')
-            .update({ housekeeping_status: 'maintenance' })
-            .eq('id', payload.unit_id);
-          error = updateError;
+          const { error: rpcError } = await (await import('./supabase')).supabase.rpc('set_unit_maintenance', {
+            p_unit_id: payload.unit_id,
+            p_staff_id: payload.staff_id || null,
+          });
+          error = rpcError;
           break;
         }
 
         case 'report_issue': {
-          const { error: insertError } = await (await import('./supabase')).supabase
-            .from('issues')
-            .insert({
-              property_id: payload.property_id,
-              unit_id: payload.unit_id,
-              stay_id: payload.stay_id,
-              category: payload.category,
-              note: payload.note,
-              reported_by: payload.reported_by,
-              status: 'open'
-            });
-          error = insertError;
+          const { error: rpcError } = await (await import('./supabase')).supabase.rpc('report_issue', {
+            p_issue_id: payload.issue_id || payload.id,
+            p_unit_id: payload.unit_id || null,
+            p_stay_id: payload.stay_id || null,
+            p_category: payload.category || 'other',
+            p_note: payload.note || null,
+            p_staff_id: payload.staff_id || payload.reported_by || null,
+          });
+          error = rpcError;
           break;
         }
 
         case 'add_charge': {
-          const { error: insertError } = await (await import('./supabase')).supabase
-            .from('charges')
-            .insert({
-              id: payload.charge_id,
-              property_id: payload.property_id,
-              stay_id: payload.stay_id,
-              item: payload.item,
-              qty: payload.qty,
-              unit_price: payload.unit_price,
-              paid: payload.paid || false,
-              pay_mode: payload.pay_mode || null,
-              staff_id: payload.staff_id
-            });
-          error = insertError;
+          const { error: rpcError } = await (await import('./supabase')).supabase.rpc('add_stay_charge', {
+            p_charge_id: payload.charge_id || payload.id,
+            p_stay_id: payload.stay_id,
+            p_item: payload.item,
+            p_qty: payload.qty || 1,
+            p_unit_price: payload.unit_price,
+            p_paid: payload.paid || false,
+            p_pay_mode: payload.pay_mode || null,
+            p_staff_id: payload.staff_id || null,
+          });
+          error = rpcError;
           break;
         }
 
         case 'record_payment': {
           const { error: rpcError } = await (await import('./supabase')).supabase.rpc('record_payment', {
+            p_payment_id: payload.payment_id,
             p_stay_id: payload.stay_id,
             p_amount: payload.amount,
             p_pay_mode: payload.pay_mode,
@@ -216,7 +332,13 @@ export async function processOutbox() {
 
       if (error) {
         console.error(`Sync error [${actionType}]:`, error.message);
-        break; // Stop the queue on unhandled errors
+        const newAttempts = (item.attempts || 0) + 1;
+        if (newAttempts >= 5) {
+          db.runSync('UPDATE outbox SET status = ?, attempts = ?, last_error = ? WHERE id = ?', ['failed', newAttempts, error.message, item.id]);
+        } else {
+          db.runSync('UPDATE outbox SET attempts = ?, last_error = ? WHERE id = ?', [newAttempts, error.message, item.id]);
+          break; // Stop queue for now on error
+        }
       } else {
         // Success, remove from outbox
         db.runSync('DELETE FROM outbox WHERE id = ?', [item.id]);
@@ -256,6 +378,48 @@ export function cacheStays(stays: any[]) {
 export function getRoomsCache() { return db.getAllSync<any>('SELECT * FROM cache_rooms'); }
 export function getUnitsCache() { return db.getAllSync<any>('SELECT * FROM cache_units'); }
 export function getStaysCache() { return db.getAllSync<any>("SELECT * FROM cache_stays WHERE status = 'checked_in'"); }
+
+export const cacheGuests = async (guests: any[]) => {
+  const database = await getDb();
+  await database.runAsync('DELETE FROM cache_guests');
+  for (const g of guests) {
+    if (!g) continue;
+    await database.runAsync(
+      'INSERT INTO cache_guests (id, name, phone, nationality) VALUES (?, ?, ?, ?)',
+      [g.id, g.name || '', g.phone || '', g.nationality || '']
+    );
+  }
+};
+
+export const getGuestsCache = async (): Promise<any[]> => {
+  const database = await getDb();
+  return await database.getAllAsync('SELECT * FROM cache_guests');
+};
+
+export const cacheStaff = async (staff: any[]) => {
+  const database = await getDb();
+  for (const s of staff) {
+    if (!s) continue;
+    await database.runAsync(
+      `INSERT INTO cache_staff (id, name, role, active) VALUES (?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET name = excluded.name, role = excluded.role, active = excluded.active`,
+      [s.id, s.name || '', s.role || '', s.active ? 1 : 0]
+    );
+  }
+};
+
+export const getStaffCache = async (): Promise<any[]> => {
+  const database = await getDb();
+  return await database.getAllAsync('SELECT * FROM cache_staff WHERE active = 1');
+};
+
+export const addStayToCache = async (stayId: string, unitId: string, guestName: string) => {
+  const database = await getDb();
+  await database.runAsync(
+    'INSERT OR REPLACE INTO cache_stays (id, unit_id, guest_name, status) VALUES (?, ?, ?, ?)',
+    [stayId, unitId, guestName, 'checked_in']
+  );
+};
 
 // --- AUTOMATIC SYNC LISTENER ---
 // This runs in the background. When internet returns, it pushes the outbox automatically!

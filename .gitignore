@@ -41,3 +41,11 @@ example
 # generated native folders
 /ios
 /android
+
+# database dumps and backups
+logstay-*.sql
+*.backup
+*.dump
+
+# graphify
+graphify-out/

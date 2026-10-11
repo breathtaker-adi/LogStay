@@ -17,10 +17,11 @@ import {
   TouchableOpacity, 
   View 
 } from "react-native";
-import { isOnline, saveToOutbox } from '../lib/offline';
+import { isOnline, saveToOutbox, addStayToCache, getCachedPropertyId, setCachedPropertyId, getRoomsCache, getUnitsCache, getStaysCache } from '../lib/offline';
 import { supabase } from "../lib/supabase";
 import { COUNTRIES } from '../lib/countries';
 import { useStaff } from '../lib/staff-context';
+import { uploadIdPhoto } from '../lib/photo';
 
 const ALL_DOCS = [
   { id: 'Passport', label: 'Passport', icon: '📘', tag: 'Form C' },
@@ -38,7 +39,7 @@ export default function CheckInScreen() {
   
   // Payment States
   const [amount, setAmount] = useState("");
-  const [payMode, setPayMode] = useState<"cash" | "upi">("cash");
+  const [payMode, setPayMode] = useState<"cash" | "upi" | "pay_later">("cash");
   
   // Gender & Nationality
   const [gender, setGender] = useState("male");
@@ -84,9 +85,28 @@ export default function CheckInScreen() {
 
   async function fetchAvailableUnits() {
     try {
+      const online = await isOnline();
+      if (!online) {
+        const roomsData = getRoomsCache();
+        const unitsData = getUnitsCache();
+        const activeStays = getStaysCache();
+        const occupiedUnitIds = (activeStays || []).map((s: any) => s.unit_id);
+
+        const formattedUnits = (unitsData || [])
+          .filter((u: any) => !occupiedUnitIds.includes(u.id))
+          .map((u: any) => {
+            const room = (roomsData || []).find((r: any) => r.id === u.room_id);
+            return { id: u.id, label: `${room?.label || 'Room'} - ${u.label}` };
+          });
+
+        setUnits(formattedUnits);
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       const { data: memberData } = await supabase.from('members').select('property_id').eq('user_id', user?.id).single();
       if (!memberData) return;
+      await setCachedPropertyId(memberData.property_id);
 
       const { data: roomsData } = await supabase.from('rooms').select('id, label, kind').eq('property_id', memberData.property_id);
       if (!roomsData) return;
@@ -156,31 +176,86 @@ export default function CheckInScreen() {
       return;
     }
 
-    setLoading(true);
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount < 0) {
+      Alert.alert("Invalid Amount", "Please enter a valid stay amount.");
+      return;
+    }
+    if (parsedAmount > 200000) {
+      Alert.alert("Amount Limit Exceeded", "Maximum allowed stay amount is ₹200,000.");
+      return;
+    }
+    if (parsedAmount === 0 && payMode !== 'pay_later' && activeStaff?.role !== 'owner') {
+      Alert.alert("Rate Restriction", "Complimentary (₹0) stays require Owner role.");
+      return;
+    }
+
     const online = await isOnline();
 
+    // Fetch the unit's gender rule
+    let unitGenderRule: string | null = null;
+    if (online) {
+      const { data: unitData } = await supabase
+        .from('units')
+        .select('gender_rule')
+        .eq('id', selectedUnit)
+        .single();
+      unitGenderRule = unitData?.gender_rule || null;
+    } else {
+      const db = await (await import('../lib/offline')).getDb();
+      const cachedUnit = await db.getFirstAsync<{ gender_rule: string }>('SELECT gender_rule FROM cache_units WHERE id = ?', [selectedUnit]);
+      unitGenderRule = cachedUnit?.gender_rule || null;
+    }
+
+    if (unitGenderRule && unitGenderRule !== 'any' && unitGenderRule !== gender) {
+      if (activeStaff?.role !== 'owner') {
+        Alert.alert('Gender Restriction', `This bed is restricted to ${unitGenderRule} guests only.`);
+        return;
+      } else {
+        // Owner override warning
+        const proceed = await new Promise((resolve) => {
+          Alert.alert('Override Restriction?', `You are assigning a ${gender} guest to a ${unitGenderRule}-only bed. Continue?`, [
+            { text: 'Cancel', onPress: () => resolve(false) },
+            { text: 'Override', onPress: () => resolve(true) }
+          ]);
+        });
+        if (!proceed) return;
+      }
+    }
+
+    setLoading(true);
+
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: memberData } = await supabase.from('members').select('property_id').eq('user_id', user?.id).single();
-      if (!memberData) throw new Error("No property found for user.");
+      let propId: string | null = null;
+      if (online) {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: memberData } = await supabase.from('members').select('property_id').eq('user_id', user?.id).single();
+        if (memberData?.property_id) {
+          propId = memberData.property_id;
+          await setCachedPropertyId(propId);
+        }
+      }
+
+      if (!propId) {
+        propId = await getCachedPropertyId();
+      }
+
+      if (!propId) throw new Error("Property not found. Please connect to internet once to load property details.");
+      const validPropertyId: string = propId;
 
       if (online) {
-        const response = await fetch(photoUri as string);
-        const blob = await response.blob();
-        const fileName = `${memberData.property_id}/id_${Date.now()}.jpg`;
-        const { error: uploadError } = await supabase.storage.from('id_photos').upload(fileName, blob);
-        if (uploadError) throw uploadError;
-
         const guestId = Crypto.randomUUID();
         const stayId = Crypto.randomUUID(); // Added for idempotent retries
+        const fileName = await uploadIdPhoto(validPropertyId, guestId, photoUri as string);
+        const rpcPayMode = payMode === 'pay_later' ? null : payMode;
 
         const { error: rpcError } = await supabase.rpc('check_in_guest', {
           p_stay_id: stayId,
           p_guest_id: guestId,
-          p_property_id: memberData.property_id,
+          p_property_id: validPropertyId,
           p_name: name, p_phone: phone, p_nationality: nationality, p_gender: gender,
           p_id_type: idType, p_id_last4: idLast4, p_id_photo_path: fileName,
-          p_unit_id: selectedUnit, p_amount: parseFloat(amount), p_pay_mode: payMode,
+          p_unit_id: selectedUnit, p_amount: parseFloat(amount), p_pay_mode: rpcPayMode,
           p_is_foreign: isForeign, p_passport_no: passportNo, p_visa_no: visaNo, p_visa_type: '',
           p_arrived_from: arrivedFrom, p_next_dest: nextDest,
           p_staff_id: activeStaff?.id
@@ -194,22 +269,27 @@ export default function CheckInScreen() {
           }
           return;
         }
+        await addStayToCache(stayId, selectedUnit, name);
         Alert.alert("Success", "Guest checked in safely!");
 
       } else {
         const guestId = Crypto.randomUUID();
         const stayId = Crypto.randomUUID(); // Added for idempotent retries
+        const rpcPayMode = payMode === 'pay_later' ? null : payMode;
         const offlinePayload = {
           id: stayId,
           stay_id: stayId, // Saved to outbox for stable retries
           guest_id: guestId,
           name, phone, nationality, gender, idType, idLast4,
-          photoUri: photoUri, selectedUnit, amount, payMode,
+          photoUri: photoUri, selectedUnit, amount, 
+          payMode: rpcPayMode,
+          pay_mode: rpcPayMode,
           isForeign, passportNo, visaNo, arrivedFrom, nextDest,
-          property_id: memberData.property_id,
+          property_id: validPropertyId,
           staff_id: activeStaff?.id
         };
         saveToOutbox('guest_checkin', offlinePayload);
+        await addStayToCache(stayId, selectedUnit, name);
         Alert.alert("Saved Offline", "Guest check-in saved locally. Will sync safely when online.");
       }
 
@@ -295,6 +375,9 @@ export default function CheckInScreen() {
         </TouchableOpacity>
         <TouchableOpacity style={[styles.toggleBtn, payMode === "upi" && styles.toggleActive]} onPress={() => setPayMode("upi")}>
           <Text style={payMode === "upi" ? styles.toggleTextActive : styles.toggleText}>UPI</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.toggleBtn, payMode === "pay_later" && styles.toggleActive]} onPress={() => setPayMode("pay_later")}>
+          <Text style={payMode === "pay_later" ? styles.toggleTextActive : styles.toggleText}>Pay Later</Text>
         </TouchableOpacity>
       </View>
       <TextInput style={styles.input} placeholder="Amount (₹)" value={amount} onChangeText={setAmount} keyboardType="numeric" textContentType="none" autoComplete="off" />

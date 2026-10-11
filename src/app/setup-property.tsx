@@ -55,14 +55,11 @@ export default function SetupPropertyScreen() {
           return;
         }
 
-        const { error: memberError } = await supabase
-          .from('members')
-          .insert([{ property_id: propertyId, user_id: user?.id, role: 'staff' }]);
+        const { error: joinError } = await supabase.rpc('join_property', {
+          p_code: propertyId.trim()
+        });
 
-        if (memberError) throw memberError;
-        
-        // Set secure PIN
-        await supabase.rpc('set_pin', { p_prop: propertyId, p_pin: pin });
+        if (joinError) throw joinError;
 
         Alert.alert("Success", "Joined property successfully!");
       }

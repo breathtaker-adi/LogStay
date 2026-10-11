@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { View, Text, TextInput, Button, StyleSheet, Alert, ActivityIndicator, TouchableOpacity } from "react-native";
 import { router } from "expo-router";
+import * as Crypto from 'expo-crypto';
 import { supabase } from "../lib/supabase";
 
 export default function AddRoomScreen() {
@@ -18,57 +19,33 @@ export default function AddRoomScreen() {
 
     setLoading(true);
 
-    // 1. Get the user's property_id
-    const { data: { user } } = await supabase.auth.getUser();
-    const { data: memberData } = await supabase
-      .from('members')
-      .select('property_id')
-      .eq('user_id', user?.id)
-      .single();
+    try {
+      const roomId = Crypto.randomUUID();
+      const numBeds = kind === "dorm" ? (parseInt(bedCount, 10) || 1) : 1;
+      const unitIds = Array.from({ length: numBeds }, () => Crypto.randomUUID());
 
-    if (!memberData) {
-      Alert.alert("Error", "No property found for this user.");
-      setLoading(false);
-      return;
-    }
+      const { error: roomError } = await supabase.rpc('add_room_with_units', {
+        p_room_id: roomId,
+        p_label: label.trim(),
+        p_kind: kind,
+        p_floor: floor ? floor.trim() : null,
+        p_unit_ids: unitIds,
+        p_unit_labels: null,
+        p_gender_rule: 'any'
+      });
 
-    // 2. Insert the Room
-    const { data: newRoom, error: roomError } = await supabase
-      .from('rooms')
-      .insert([{ property_id: memberData.property_id, label: label, kind: kind, floor: floor }])
-      .select()
-      .single();
-
-    if (roomError) {
-      Alert.alert("Error", roomError.message);
-      setLoading(false);
-      return;
-    }
-
-    // 3. If it's a dorm, create the beds (units)
-    if (kind === "dorm") {
-      const numBeds = parseInt(bedCount, 10) || 1;
-      const unitsToInsert = Array.from({ length: numBeds }, (_, i) => ({
-        room_id: newRoom.id,
-        label: `Bed ${i + 1}`,
-        gender_rule: 'any'
-      }));
-
-      const { error: unitsError } = await supabase.from('units').insert(unitsToInsert);
-      if (unitsError) {
-        Alert.alert("Error creating beds", unitsError.message);
+      if (roomError) {
+        Alert.alert("Error", roomError.message);
+        setLoading(false);
+        return;
       }
-    } else {
-      // If private room, just create 1 unit representing the whole room
-      const { error: unitError } = await supabase
-        .from('units')
-        .insert([{ room_id: newRoom.id, label: 'Whole Room', gender_rule: 'any' }]);
-        
-      if (unitError) Alert.alert("Error creating unit", unitError.message);
-    }
 
-    setLoading(false);
-    router.replace("/home");
+      setLoading(false);
+      router.replace("/home");
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to add room");
+      setLoading(false);
+    }
   }
 
   return (

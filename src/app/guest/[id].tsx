@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, StyleSheet, ActivityIndicator, Modal, TextInput, Image } from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useStaff } from '@/lib/staff-context';
 import { isOnline, saveToOutbox } from '@/lib/offline';
@@ -8,17 +8,24 @@ import * as Crypto from 'expo-crypto';
 
 export default function GuestDetailScreen() {
   const { id, stayId } = useLocalSearchParams<{ id: string; stayId: string }>();
-  const { activeStaff } = useStaff();
+  const { activeStaff, can } = useStaff();
   
   const [loading, setLoading] = useState(true);
   const [guest, setGuest] = useState<any>(null);
   const [stay, setStay] = useState<any>(null);
   const [charges, setCharges] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
   const [showChargeModal, setShowChargeModal] = useState(false);
   const [showPayModal, setShowPayModal] = useState(false);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [loadingPhoto, setLoadingPhoto] = useState(false);
   
+  // Refund form state
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundPaymentId, setRefundPaymentId] = useState<string | null>(null);
+  const [refundReason, setRefundReason] = useState('');
+  const [refunding, setRefunding] = useState(false);
+
   // Charge form state
   const [item, setItem] = useState('');
   const [price, setPrice] = useState('');
@@ -46,6 +53,14 @@ export default function GuestDetailScreen() {
       .order('created_at', { ascending: false });
     setCharges(chargesData || []);
 
+    // Fetch Payments
+    const { data: paymentsData } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('stay_id', stayId)
+      .order('created_at', { ascending: false });
+    setPayments(paymentsData || []);
+
     setLoading(false);
   };
 
@@ -67,15 +82,9 @@ export default function GuestDetailScreen() {
       if (error) throw error;
       setPhotoUrl(data.signedUrl);
 
-      // 2. Write to Audit Log
-      const { data: userData } = await supabase.auth.getUser();
-      await supabase.from('audit_log').insert({
-        property_id: guest.property_id,
-        user_id: userData.user?.id,
-        action: 'view_id_photo',
-        record_id: guest.id
-      });
-    } catch (e: any) {
+      // 2. Write to Audit Log via secure RPC
+      await supabase.rpc('log_photo_view', { p_guest_id: guest.id });
+    } catch {
       Alert.alert('Error', 'Could not load ID photo.');
     } finally {
       setLoadingPhoto(false);
@@ -92,23 +101,24 @@ export default function GuestDetailScreen() {
     const numPrice = parseFloat(price);
 
     if (await isOnline()) {
-      const { error } = await supabase.from('charges').insert({
-        id: chargeId,
-        property_id: guest.property_id,
-        stay_id: stayId,
-        item,
-        qty: 1,
-        unit_price: numPrice,
-        paid: false,
-        staff_id: activeStaff.id
+      const { error } = await supabase.rpc('add_stay_charge', {
+        p_charge_id: chargeId,
+        p_stay_id: stayId,
+        p_item: item.trim(),
+        p_qty: 1,
+        p_unit_price: numPrice,
+        p_paid: false,
+        p_pay_mode: null,
+        p_staff_id: activeStaff.id
       });
       if (error) return Alert.alert('Error', error.message);
     } else {
       await saveToOutbox('add_charge', {
+        id: chargeId,
         charge_id: chargeId,
         property_id: guest.property_id,
         stay_id: stayId,
-        item,
+        item: item.trim(),
         qty: 1,
         unit_price: numPrice,
         paid: false,
@@ -128,9 +138,11 @@ export default function GuestDetailScreen() {
   const handleCollectPayment = async () => {
     if (!payAmount || !activeStaff) return;
     const numAmount = parseFloat(payAmount);
+    const paymentId = Crypto.randomUUID();
 
     if (await isOnline()) {
       const { error } = await supabase.rpc('record_payment', {
+        p_payment_id: paymentId,
         p_stay_id: stayId,
         p_amount: numAmount,
         p_pay_mode: payMode,
@@ -139,6 +151,7 @@ export default function GuestDetailScreen() {
       if (error) return Alert.alert('Error', error.message);
     } else {
       await saveToOutbox('record_payment', {
+        payment_id: paymentId,
         stay_id: stayId,
         amount: numAmount,
         pay_mode: payMode,
@@ -149,6 +162,31 @@ export default function GuestDetailScreen() {
     setShowPayModal(false);
     setPayAmount('');
     Alert.alert('Success', 'Payment recorded.');
+    fetchDetails();
+  };
+
+  const handleRefund = (paymentId: string) => {
+    setRefundPaymentId(paymentId);
+    setRefundReason('');
+    setShowRefundModal(true);
+  };
+
+  const confirmRefund = async () => {
+    if (!refundPaymentId || !refundReason.trim()) {
+      return Alert.alert('Error', 'Reason is required');
+    }
+    setRefunding(true);
+    const { error } = await supabase.rpc('refund_payment', {
+      p_payment_id: refundPaymentId,
+      p_staff_id: activeStaff?.id,
+      p_reason: refundReason.trim()
+    });
+    setRefunding(false);
+    if (error) return Alert.alert('Error', error.message);
+    setShowRefundModal(false);
+    setRefundPaymentId(null);
+    setRefundReason('');
+    Alert.alert('Success', 'Payment refunded.');
     fetchDetails();
   };
 
@@ -164,16 +202,28 @@ export default function GuestDetailScreen() {
           <Text style={styles.guestName}>{guest.name}</Text>
           <Text style={styles.guestInfo}>{guest.phone || 'No phone'} • {guest.nationality}</Text>
           <Text style={styles.guestInfo}>ID: {guest.id_type} ****{guest.id_last4}</Text>
-          {guest.id_photo_path && (
-            <Pressable 
-              style={{ backgroundColor: '#eff6ff', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, alignSelf: 'flex-start', marginTop: 12 }} 
-              onPress={handleViewPhoto}
-              disabled={loadingPhoto}
-            >
-              <Text style={{ color: '#2563eb', fontWeight: 'bold', fontSize: 14 }}>
-                {loadingPhoto ? 'Loading...' : 'View ID Photo'}
-              </Text>
-            </Pressable>
+          {guest.id_photo_path && !guest.id_deleted_at ? (
+            can('view_id_photo') && (
+              <Pressable 
+                style={{ backgroundColor: '#eff6ff', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, alignSelf: 'flex-start', marginTop: 12 }} 
+                onPress={handleViewPhoto}
+                disabled={loadingPhoto}
+              >
+                <Text style={{ color: '#2563eb', fontWeight: 'bold', fontSize: 14 }}>
+                  {loadingPhoto ? 'Loading...' : 'View ID Photo'}
+                </Text>
+              </Pressable>
+            )
+          ) : (
+            <Text style={{ fontSize: 12, color: '#94a3b8', marginTop: 8, fontStyle: 'italic' }}>
+              {guest.id_deleted_at ? 'ID photo deleted per retention policy.' : 'No ID photo on file.'}
+            </Text>
+          )}
+
+          {guest.id_photo_expires_at && !guest.id_deleted_at && (
+            <Text style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>
+              Auto-deletes on {new Date(guest.id_photo_expires_at).toLocaleDateString()}
+            </Text>
           )}
         </View>
       </View>
@@ -218,6 +268,40 @@ export default function GuestDetailScreen() {
             <View key={charge.id} style={styles.chargeItem}>
               <Text style={styles.chargeName}>{charge.item}</Text>
               <Text style={styles.chargePrice}>₹{charge.unit_price}</Text>
+            </View>
+          ))
+        )}
+      </View>
+
+      {/* Payment History */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Payment History</Text>
+        {payments.length === 0 ? (
+          <Text style={styles.empty}>No payments recorded.</Text>
+        ) : (
+          payments.map(pay => (
+            <View key={pay.id} style={styles.chargeItem}>
+              <View>
+                <Text style={styles.chargeName}>{pay.pay_mode?.toUpperCase()} Payment</Text>
+                <Text style={{ fontSize: 12, color: '#94a3b8' }}>{new Date(pay.created_at).toLocaleString()}</Text>
+                {pay.refunded && <Text style={{ color: '#ef4444', fontSize: 12, fontWeight: 'bold' }}>REFUNDED</Text>}
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                {!pay.refunded && (
+                  <Text style={[styles.chargePrice, { color: pay.refunded ? '#94a3b8' : '#10b981' }]}>
+                    ₹{pay.amount}
+                  </Text>
+                )}
+                {/* Refund Button (Owner Only) */}
+                {!pay.refunded && can('refund_payment') && (
+                  <Pressable 
+                    style={{ backgroundColor: '#ef4444', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }} 
+                    onPress={() => handleRefund(pay.id)}
+                  >
+                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Refund</Text>
+                  </Pressable>
+                )}
+              </View>
             </View>
           ))
         )}
@@ -308,6 +392,41 @@ export default function GuestDetailScreen() {
               </Pressable>
               <Pressable style={styles.submitBtn} onPress={handleCollectPayment}>
                 <Text style={styles.submitBtnText}>Collect</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Refund Modal */}
+      <Modal visible={showRefundModal} animationType="slide" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Refund Payment</Text>
+            <Text style={{ fontSize: 14, color: '#64748b', marginBottom: 12 }}>
+              Enter a reason for this refund (required). If this was a cash payment, it will deduct from the active shift cash drawer.
+            </Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Reason for refund (e.g. Overcharged, cancellation)"
+              value={refundReason}
+              onChangeText={setRefundReason}
+            />
+            <View style={styles.modalBtnRow}>
+              <Pressable 
+                style={styles.cancelBtn} 
+                onPress={() => { setShowRefundModal(false); setRefundPaymentId(null); setRefundReason(''); }}
+              >
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </Pressable>
+              <Pressable 
+                style={[styles.submitBtn, { backgroundColor: '#ef4444' }]} 
+                onPress={confirmRefund}
+                disabled={refunding}
+              >
+                <Text style={styles.submitBtnText}>
+                  {refunding ? 'Refunding...' : 'Confirm Refund'}
+                </Text>
               </Pressable>
             </View>
           </View>

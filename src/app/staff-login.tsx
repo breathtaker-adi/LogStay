@@ -5,6 +5,7 @@ import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View 
 import { router, useFocusEffect } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useStaff } from '@/lib/staff-context';
+import { isOnline, getStaffCache, cacheStaff, saveLocalPinHash, verifyLocalPin } from '@/lib/offline';
 
 export default function StaffLoginScreen() {
   const [staffList, setStaffList] = useState<any[]>([]);
@@ -16,30 +17,46 @@ export default function StaffLoginScreen() {
 
   const fetchStaff = async () => {
     setLoading(true);
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData.user) return router.replace('/login');
 
-    // Find the user's property
-    const { data: member } = await supabase
-      .from('members')
-      .select('property_id')
-      .eq('user_id', userData.user.id)
-      .single();
+    // 1. Read from local cache first
+    const localStaff = await getStaffCache();
+    if (localStaff.length > 0) {
+      setStaffList(localStaff);
+      setLoading(false);
+    }
 
-    if (!member) return router.replace('/setup-property');
+    // 2. If online, fetch from Supabase and update cache
+    if (await isOnline()) {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) return router.replace('/login');
 
-    // Fetch active staff for this property using the secure view
-    const { data, error } = await supabase
-      .from('staff_profiles_safe')
-      .select('*')
-      .eq('property_id', member.property_id)
-      .eq('active', true);
+      // Find the user's property
+      const { data: member } = await supabase
+        .from('members')
+        .select('property_id')
+        .eq('user_id', userData.user.id)
+        .single();
 
-    if (error) {
-      Alert.alert('Error', 'Could not load staff list');
-      console.error(error);
+      if (!member) return router.replace('/setup-property');
+
+      // Fetch active staff for this property using the secure view
+      const { data, error } = await supabase
+        .from('staff_profiles_safe')
+        .select('*')
+        .eq('property_id', member.property_id)
+        .eq('active', true);
+
+      if (error) {
+        Alert.alert('Error', 'Could not load staff list');
+        console.error(error);
+      } else if (data) {
+        setStaffList(data);
+        await cacheStaff(data); // Save to local cache
+      }
     } else {
-      setStaffList(data || []);
+      if (localStaff.length === 0) {
+        Alert.alert('Offline', 'No staff data cached. Please connect to the internet to log in.');
+      }
     }
     setLoading(false);
   };
@@ -55,42 +72,65 @@ export default function StaffLoginScreen() {
     if (!selectedStaff || pin.length < 4) return;
     setVerifying(true);
 
-    const { data, error } = await supabase.rpc('verify_staff_pin', {
-      p_staff_id: selectedStaff.id,
-      p_pin: pin
-    });
+    if (await isOnline()) {
+      const { data, error } = await supabase.rpc('staff_login', {
+        p_staff: selectedStaff.id,
+        p_pin: pin
+      });
 
-    setVerifying(false);
+      setVerifying(false);
 
-    if (error) {
-      Alert.alert('Error', error.message);
-      return;
-    }
-
-    if (data === true) {
-      // 1. Clock in the staff member
-      const { data: attData, error: attError } = await supabase
-        .from('staff_attendance')
-        .insert({ staff_id: selectedStaff.id })
-        .select('id')
-        .single();
-
-      let attendanceId = null;
-      if (!attError && attData) {
-        attendanceId = attData.id;
+      if (error) {
+        Alert.alert('Error', error.message);
+        return;
       }
 
-      // 2. Set active staff in context with the attendance ID
-      await setActiveStaff({ 
-        id: selectedStaff.id, 
-        name: selectedStaff.name, 
-        role: selectedStaff.role,
-        attendanceId: attendanceId
-      });
-      router.replace('/home');
+      if (data === true) {
+        // SAVE LOCAL PIN HASH FOR OFFLINE USE
+        await saveLocalPinHash(selectedStaff.id, pin);
+
+        // 1. Clock in the staff member via secure RPC
+        const { data: attId, error: attError } = await supabase.rpc('clock_in_staff', {
+          p_staff_id: selectedStaff.id
+        });
+
+        let attendanceId = null;
+        if (!attError && attId) {
+          attendanceId = attId;
+        }
+
+        // 2. Set active staff in context with the attendance ID
+        await setActiveStaff({ 
+          id: selectedStaff.id, 
+          name: selectedStaff.name, 
+          role: selectedStaff.role,
+          attendanceId: attendanceId
+        });
+        router.replace('/home');
+      } else {
+        Alert.alert('Invalid PIN', 'The PIN you entered is incorrect.');
+        setPin('');
+      }
     } else {
-      Alert.alert('Invalid PIN', 'The PIN you entered is incorrect.');
-      setPin('');
+      // OFFLINE FALLBACK: Verify locally
+      setVerifying(false);
+      try {
+        const isValid = await verifyLocalPin(selectedStaff.id, pin);
+        if (isValid) {
+          await setActiveStaff({
+            id: selectedStaff.id,
+            name: selectedStaff.name,
+            role: selectedStaff.role,
+            attendanceId: null
+          });
+          router.replace('/home');
+        } else {
+          Alert.alert('Invalid PIN', 'The PIN you entered is incorrect.');
+          setPin('');
+        }
+      } catch (e: any) {
+        Alert.alert('Locked', e.message);
+      }
     }
   };
 
@@ -100,15 +140,6 @@ export default function StaffLoginScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Settings Button */}
-      <Pressable 
-        style={styles.settingsBtn} 
-        onPress={() => router.push('/settings')}
-      >
-        <Ionicons name="settings" size={24} color="#64748b" />
-        <Text style={styles.settingsText}>Owner Settings</Text>
-      </Pressable>
-
       <Text style={styles.title}>{"Who's at the desk?"}</Text>
       
       {!selectedStaff ? (
@@ -172,18 +203,6 @@ const styles = StyleSheet.create({
   loginBtn: { backgroundColor: '#2563eb', paddingHorizontal: 40, paddingVertical: 14, borderRadius: 12 },
   loginBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
   backText: { color: '#64748b', marginTop: 16 },
-  settingsBtn: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 8, 
-    alignSelf: 'flex-end', 
-    marginBottom: 20,
-    padding: 8
-  },
-  settingsText: { 
-    color: '#64748b', 
-    fontWeight: '600' 
-  },
   emptyBox: { alignItems: 'center', marginTop: 60, paddingHorizontal: 16, gap: 12 },
   emptyTitle: { fontSize: 18, fontWeight: 'bold', color: '#334155' },
   emptySub: { color: '#64748b', textAlign: 'center', marginBottom: 12 }

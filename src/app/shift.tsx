@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { View, Text, TextInput, Button, StyleSheet, Alert, FlatList } from "react-native";
 import * as Crypto from 'expo-crypto';
 import { supabase } from "../lib/supabase";
-import { isOnline, saveToOutbox } from "../lib/offline";
+import { isOnline, saveToOutbox, getCachedPropertyId, setCachedPropertyId } from "../lib/offline";
 import { useStaff } from "../lib/staff-context";
 
 export default function ShiftScreen() {
@@ -26,9 +26,15 @@ export default function ShiftScreen() {
   async function fetchShiftData() {
     setLoading(true);
     try {
+      if (!(await isOnline())) {
+        setLoading(false);
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       const { data: memberData } = await supabase.from('members').select('property_id').eq('user_id', user?.id).single();
       if (!memberData) return;
+      await setCachedPropertyId(memberData.property_id);
 
       // 1. Fetch Active Shift
       const { data: shiftData } = await supabase
@@ -70,36 +76,55 @@ export default function ShiftScreen() {
     if (!openingCash) return Alert.alert("Missing Info", "Please enter opening cash amount.");
     
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: memberData } = await supabase.from('members').select('property_id').eq('user_id', user?.id).single();
-      if (!memberData) throw new Error("Property not found");
+      let propertyId: string | null = null;
+      let userId: string | undefined;
+
+      if (await isOnline()) {
+        const { data: { user } } = await supabase.auth.getUser();
+        userId = user?.id;
+        const { data: memberData } = await supabase.from('members').select('property_id').eq('user_id', user?.id).single();
+        if (memberData?.property_id) {
+          propertyId = memberData.property_id;
+          await setCachedPropertyId(propertyId);
+        }
+      }
+
+      if (!propertyId) {
+        propertyId = await getCachedPropertyId();
+      }
+
+      if (!propertyId) {
+        Alert.alert("Setup Required", "Please connect to the internet once to load property details.");
+        return;
+      }
+      const validPropertyId = propertyId;
 
       const shiftId = Crypto.randomUUID();
-      const userId = user?.id;
-      const propertyId = memberData.property_id;
       const amount = parseFloat(openingCash);
 
       if (await isOnline()) {
-        const { data, error } = await supabase
-          .from('shifts')
-          .insert({ id: shiftId, property_id: propertyId, opened_by: userId, opening_cash: amount, status: 'open' })
-          .select().single();
+        const { error } = await supabase.rpc('open_shift', {
+          p_shift_id: shiftId,
+          p_opening_cash: amount,
+          p_staff_id: activeStaff?.id || null
+        });
           
         if (error) { Alert.alert('Error', error.message); return; }
-        setActiveShift(data);
       } else {
         await saveToOutbox('shift_open', { 
+          id: shiftId,
           shift_id: shiftId, 
-          property_id: propertyId, 
-          user_id: userId, 
-          opening_cash: amount 
+          property_id: validPropertyId, 
+          user_id: userId || null, 
+          opening_cash: amount,
+          staff_id: activeStaff?.id || null
         });
         
         // Optimistic UI: Set local state so the screen updates
         setActiveShift({ 
           id: shiftId, 
-          property_id: propertyId, 
-          opened_by: userId, 
+          property_id: validPropertyId, 
+          opened_by: userId || null, 
           opening_cash: amount, 
           status: 'open', 
           counted_cash: null, 
@@ -127,15 +152,19 @@ export default function ShiftScreen() {
       const note = pettyNote;
 
       if (await isOnline()) {
-        const { data: newEntry, error } = await supabase
-          .from('cash_entries')
-          .insert({ id: entryId, shift_id: activeShift.id, kind: 'petty', amount, note, staff_id: activeStaff?.id })
-          .select().single();
+        const { error } = await supabase.rpc('add_petty_cash', {
+          p_entry_id: entryId,
+          p_shift_id: activeShift.id,
+          p_amount: amount,
+          p_note: note || null,
+          p_staff_id: activeStaff?.id || null
+        });
           
         if (error) { Alert.alert('Error', error.message); return; }
-        setEntries([...entries, newEntry || { id: entryId, shift_id: activeShift.id, kind: 'petty', amount, note, staff_id: activeStaff?.id, created_at: new Date().toISOString() }]);
+        setEntries([...entries, { id: entryId, shift_id: activeShift.id, kind: 'petty', amount, note, staff_id: activeStaff?.id, created_at: new Date().toISOString() }]);
       } else {
         await saveToOutbox('petty_cash', { 
+          id: entryId,
           entry_id: entryId, 
           shift_id: activeShift.id, 
           amount, 
@@ -156,57 +185,42 @@ export default function ShiftScreen() {
   }
 
   async function closeShift() {
-    // At the very beginning of closeShift():
     if (!(await isOnline())) {
-      Alert.alert('Internet Required', "You must be online to verify the co-signer's PIN and close the shift.");
+      Alert.alert('Internet Required', "You must be online to verify and close the shift.");
       return;
     }
 
-    if (!countedCash || !coSignPin) {
-      return Alert.alert("Missing Info", "Please enter counted cash and incoming staff PIN.");
+    if (!countedCash) {
+      return Alert.alert("Missing Info", "Please enter counted cash.");
+    }
+
+    if (activeStaff?.role !== 'owner' && !coSignPin) {
+      return Alert.alert("Co-Sign Required", "Please enter incoming staff PIN to hand over the drawer.");
     }
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: memberData } = await supabase.from('members').select('property_id').eq('user_id', user?.id).single();
-      if (!memberData) throw new Error("Property not found");
+      const { data: closeResult, error: rpcError } = await supabase.rpc('close_shift_secure', {
+        p_shift_id: activeShift.id,
+        p_counted_cash: parseFloat(countedCash),
+        p_staff_id: activeStaff?.id,
+        p_cosign_pin: coSignPin ? coSignPin.trim() : null
+      });
 
-      // 1. Verify the Co-Sign PIN using the secure database function
-      const { data: isValid, error: rpcError } = await supabase
-        .rpc('verify_cosign', { p_prop: memberData.property_id, p_pin: coSignPin });
-
-      if (rpcError || !isValid) {
-        return Alert.alert("Invalid PIN", "The incoming staff PIN is incorrect or you cannot co-sign your own shift.");
+      if (rpcError) {
+        return Alert.alert("Shift Handover Failed", rpcError.message);
       }
 
-      // 2. Close the shift
-      const { error: closeError } = await supabase
-        .from('shifts')
-        .update({
-          status: 'closed',
-          counted_cash: parseFloat(countedCash),
-          closed_by: user?.id,
-          closed_at: new Date().toISOString(),
-          co_signed: true
-        })
-        .eq('id', activeShift.id);
-
-      if (closeError) throw closeError;
-
-      // 3. Add to Audit Log
-      await supabase.from('audit_log').insert([{
-        property_id: memberData.property_id,
-        user_id: user?.id,
-        action: 'shift_close',
-        record_id: activeShift.id
-      }]);
-
-      Alert.alert("Success", "Shift closed & co-signed successfully!");
+      Alert.alert(
+        "Success", 
+        closeResult?.co_signed 
+          ? `Shift closed & co-signed by ${closeResult?.cosigner || 'incoming staff'}!` 
+          : "Shift closed by owner."
+      );
       setActiveShift(null);
       setEntries([]);
       setCountedCash("");
       setCoSignPin("");
-      fetchShiftData(); // Refresh history
+      fetchShiftData();
 
     } catch (error: any) {
       Alert.alert("Error", error.message);
@@ -267,8 +281,16 @@ export default function ShiftScreen() {
           
           <Text style={styles.subtitle}>Close Shift (Handover)</Text>
           <TextInput style={styles.input} placeholder="Counted Cash by Desk Staff" value={countedCash} onChangeText={setCountedCash} keyboardType="numeric" />
-          <TextInput style={styles.input} placeholder="Incoming Staff PIN (Co-Sign)" value={coSignPin} onChangeText={setCoSignPin} keyboardType="numeric" maxLength={4} secureTextEntry />
-          <Button title="Close & Co-Sign Shift" onPress={closeShift} color="#ef4444" />
+          <TextInput 
+            style={styles.input} 
+            placeholder={activeStaff?.role === 'owner' ? "Incoming Staff PIN (Optional for Owner)" : "Incoming Staff PIN (Co-Sign)"} 
+            value={coSignPin} 
+            onChangeText={setCoSignPin} 
+            keyboardType="numeric" 
+            maxLength={4} 
+            secureTextEntry 
+          />
+          <Button title={activeStaff?.role === 'owner' ? "Close Shift" : "Close & Co-Sign Shift"} onPress={closeShift} color="#ef4444" />
         </View>
       )}
 
