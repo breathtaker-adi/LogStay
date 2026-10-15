@@ -1,8 +1,8 @@
 // src/app/outbox.tsx
-import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, Pressable, StyleSheet, Alert, ActivityIndicator } from 'react-native';
-import { router } from 'expo-router';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, FlatList, Pressable, StyleSheet, Alert, ActivityIndicator, RefreshControl } from 'react-native';
 import { getDb, processOutbox } from '@/lib/offline';
+import { ScreenHeader } from '@/lib/screen-header';
 
 export default function OutboxScreen() {
   const [items, setItems] = useState<any[]>([]);
@@ -65,25 +65,38 @@ export default function OutboxScreen() {
     </View>
   );
 
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await processOutbox();
+      await fetchItems();
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()}>
-          <Text style={styles.backBtn}>← Back</Text>
-        </Pressable>
-        <Text style={styles.title}>Sync Queue</Text>
-        <Pressable onPress={handleRetryAll} disabled={loading}>
-          <Text style={styles.retryBtn}>Retry All</Text>
-        </Pressable>
-      </View>
+      <ScreenHeader
+        title="Offline Outbox"
+        subtitle="Sync Queue"
+        right={
+          <Pressable onPress={handleRetryAll} disabled={loading} style={{ paddingVertical: 4, paddingHorizontal: 6 }}>
+            <Text style={styles.retryBtn}>Retry</Text>
+          </Pressable>
+        }
+      />
 
-      {loading ? (
+      {loading && !refreshing ? (
         <ActivityIndicator size="large" style={{ marginTop: 40 }} />
       ) : (
         <FlatList
           data={items}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           ListEmptyComponent={<Text style={styles.empty}>Queue is empty. All data synced.</Text>}
           contentContainerStyle={{ padding: 16 }}
         />

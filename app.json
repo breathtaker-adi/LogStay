@@ -13,13 +13,17 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundColor": "#ffffff"
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "backgroundColor": "#023dfd"
       },
       "package": "com.logstay.app",
       "allowBackup": false,
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -32,7 +36,7 @@
         {
           "image": "./assets/images/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#2563eb"
+          "backgroundColor": "#023dfd"
         }
       ],
       [
@@ -59,8 +63,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": ""
-      }
+        "projectId": "fea38ce5-3250-4199-86d9-669ec8e8c9cf"
+      },
+      "router": {}
     }
   }
 }

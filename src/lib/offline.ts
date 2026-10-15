@@ -64,7 +64,7 @@ export const initOfflineDB = async () => {
   await db.execAsync(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS outbox (id TEXT PRIMARY KEY NOT NULL, entity TEXT, type TEXT, payload TEXT NOT NULL, created_at INTEGER NOT NULL, status TEXT DEFAULT 'pending', attempts INTEGER DEFAULT 0, last_error TEXT);
-    CREATE TABLE IF NOT EXISTS cache_rooms (id TEXT PRIMARY KEY, property_id TEXT, label TEXT, kind TEXT);
+    CREATE TABLE IF NOT EXISTS cache_rooms (id TEXT PRIMARY KEY, property_id TEXT, label TEXT, kind TEXT, floor TEXT, floor_no INTEGER);
     CREATE TABLE IF NOT EXISTS cache_units (id TEXT PRIMARY KEY, room_id TEXT, label TEXT, gender_rule TEXT, housekeeping_status TEXT);
     CREATE TABLE IF NOT EXISTS cache_stays (id TEXT PRIMARY KEY, property_id TEXT, unit_id TEXT, guest_name TEXT, status TEXT);
     CREATE TABLE IF NOT EXISTS cache_guests (id TEXT PRIMARY KEY, name TEXT, phone TEXT, nationality TEXT);
@@ -77,6 +77,8 @@ export const initOfflineDB = async () => {
   try { db.execSync("ALTER TABLE outbox ADD COLUMN attempts INTEGER DEFAULT 0"); } catch {}
   try { db.execSync("ALTER TABLE outbox ADD COLUMN last_error TEXT"); } catch {}
   try { db.execSync("ALTER TABLE outbox ADD COLUMN type TEXT"); } catch {}
+  try { db.execSync("ALTER TABLE cache_rooms ADD COLUMN floor TEXT"); } catch {}
+  try { db.execSync("ALTER TABLE cache_rooms ADD COLUMN floor_no INTEGER"); } catch {}
   try { db.execSync("ALTER TABLE cache_stays ADD COLUMN guest_name TEXT"); } catch {}
   try { db.execSync("ALTER TABLE cache_staff ADD COLUMN pin_hash_local TEXT"); } catch {}
   try { db.execSync("ALTER TABLE cache_staff ADD COLUMN salt TEXT"); } catch {}
@@ -95,7 +97,7 @@ db.execSync(`
     attempts INTEGER DEFAULT 0,
     last_error TEXT
   );
-  CREATE TABLE IF NOT EXISTS cache_rooms (id TEXT PRIMARY KEY, property_id TEXT, label TEXT, kind TEXT);
+  CREATE TABLE IF NOT EXISTS cache_rooms (id TEXT PRIMARY KEY, property_id TEXT, label TEXT, kind TEXT, floor TEXT, floor_no INTEGER);
   CREATE TABLE IF NOT EXISTS cache_units (id TEXT PRIMARY KEY, room_id TEXT, label TEXT, gender_rule TEXT, housekeeping_status TEXT);
   CREATE TABLE IF NOT EXISTS cache_stays (id TEXT PRIMARY KEY, property_id TEXT, unit_id TEXT, guest_name TEXT, status TEXT);
   CREATE TABLE IF NOT EXISTS cache_guests (id TEXT PRIMARY KEY, name TEXT, phone TEXT, nationality TEXT);
@@ -108,6 +110,8 @@ try { db.execSync("ALTER TABLE outbox ADD COLUMN status TEXT DEFAULT 'pending'")
 try { db.execSync("ALTER TABLE outbox ADD COLUMN attempts INTEGER DEFAULT 0"); } catch {}
 try { db.execSync("ALTER TABLE outbox ADD COLUMN last_error TEXT"); } catch {}
 try { db.execSync("ALTER TABLE outbox ADD COLUMN type TEXT"); } catch {}
+try { db.execSync("ALTER TABLE cache_rooms ADD COLUMN floor TEXT"); } catch {}
+try { db.execSync("ALTER TABLE cache_rooms ADD COLUMN floor_no INTEGER"); } catch {}
 try { db.execSync("ALTER TABLE cache_stays ADD COLUMN guest_name TEXT"); } catch {}
 try { db.execSync("ALTER TABLE cache_staff ADD COLUMN pin_hash_local TEXT"); } catch {}
 try { db.execSync("ALTER TABLE cache_staff ADD COLUMN salt TEXT"); } catch {}
@@ -144,7 +148,7 @@ export async function updateLocalUnitStatus(unitId: string, status: string) {
 }
 
 export async function removeStayFromCache(stayId: string) {
-  db.runSync(`DELETE FROM cache_stays WHERE id = ?`, [stayId]);
+  db.runSync(`DELETE FROM cache_stays WHERE id = ? OR unit_id = ?`, [stayId, stayId]);
 }
 
 export async function isOnline() {
@@ -157,7 +161,7 @@ export async function getPendingCount(): Promise<number> {
   return result?.count || 0;
 }
 
-const PBKDF2_ROUNDS = 100000;
+const PBKDF2_ROUNDS = 2048;
 
 export function hashPinWithSalt(pin: string, salt: string, rounds: number = PBKDF2_ROUNDS): string {
   const derived = pbkdf2(sha256, pin, salt, { c: rounds, dkLen: 32 });
@@ -181,9 +185,15 @@ export const verifyLocalPin = async (staffId: string, pin: string): Promise<bool
   const staff = await database.getFirstAsync<any>('SELECT * FROM cache_staff WHERE id = ?', [staffId]);
   if (!staff || !staff.salt) return false;
 
-  // Check local lockout (5 failed attempts = 5 min lock)
+  // Check local lockout (5 failed attempts = 30 second lock, user-friendly timeout)
   if (staff.local_locked_until && staff.local_locked_until > Date.now()) {
-    throw new Error('Locked locally, try later');
+    // Clamp any legacy 5-minute locks down to max 30 seconds from now
+    if (staff.local_locked_until > Date.now() + (30 * 1000)) {
+      await database.runAsync('UPDATE cache_staff SET local_locked_until = ? WHERE id = ?', [Date.now() + (30 * 1000), staffId]);
+      staff.local_locked_until = Date.now() + (30 * 1000);
+    }
+    const remainingSeconds = Math.max(1, Math.ceil((staff.local_locked_until - Date.now()) / 1000));
+    throw new Error(`PIN locked due to failed attempts. Please wait ${remainingSeconds}s.`);
   }
 
   // Retrieve hash from hardware-backed SecureStore (with fallback migration for legacy SQLite rows)
@@ -207,7 +217,7 @@ export const verifyLocalPin = async (staffId: string, pin: string): Promise<bool
     const legacyComputed = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, pin + staff.salt);
     if (legacyComputed === expectedHash) {
       matches = true;
-      // Auto-upgrade to 100,000 rounds PBKDF2 in SecureStore
+      // Auto-upgrade to PBKDF2 in SecureStore
       const upgraded = hashPinWithSalt(pin, staff.salt, PBKDF2_ROUNDS);
       await SecureStore.setItemAsync(`staff_pin_hash_${staffId}`, upgraded);
     }
@@ -218,7 +228,8 @@ export const verifyLocalPin = async (staffId: string, pin: string): Promise<bool
     return true;
   } else {
     const newTries = (staff.local_failed_tries || 0) + 1;
-    const lockUntil = newTries >= 5 ? Date.now() + (5 * 60 * 1000) : 0;
+    // 5 failed attempts locks for 30 seconds (down from 5 minutes)
+    const lockUntil = newTries >= 5 ? Date.now() + (30 * 1000) : 0;
     await database.runAsync('UPDATE cache_staff SET local_failed_tries = ?, local_locked_until = ? WHERE id = ?', [newTries, lockUntil, staffId]);
     return false;
   }
@@ -405,14 +416,17 @@ export async function processOutbox() {
 // --- CACHE FUNCTIONS ---
 export function cacheRooms(rooms: any[]) {
   db.runSync('DELETE FROM cache_rooms');
-  rooms.forEach(r => {
-    db.runSync('INSERT INTO cache_rooms (id, property_id, label, kind) VALUES (?, ?, ?, ?)', [r.id, r.property_id, r.label, r.kind]);
+  rooms.filter(r => !r.archived_at).forEach(r => {
+    db.runSync(
+      'INSERT INTO cache_rooms (id, property_id, label, kind, floor, floor_no) VALUES (?, ?, ?, ?, ?, ?)',
+      [r.id, r.property_id, r.label, r.kind, r.floor || null, r.floor_no !== undefined ? r.floor_no : null]
+    );
   });
 }
 
 export function cacheUnits(units: any[]) {
   db.runSync('DELETE FROM cache_units');
-  units.forEach(u => {
+  units.filter(u => !u.archived_at).forEach(u => {
     db.runSync('INSERT INTO cache_units (id, room_id, label, gender_rule, housekeeping_status) VALUES (?, ?, ?, ?, ?)', 
     [u.id, u.room_id, u.label, u.gender_rule, u.housekeeping_status]);
   });
@@ -422,7 +436,7 @@ export function cacheStays(stays: any[]) {
   db.runSync('DELETE FROM cache_stays');
   stays.forEach(s => {
     db.runSync('INSERT INTO cache_stays (id, property_id, unit_id, status) VALUES (?, ?, ?, ?)', 
-    [s.id, s.property_id, s.unit_id, s.status]);
+    [s.id || s.unit_id || '', s.property_id || '', s.unit_id, s.status || 'checked_in']);
   });
 }
 

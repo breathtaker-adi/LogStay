@@ -22,10 +22,10 @@ const permissions: Record<Role, Action[]> = {
   ],
   desk: [
     'check_in', 'check_out', 'guests', 'shift', 'export', 'form_c', 
-    'mark_clean', 'set_maintenance', 'view_id_photo'
+    'settings', 'mark_clean', 'set_maintenance', 'view_id_photo'
   ],
   housekeeping: [
-    'mark_clean'
+    'settings', 'mark_clean'
   ]
 };
 

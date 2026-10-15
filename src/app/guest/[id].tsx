@@ -1,14 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, StyleSheet, ActivityIndicator, Modal, TextInput, Image } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { View, Text, ScrollView, Pressable, Alert, StyleSheet, ActivityIndicator, Modal, TextInput, Image, TouchableOpacity } from 'react-native';
+import { useLocalSearchParams, router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useStaff } from '@/lib/staff-context';
 import { isOnline, saveToOutbox } from '@/lib/offline';
 import * as Crypto from 'expo-crypto';
+import { ScreenHeader } from '@/lib/screen-header';
+import { exportGuestRegistrationCardPDF } from '@/lib/pdf-reports';
 
 export default function GuestDetailScreen() {
   const { id, stayId } = useLocalSearchParams<{ id: string; stayId: string }>();
   const { activeStaff, can } = useStaff();
+
+  // RBAC Guard: Housekeeper cannot access guest folio and personal details
+  useEffect(() => {
+    if (activeStaff && !can('guests')) {
+      Alert.alert(
+        "Access Restricted",
+        "Guest folios and identity records are restricted to Front Desk and Owners."
+      );
+      router.replace('/home');
+    }
+  }, [activeStaff, can]);
   
   const [loading, setLoading] = useState(true);
   const [guest, setGuest] = useState<any>(null);
@@ -24,6 +38,7 @@ export default function GuestDetailScreen() {
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refundPaymentId, setRefundPaymentId] = useState<string | null>(null);
   const [refundReason, setRefundReason] = useState('');
+  const [ownerPin, setOwnerPin] = useState('');
   const [refunding, setRefunding] = useState(false);
 
   // Charge form state
@@ -168,6 +183,7 @@ export default function GuestDetailScreen() {
   const handleRefund = (paymentId: string) => {
     setRefundPaymentId(paymentId);
     setRefundReason('');
+    setOwnerPin('');
     setShowRefundModal(true);
   };
 
@@ -175,137 +191,237 @@ export default function GuestDetailScreen() {
     if (!refundPaymentId || !refundReason.trim()) {
       return Alert.alert('Error', 'Reason is required');
     }
+    if (!ownerPin.trim()) {
+      return Alert.alert('Security', 'Owner PIN is required to authorize refunds.');
+    }
     setRefunding(true);
     const { error } = await supabase.rpc('refund_payment', {
       p_payment_id: refundPaymentId,
       p_staff_id: activeStaff?.id,
-      p_reason: refundReason.trim()
+      p_reason: refundReason.trim(),
+      p_owner_pin: ownerPin.trim()
     });
     setRefunding(false);
     if (error) return Alert.alert('Error', error.message);
     setShowRefundModal(false);
     setRefundPaymentId(null);
     setRefundReason('');
+    setOwnerPin('');
     Alert.alert('Success', 'Payment refunded.');
     fetchDetails();
   };
 
+  const handleExportGRCPDF = async () => {
+    if (!guest) return;
+    try {
+      await exportGuestRegistrationCardPDF({
+        propertyName: 'LogStay Hospitality',
+        guestName: guest.name,
+        phone: guest.phone,
+        nationality: guest.nationality || 'Indian',
+        idType: guest.id_type || 'ID Card',
+        idLast4: guest.id_last4,
+        roomBed: 'Assigned Unit',
+        checkInDate: stay?.check_in ? new Date(stay.check_in).toLocaleString('en-IN') : new Date().toLocaleString('en-IN'),
+        amount: stay?.amount || 0,
+        payMode: stay?.pay_mode || 'Cash',
+      });
+    } catch (err: any) {
+      Alert.alert('Export Error', err?.message || 'Could not generate GRC PDF');
+    }
+  };
+
   if (loading || !guest) {
-    return <View style={styles.center}><ActivityIndicator size="large" color="#2563eb" /></View>;
+    return (
+      <View style={{ flex: 1, backgroundColor: '#f8fafc' }}>
+        <ScreenHeader title="Guest Details" />
+        <View style={styles.center}><ActivityIndicator size="large" color="#2563eb" /></View>
+      </View>
+    );
   }
 
   return (
-    <ScrollView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.guestName}>{guest.name}</Text>
-          <Text style={styles.guestInfo}>{guest.phone || 'No phone'} • {guest.nationality}</Text>
-          <Text style={styles.guestInfo}>ID: {guest.id_type} ****{guest.id_last4}</Text>
-          {guest.id_photo_path && !guest.id_deleted_at ? (
-            can('view_id_photo') && (
-              <Pressable 
-                style={{ backgroundColor: '#eff6ff', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, alignSelf: 'flex-start', marginTop: 12 }} 
-                onPress={handleViewPhoto}
-                disabled={loadingPhoto}
-              >
-                <Text style={{ color: '#2563eb', fontWeight: 'bold', fontSize: 14 }}>
-                  {loadingPhoto ? 'Loading...' : 'View ID Photo'}
-                </Text>
-              </Pressable>
-            )
-          ) : (
-            <Text style={{ fontSize: 12, color: '#94a3b8', marginTop: 8, fontStyle: 'italic' }}>
-              {guest.id_deleted_at ? 'ID photo deleted per retention policy.' : 'No ID photo on file.'}
-            </Text>
-          )}
+    <View style={{ flex: 1, backgroundColor: '#f8fafc' }}>
+      <ScreenHeader
+        title="Guest Details"
+        subtitle={guest?.name || 'In-House'}
+      />
+      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {/* Guest Profile Hero Card */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroTopRow}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {guest.name ? guest.name.charAt(0).toUpperCase() : 'G'}
+              </Text>
+            </View>
+            <View style={styles.heroNameCol}>
+              <Text style={styles.guestName}>{guest.name}</Text>
+              <View style={styles.badgesRow}>
+                <View style={styles.pillBadge}>
+                  <Ionicons name="call-outline" size={12} color="#64748b" />
+                  <Text style={styles.pillText}>{guest.phone || 'No phone'}</Text>
+                </View>
+                {guest.nationality ? (
+                  <View style={[styles.pillBadge, { backgroundColor: '#fef3c7' }]}>
+                    <Text style={[styles.pillText, { color: '#92400e' }]}>🌐 {guest.nationality}</Text>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.idRow}>
+            <View style={styles.idBadge}>
+              <Ionicons name="card-outline" size={14} color="#2563eb" />
+              <Text style={styles.idText}>
+                {guest.id_type || 'ID'} ••••{guest.id_last4 || '----'}
+              </Text>
+            </View>
+
+            {guest.id_photo_path && !guest.id_deleted_at ? (
+              can('view_id_photo') && (
+                <TouchableOpacity 
+                  style={styles.viewPhotoBtn} 
+                  onPress={handleViewPhoto}
+                  disabled={loadingPhoto}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="image-outline" size={14} color="#2563eb" />
+                  <Text style={styles.viewPhotoText}>
+                    {loadingPhoto ? 'Loading...' : 'View ID Photo'}
+                  </Text>
+                </TouchableOpacity>
+              )
+            ) : (
+              <Text style={styles.photoStatusText}>
+                {guest.id_deleted_at ? 'ID purged per retention' : 'No photo uploaded'}
+              </Text>
+            )}
+          </View>
 
           {guest.id_photo_expires_at && !guest.id_deleted_at && (
-            <Text style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>
-              Auto-deletes on {new Date(guest.id_photo_expires_at).toLocaleDateString()}
+            <Text style={styles.retentionNotice}>
+              Auto-purges on {new Date(guest.id_photo_expires_at).toLocaleDateString()}
             </Text>
           )}
         </View>
-      </View>
 
-      {/* Folio Summary */}
-      <View style={styles.folioCard}>
-        <View style={styles.folioRow}>
-          <Text style={styles.folioLabel}>Stay Amount</Text>
-          <Text style={styles.folioValue}>₹{stay?.amount || 0}</Text>
-        </View>
-        <View style={styles.folioRow}>
-          <Text style={styles.folioLabel}>Extra Charges</Text>
-          <Text style={styles.folioValue}>₹{totalCharges}</Text>
-        </View>
-        <View style={styles.folioRow}>
-          <Text style={styles.folioLabel}>Paid</Text>
-          <Text style={[styles.folioValue, { color: '#10b981' }]}>- ₹{totalPaid}</Text>
-        </View>
-        <View style={[styles.folioRow, styles.folioTotal]}>
-          <Text style={styles.folioTotalLabel}>Balance Due</Text>
-          <Text style={styles.folioTotalValue}>₹{balance}</Text>
-        </View>
-      </View>
+        {/* Folio Financial Card */}
+        <View style={styles.folioCard}>
+          <View style={styles.folioHeader}>
+            <Ionicons name="receipt-outline" size={20} color="#0f172a" />
+            <Text style={styles.folioHeaderTitle}>Folio Summary</Text>
+          </View>
 
-      {/* Action Buttons */}
-      <View style={styles.btnRow}>
-        <Pressable style={styles.chargeBtn} onPress={() => setShowChargeModal(true)}>
-          <Text style={styles.btnText}>+ Add Purchase</Text>
-        </Pressable>
-        <Pressable style={styles.payBtn} onPress={() => setShowPayModal(true)}>
-          <Text style={styles.btnText}>Collect Payment</Text>
-        </Pressable>
-      </View>
+          <View style={styles.folioRow}>
+            <Text style={styles.folioLabel}>Stay Room Rate</Text>
+            <Text style={styles.folioValue}>₹{Number(stay?.amount || 0).toLocaleString('en-IN')}</Text>
+          </View>
+          <View style={styles.folioRow}>
+            <Text style={styles.folioLabel}>Extra Purchases / Services</Text>
+            <Text style={styles.folioValue}>+ ₹{Number(totalCharges).toLocaleString('en-IN')}</Text>
+          </View>
+          <View style={styles.folioRow}>
+            <Text style={styles.folioLabel}>Total Amount Paid</Text>
+            <Text style={[styles.folioValue, { color: '#16a34a' }]}>- ₹{Number(totalPaid).toLocaleString('en-IN')}</Text>
+          </View>
 
-      {/* Charges List */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Folio History</Text>
-        {charges.length === 0 ? (
-          <Text style={styles.empty}>No extra charges yet.</Text>
-        ) : (
-          charges.map(charge => (
-            <View key={charge.id} style={styles.chargeItem}>
-              <Text style={styles.chargeName}>{charge.item}</Text>
-              <Text style={styles.chargePrice}>₹{charge.unit_price}</Text>
+          {/* Balance Due Banner */}
+          <View style={[styles.balanceBanner, balance > 0 ? styles.balanceBannerDue : styles.balanceBannerSettled]}>
+            <View>
+              <Text style={[styles.balanceBannerTitle, balance > 0 ? styles.balanceTitleDue : styles.balanceTitleSettled]}>
+                {balance > 0 ? 'Balance Pending' : 'Folio Settled'}
+              </Text>
+              <Text style={styles.balanceBannerSub}>
+                {balance > 0 ? 'Collect balance before checkout' : 'All charges paid in full'}
+              </Text>
             </View>
-          ))
-        )}
-      </View>
+            <Text style={[styles.balanceBannerAmount, balance > 0 ? styles.balanceAmountDue : styles.balanceAmountSettled]}>
+              ₹{Number(balance).toLocaleString('en-IN')}
+            </Text>
+          </View>
+        </View>
 
-      {/* Payment History */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Payment History</Text>
-        {payments.length === 0 ? (
-          <Text style={styles.empty}>No payments recorded.</Text>
-        ) : (
-          payments.map(pay => (
-            <View key={pay.id} style={styles.chargeItem}>
-              <View>
-                <Text style={styles.chargeName}>{pay.pay_mode?.toUpperCase()} Payment</Text>
-                <Text style={{ fontSize: 12, color: '#94a3b8' }}>{new Date(pay.created_at).toLocaleString()}</Text>
-                {pay.refunded && <Text style={{ color: '#ef4444', fontSize: 12, fontWeight: 'bold' }}>REFUNDED</Text>}
+        {/* Action Buttons */}
+        <View style={styles.btnRow}>
+          <TouchableOpacity style={styles.chargeBtn} onPress={() => setShowChargeModal(true)} activeOpacity={0.8}>
+            <Ionicons name="cart-outline" size={18} color="#ffffff" />
+            <Text style={styles.btnText}>+ Add Purchase</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.payBtn} onPress={() => setShowPayModal(true)} activeOpacity={0.8}>
+            <Ionicons name="cash-outline" size={18} color="#ffffff" />
+            <Text style={styles.btnText}>Collect Payment</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* GRC PDF Export Action */}
+        <TouchableOpacity style={styles.pdfBtn} onPress={handleExportGRCPDF} activeOpacity={0.8}>
+          <Ionicons name="document-text-outline" size={17} color="#0f172a" />
+          <Text style={styles.pdfBtnText}>Print / Share Registration Card (PDF)</Text>
+        </TouchableOpacity>
+
+        {/* Charges List */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="list" size={18} color="#475569" />
+            <Text style={styles.sectionTitle}>Extra Purchases ({charges.length})</Text>
+          </View>
+          {charges.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.empty}>No extra charges added to folio.</Text>
+            </View>
+          ) : (
+            charges.map(charge => (
+              <View key={charge.id} style={styles.chargeItem}>
+                <View style={styles.chargeInfo}>
+                  <Text style={styles.chargeName}>{charge.item}</Text>
+                  <Text style={styles.chargeDate}>{new Date(charge.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
+                </View>
+                <Text style={styles.chargePrice}>+ ₹{Number(charge.unit_price).toLocaleString('en-IN')}</Text>
               </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                {!pay.refunded && (
-                  <Text style={[styles.chargePrice, { color: pay.refunded ? '#94a3b8' : '#10b981' }]}>
-                    ₹{pay.amount}
+            ))
+          )}
+        </View>
+
+        {/* Payment History */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="wallet-outline" size={18} color="#475569" />
+            <Text style={styles.sectionTitle}>Payment Receipts ({payments.length})</Text>
+          </View>
+          {payments.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Text style={styles.empty}>No payments recorded yet.</Text>
+            </View>
+          ) : (
+            payments.map(pay => (
+              <View key={pay.id} style={styles.chargeItem}>
+                <View style={styles.chargeInfo}>
+                  <View style={styles.payModePill}>
+                    <Text style={styles.payModePillText}>{pay.pay_mode?.toUpperCase() || 'CASH'}</Text>
+                  </View>
+                  <Text style={styles.chargeDate}>{new Date(pay.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
+                  {pay.refunded && <Text style={styles.refundedTag}>REFUNDED</Text>}
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Text style={[styles.chargePrice, { color: pay.refunded ? '#94a3b8' : '#16a34a' }]}>
+                    - ₹{Number(pay.amount).toLocaleString('en-IN')}
                   </Text>
-                )}
-                {/* Refund Button (Owner Only) */}
-                {!pay.refunded && can('refund_payment') && (
-                  <Pressable 
-                    style={{ backgroundColor: '#ef4444', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 }} 
-                    onPress={() => handleRefund(pay.id)}
-                  >
-                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Refund</Text>
-                  </Pressable>
-                )}
+                  {!pay.refunded && can('refund_payment') && (
+                    <TouchableOpacity 
+                      style={styles.refundBtn} 
+                      onPress={() => handleRefund(pay.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.refundBtnText}>Refund</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
-            </View>
-          ))
-        )}
-      </View>
+            ))
+          )}
+        </View>
 
       {/* Add Charge Modal */}
       <Modal visible={showChargeModal} animationType="slide" transparent={true}>
@@ -412,10 +528,19 @@ export default function GuestDetailScreen() {
               value={refundReason}
               onChangeText={setRefundReason}
             />
+            <TextInput
+              style={styles.input}
+              placeholder="Owner PIN (Required to authorize)"
+              value={ownerPin}
+              onChangeText={setOwnerPin}
+              secureTextEntry
+              keyboardType="numeric"
+              maxLength={6}
+            />
             <View style={styles.modalBtnRow}>
               <Pressable 
                 style={styles.cancelBtn} 
-                onPress={() => { setShowRefundModal(false); setRefundPaymentId(null); setRefundReason(''); }}
+                onPress={() => { setShowRefundModal(false); setRefundPaymentId(null); setRefundReason(''); setOwnerPin(''); }}
               >
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </Pressable>
@@ -448,49 +573,481 @@ export default function GuestDetailScreen() {
           )}
         </View>
       </Modal>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  header: { padding: 24, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
-  guestName: { fontSize: 24, fontWeight: 'bold' },
-  guestInfo: { color: '#64748b', marginTop: 4 },
-  folioCard: { backgroundColor: '#fff', margin: 16, padding: 20, borderRadius: 12 },
-  folioRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 },
-  folioLabel: { color: '#64748b' },
-  folioValue: { fontWeight: '600' },
-  folioTotal: { borderTopWidth: 1, borderTopColor: '#e2e8f0', marginTop: 8, paddingTop: 16 },
-  folioTotalLabel: { fontWeight: 'bold', fontSize: 16 },
-  folioTotalValue: { fontWeight: 'bold', fontSize: 18, color: '#2563eb' },
-  btnRow: { flexDirection: 'row', gap: 12, paddingHorizontal: 16, marginBottom: 16 },
-  chargeBtn: { flex: 1, backgroundColor: '#f59e0b', padding: 16, borderRadius: 8, alignItems: 'center' },
-  payBtn: { flex: 1, backgroundColor: '#10b981', padding: 16, borderRadius: 8, alignItems: 'center' },
-  btnText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
-  section: { padding: 16 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 12 },
-  empty: { color: '#94a3b8', fontStyle: 'italic' },
-  chargeItem: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: '#fff', padding: 16, borderRadius: 8, marginBottom: 8 },
-  chargeName: { fontSize: 16 },
-  chargePrice: { fontWeight: 'bold' },
-  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
-  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 16 },
-  quickAddRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  quickChip: { backgroundColor: '#f1f5f9', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20 },
-  quickChipText: { fontSize: 12, color: '#64748b' },
-  input: { borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, padding: 12, fontSize: 16, marginBottom: 12 },
-  modalBtnRow: { flexDirection: 'row', gap: 12, marginTop: 12 },
-  cancelBtn: { flex: 1, padding: 14, borderRadius: 8, alignItems: 'center', backgroundColor: '#f1f5f9' },
-  cancelBtnText: { color: '#64748b', fontWeight: 'bold' },
-  submitBtn: { flex: 1, padding: 14, borderRadius: 8, alignItems: 'center', backgroundColor: '#2563eb' },
-  submitBtnText: { color: '#fff', fontWeight: 'bold' },
-  balanceText: { fontSize: 16, color: '#64748b', marginBottom: 16 },
-  payModeRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
-  payModeBtn: { flex: 1, padding: 12, borderRadius: 8, backgroundColor: '#f1f5f9', alignItems: 'center' },
-  payModeActive: { backgroundColor: '#2563eb' },
-  payModeText: { color: '#64748b', fontWeight: '600' },
-  payModeTextActive: { color: '#fff' }
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc'
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 40
+  },
+  heroCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14
+  },
+  avatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#eff6ff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+    borderWidth: 1.5,
+    borderColor: '#bfdbfe'
+  },
+  avatarText: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#2563eb'
+  },
+  heroNameCol: {
+    flex: 1
+  },
+  guestName: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+    letterSpacing: -0.3
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+    flexWrap: 'wrap'
+  },
+  pillBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8
+  },
+  pillText: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600'
+  },
+  idRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    gap: 8
+  },
+  idBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
+  idText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155'
+  },
+  viewPhotoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#dbeafe'
+  },
+  viewPhotoText: {
+    color: '#2563eb',
+    fontWeight: '700',
+    fontSize: 12
+  },
+  photoStatusText: {
+    fontSize: 11,
+    color: '#94a3b8',
+    fontStyle: 'italic'
+  },
+  retentionNotice: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginTop: 8
+  },
+  folioCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 18,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2
+  },
+  folioHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9'
+  },
+  folioHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  folioRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6
+  },
+  folioLabel: {
+    fontSize: 13,
+    color: '#64748b',
+    fontWeight: '500'
+  },
+  folioValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  balanceBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 14
+  },
+  balanceBannerDue: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca'
+  },
+  balanceBannerSettled: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0'
+  },
+  balanceBannerTitle: {
+    fontSize: 14,
+    fontWeight: '800'
+  },
+  balanceTitleDue: {
+    color: '#991b1b'
+  },
+  balanceTitleSettled: {
+    color: '#166534'
+  },
+  balanceBannerSub: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2
+  },
+  balanceBannerAmount: {
+    fontSize: 20,
+    fontWeight: '800'
+  },
+  balanceAmountDue: {
+    color: '#dc2626'
+  },
+  balanceAmountSettled: {
+    color: '#16a34a'
+  },
+  btnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16
+  },
+  chargeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#d97706',
+    paddingVertical: 14,
+    borderRadius: 14,
+    shadowColor: '#d97706',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  payBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#16a34a',
+    paddingVertical: 14,
+    borderRadius: 14,
+    shadowColor: '#16a34a',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  btnText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 14
+  },
+  pdfBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    paddingVertical: 13,
+    borderRadius: 14,
+    marginBottom: 16
+  },
+  pdfBtnText: {
+    color: '#0f172a',
+    fontWeight: '700',
+    fontSize: 13.5
+  },
+  section: {
+    marginBottom: 16
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+    paddingLeft: 4
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#334155'
+  },
+  emptyCard: {
+    backgroundColor: '#ffffff',
+    padding: 16,
+    borderRadius: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  empty: {
+    color: '#94a3b8',
+    fontSize: 13,
+    fontStyle: 'italic'
+  },
+  chargeItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    padding: 14,
+    borderRadius: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1
+  },
+  chargeInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1
+  },
+  chargeName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1e293b'
+  },
+  chargeDate: {
+    fontSize: 12,
+    color: '#94a3b8'
+  },
+  chargePrice: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  payModePill: {
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6
+  },
+  payModePillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#2563eb'
+  },
+  refundedTag: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#dc2626',
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4
+  },
+  refundBtn: {
+    backgroundColor: '#fee2e2',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6
+  },
+  refundBtnText: {
+    color: '#dc2626',
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(15,23,42,0.5)'
+  },
+  modalContent: {
+    backgroundColor: '#ffffff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 16
+  },
+  quickAddRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16
+  },
+  quickChip: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  quickChipText: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600'
+  },
+  input: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 13,
+    fontSize: 15,
+    marginBottom: 12,
+    color: '#0f172a'
+  },
+  modalBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 8
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#f1f5f9'
+  },
+  cancelBtnText: {
+    color: '#64748b',
+    fontWeight: '700',
+    fontSize: 14
+  },
+  submitBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#2563eb',
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3
+  },
+  submitBtnText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 14
+  },
+  balanceText: {
+    fontSize: 14,
+    color: '#64748b',
+    marginBottom: 14
+  },
+  payModeRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14
+  },
+  payModeBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  payModeActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb'
+  },
+  payModeText: {
+    color: '#64748b',
+    fontWeight: '600',
+    fontSize: 13
+  },
+  payModeTextActive: {
+    color: '#ffffff',
+    fontWeight: '700'
+  }
 });

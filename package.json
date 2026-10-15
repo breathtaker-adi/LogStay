@@ -21,6 +21,7 @@
     "expo-image-manipulator": "~57.0.21",
     "expo-image-picker": "~57.0.20",
     "expo-linking": "~57.0.12",
+    "expo-print": "~57.0.2",
     "expo-router": "~57.0.25",
     "expo-secure-store": "~57.0.4",
     "expo-sharing": "~57.0.22",
@@ -55,6 +56,11 @@
     "web": "expo start --web",
     "start:router": "expo-router/entry",
     "lint": "expo lint",
+    "test": "node scripts/test-floors.mjs && node scripts/test-mrz.mjs && node scripts/test-anomaly.mjs && node scripts/fault-injection-tests.mjs",
+    "test:mrz": "node scripts/test-mrz.mjs",
+    "test:anomaly": "node scripts/test-anomaly.mjs",
+    "test:faults": "node scripts/fault-injection-tests.mjs",
+    "test:floors": "node scripts/test-floors.mjs",
     "test:security": "node scripts/attack-tests.mjs"
   },
   "private": true

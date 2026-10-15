@@ -1,0 +1,1148 @@
+// src/app/dorm/[roomId].tsx
+// Dorm Bed Breakdown & Dorm Lifecycle Management
+// Elevate UI with Dorm Hero Card, Status Pills, Bed Cards, and smooth modals
+
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  TextInput
+} from 'react-native';
+import { useLocalSearchParams, router } from 'expo-router';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { supabase } from '@/lib/supabase';
+import { useStaff } from '@/lib/staff-context';
+import { isOnline, processOutbox } from '@/lib/offline';
+import { bedState, BedState } from '@/lib/bed-state';
+import * as Crypto from 'expo-crypto';
+import { ScreenHeader } from '@/lib/screen-header';
+import { floorLabel, resolveFloorNo } from '@/lib/floors';
+
+export default function DormDetailScreen() {
+  const { roomId } = useLocalSearchParams<{ roomId: string }>();
+  const { activeStaff, can } = useStaff();
+
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [room, setRoom] = useState<any>(null);
+  const [units, setUnits] = useState<any[]>([]);
+  const [activeStaysMap, setActiveStaysMap] = useState<Record<string, any>>({});
+  const [lastSynced, setLastSynced] = useState<string>('');
+
+  // Edit Room Modal State
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editLabel, setEditLabel] = useState('');
+  const [editFloorNo, setEditFloorNo] = useState<number>(0);
+  const [editGenderRule, setEditGenderRule] = useState<'any' | 'male' | 'female'>('any');
+  const [ownerPin, setOwnerPin] = useState('');
+  const [submittingEdit, setSubmittingEdit] = useState(false);
+
+  // Add Bed State
+  const [showAddBedModal, setShowAddBedModal] = useState(false);
+  const [newBedLabel, setNewBedLabel] = useState('');
+
+  const fetchDormData = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      // 1. Fetch Room Info
+      const { data: rData, error: rError } = await supabase
+        .from('rooms')
+        .select('*')
+        .eq('id', roomId)
+        .is('archived_at', null)
+        .single();
+
+      if (rError || !rData) {
+        Alert.alert('Error', 'Dorm room not found or has been archived.');
+        router.back();
+        return;
+      }
+      setRoom(rData);
+      setEditLabel(rData.label);
+      setEditFloorNo(resolveFloorNo(rData) ?? 0);
+
+      // 2. Fetch Beds (Units)
+      const { data: uData, error: uError } = await supabase
+        .from('units')
+        .select('*')
+        .eq('room_id', roomId)
+        .is('archived_at', null)
+        .order('label');
+
+      if (uError) throw uError;
+      setUnits(uData || []);
+
+      if (uData && uData.length > 0) {
+        setEditGenderRule((uData[0].gender_rule as any) || 'any');
+        const unitIds = uData.map(u => u.id);
+
+        // 3. Fetch Active Stays for these beds
+        const { data: staysData } = await supabase
+          .from('stays')
+          .select('id, unit_id, amount, pay_mode, guests ( name, phone )')
+          .in('unit_id', unitIds)
+          .eq('status', 'checked_in');
+
+        const map: Record<string, any> = {};
+        (staysData || []).forEach((s: any) => {
+          map[s.unit_id] = s;
+        });
+        setActiveStaysMap(map);
+      }
+
+      setLastSynced(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    } catch (err: any) {
+      console.error('Error fetching dorm data:', err);
+      Alert.alert('Error', err.message || 'Failed to load dorm details');
+    } finally {
+      setLoading(false);
+    }
+  }, [roomId]);
+
+  useEffect(() => {
+    fetchDormData();
+  }, [fetchDormData]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await processOutbox();
+      await fetchDormData();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchDormData]);
+
+  // Section 3C: Edit Room (Owner only, Online-only)
+  const handleSaveEdit = async () => {
+    if (!editLabel.trim()) {
+      return Alert.alert('Validation', 'Room label is required.');
+    }
+    if (!(await isOnline())) {
+      return Alert.alert('Online Required', 'Room editing requires an internet connection.');
+    }
+    if (!ownerPin.trim()) {
+      return Alert.alert('Security', 'Please enter your owner PIN to confirm.');
+    }
+
+    try {
+      setSubmittingEdit(true);
+      const { error } = await supabase.rpc('update_room', {
+        p_room_id: roomId,
+        p_label: editLabel.trim(),
+        p_floor: floorLabel(editFloorNo),
+        p_gender_rule: editGenderRule,
+        p_staff_id: activeStaff?.id,
+        p_owner_pin: ownerPin.trim(),
+        p_floor_no: editFloorNo
+      });
+
+      if (error) {
+        Alert.alert('Update Failed', error.message);
+        return;
+      }
+
+      Alert.alert('Success', 'Dorm room updated successfully.');
+      setShowEditModal(false);
+      setOwnerPin('');
+      fetchDormData();
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    } finally {
+      setSubmittingEdit(false);
+    }
+  };
+
+  // Section 3C: Add Bed to Dorm
+  const handleAddBed = async () => {
+    if (!newBedLabel.trim()) {
+      return Alert.alert('Validation', 'Bed label is required (e.g. Bed 5).');
+    }
+    if (!(await isOnline())) {
+      return Alert.alert('Online Required', 'Adding beds requires an internet connection.');
+    }
+    if (!ownerPin.trim()) {
+      return Alert.alert('Security', 'Please enter your owner PIN to confirm.');
+    }
+
+    try {
+      setSubmittingEdit(true);
+      const newUnitId = Crypto.randomUUID();
+      const { error } = await supabase.rpc('add_beds', {
+        p_room_id: roomId,
+        p_unit_ids: [newUnitId],
+        p_unit_labels: [newBedLabel.trim()],
+        p_staff_id: activeStaff?.id,
+        p_owner_pin: ownerPin.trim()
+      });
+
+      if (error) {
+        Alert.alert('Add Bed Failed', error.message);
+        return;
+      }
+
+      Alert.alert('Success', `Bed "${newBedLabel.trim()}" added.`);
+      setShowAddBedModal(false);
+      setNewBedLabel('');
+      setOwnerPin('');
+      fetchDormData();
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    } finally {
+      setSubmittingEdit(false);
+    }
+  };
+
+  // Section 3C: Remove Room (Owner only, Online-only)
+  const handleRemoveRoom = () => {
+    const activeCount = Object.keys(activeStaysMap).length;
+    if (activeCount > 0) {
+      return Alert.alert(
+        'Blocked',
+        `Cannot remove this dorm while ${activeCount} guest${activeCount > 1 ? 's are' : ' is'} checked in.`
+      );
+    }
+
+    Alert.alert(
+      'Remove Dorm Confirmation',
+      'Are you sure you want to remove this dorm room? All beds will be removed or archived.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            setShowEditModal(true);
+          }
+        }
+      ]
+    );
+  };
+
+  const executeRemove = async (pin: string) => {
+    if (!(await isOnline())) {
+      return Alert.alert('Online Required', 'Room removal requires an internet connection.');
+    }
+
+    try {
+      const { data: result, error } = await supabase.rpc('remove_room', {
+        p_room_id: roomId,
+        p_staff_id: activeStaff?.id,
+        p_owner_pin: pin.trim()
+      });
+
+      if (error) {
+        Alert.alert('Removal Failed', error.message);
+        return;
+      }
+
+      Alert.alert(
+        'Room Removed',
+        result === 'archived'
+          ? 'Room has historical stays and was safely archived.'
+          : 'Room had no stays and was permanently deleted.'
+      );
+      router.replace('/rooms');
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    }
+  };
+
+  if (loading && !room) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#2563eb" />
+      </View>
+    );
+  }
+
+  const activeUnitIds = new Set(Object.keys(activeStaysMap));
+  const totalBeds = units.length;
+  const occupiedCount = activeUnitIds.size;
+  const dirtyCount = units.filter(u => u.housekeeping_status === 'dirty').length;
+  const maintCount = units.filter(u => u.housekeeping_status === 'maintenance').length;
+  const cleanCount = Math.max(0, totalBeds - occupiedCount - dirtyCount - maintCount);
+
+  return (
+    <View style={styles.container}>
+      <ScreenHeader
+        title={room?.label || 'Dorm'}
+        subtitle={`${room?.floor ? `Floor ${room.floor} • ` : ''}${totalBeds} Beds • ${occupiedCount} Taken${lastSynced ? ` • Synced ${lastSynced}` : ''}`}
+        right={
+          can('settings') ? (
+            <TouchableOpacity
+              style={styles.headerActionBtn}
+              onPress={() => setShowAddBedModal(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add" size={16} color="#ffffff" />
+              <Text style={styles.headerActionText}>Add Bed</Text>
+            </TouchableOpacity>
+          ) : undefined
+        }
+      />
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── HERO DORM SUMMARY CARD ───────────────────────────────── */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroTopRow}>
+            <View style={styles.heroIconBox}>
+              <MaterialCommunityIcons name="bunk-bed-outline" size={26} color="#2563eb" />
+            </View>
+            <View style={styles.heroTitleBox}>
+              <Text style={styles.heroTitle}>{room?.label || 'Dorm'}</Text>
+              <View style={styles.heroBadgeRow}>
+                <View style={styles.heroFloorBadge}>
+                  <Text style={styles.heroFloorText}>Floor {room?.floor || 'G'}</Text>
+                </View>
+                <View style={[styles.heroGenderBadge, editGenderRule === 'female' ? styles.badgeFemale : editGenderRule === 'male' ? styles.badgeMale : styles.badgeAny]}>
+                  <Text style={styles.heroGenderText}>
+                    {editGenderRule === 'female' ? '♀ Female Only' : editGenderRule === 'male' ? '♂ Male Only' : '⚧ Any Gender'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            {can('settings') && (
+              <TouchableOpacity
+                style={styles.heroEditBtn}
+                onPress={() => setShowEditModal(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="create-outline" size={16} color="#2563eb" />
+                <Text style={styles.heroEditText}>Edit</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Quick Stats Pills */}
+          <View style={styles.metricsRow}>
+            <View style={[styles.metricPill, { backgroundColor: '#eff6ff' }]}>
+              <Text style={[styles.metricNumber, { color: '#2563eb' }]}>{totalBeds}</Text>
+              <Text style={styles.metricLabel}>Total Beds</Text>
+            </View>
+            <View style={[styles.metricPill, { backgroundColor: '#fee2e2' }]}>
+              <Text style={[styles.metricNumber, { color: '#dc2626' }]}>{occupiedCount}</Text>
+              <Text style={styles.metricLabel}>Occupied</Text>
+            </View>
+            <View style={[styles.metricPill, { backgroundColor: '#dcfce7' }]}>
+              <Text style={[styles.metricNumber, { color: '#16a34a' }]}>{cleanCount}</Text>
+              <Text style={styles.metricLabel}>Available</Text>
+            </View>
+            {dirtyCount > 0 && (
+              <View style={[styles.metricPill, { backgroundColor: '#fef3c7' }]}>
+                <Text style={[styles.metricNumber, { color: '#b45309' }]}>{dirtyCount}</Text>
+                <Text style={styles.metricLabel}>Dirty</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* ── BEDS LIST SECTION ───────────────────────────────────── */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>BEDS IN THIS ROOM</Text>
+          <Text style={styles.sectionSubtitle}>{units.length} total</Text>
+        </View>
+
+        {units.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconBox}>
+              <MaterialCommunityIcons name="bed-empty" size={38} color="#94a3b8" />
+            </View>
+            <Text style={styles.emptyTitle}>No beds in this dorm yet</Text>
+            <Text style={styles.emptyText}>Add beds to this dorm to begin checking in guests.</Text>
+            {can('settings') && (
+              <TouchableOpacity
+                style={styles.addFirstBedBtn}
+                onPress={() => setShowAddBedModal(true)}
+              >
+                <Text style={styles.addFirstBedText}>+ Add First Bed</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          units.map(unit => {
+            const state: BedState = bedState(unit, activeUnitIds);
+            const stay = activeStaysMap[unit.id];
+            const guestName = Array.isArray(stay?.guests) ? stay?.guests[0]?.name : stay?.guests?.name;
+            const guestPhone = Array.isArray(stay?.guests) ? stay?.guests[0]?.phone : stay?.guests?.phone;
+
+            const stateTheme = {
+              clean: { bg: '#dcfce7', text: '#166534', dot: '#16a34a', label: 'Clean / Free' },
+              occupied: { bg: '#fee2e2', text: '#991b1b', dot: '#dc2626', label: 'Occupied' },
+              dirty: { bg: '#fffbeb', text: '#92400e', dot: '#d97706', label: 'Needs Clean' },
+              maintenance: { bg: '#f1f5f9', text: '#334155', dot: '#64748b', label: 'Maintenance' }
+            }[state] || { bg: '#f1f5f9', text: '#334155', dot: '#64748b', label: state };
+
+            return (
+              <Pressable
+                key={unit.id}
+                style={styles.bedCard}
+                onPress={() => router.push(`/room/${unit.id}`)}
+              >
+                <View style={styles.bedTopRow}>
+                  <View style={styles.bedIconBadge}>
+                    <Ionicons name="bed-outline" size={18} color="#2563eb" />
+                  </View>
+                  <View style={styles.bedInfoBox}>
+                    <Text style={styles.bedLabel}>{unit.label}</Text>
+                    {unit.gender_rule && unit.gender_rule !== 'any' && (
+                      <Text style={styles.bedSubrule}>
+                        {unit.gender_rule.toUpperCase()}
+                      </Text>
+                    )}
+                  </View>
+
+                  <View style={[styles.statusBadge, { backgroundColor: stateTheme.bg }]}>
+                    <View style={[styles.statusDot, { backgroundColor: stateTheme.dot }]} />
+                    <Text style={[styles.statusBadgeText, { color: stateTheme.text }]}>
+                      {stateTheme.label}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Occupant / Vacant Banner */}
+                {stay ? (
+                  <View style={styles.occupantBanner}>
+                    <View style={styles.occupantAvatar}>
+                      <Text style={styles.occupantAvatarText}>
+                        {(guestName || 'G').charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.occupantInfo}>
+                      <Text style={styles.occupantName} numberOfLines={1}>
+                        {guestName || 'Guest Checked In'}
+                      </Text>
+                      {activeStaff?.role !== 'housekeeping' && guestPhone ? (
+                        <Text style={styles.occupantPhone}>📞 {guestPhone}</Text>
+                      ) : null}
+                    </View>
+                    <View style={styles.chevronBox}>
+                      <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.vacantBanner}>
+                    <Ionicons
+                      name={state === 'clean' ? 'checkmark-circle-outline' : state === 'dirty' ? 'sparkles-outline' : 'construct-outline'}
+                      size={15}
+                      color={stateTheme.dot}
+                    />
+                    <Text style={[styles.vacantText, { color: stateTheme.text }]}>
+                      {state === 'clean'
+                        ? 'Vacant • Ready for immediate check-in'
+                        : state === 'dirty'
+                        ? 'Awaiting housekeeping cleaning'
+                        : 'Bed currently out of service'}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={14} color="#94a3b8" style={{ marginLeft: 'auto' }} />
+                  </View>
+                )}
+              </Pressable>
+            );
+          })
+        )}
+
+        {/* ── OWNER ACTIONS CARD ──────────────────────────────────── */}
+        {can('settings') && (
+          <View style={styles.dangerZone}>
+            <View style={styles.dangerHeader}>
+              <MaterialCommunityIcons name="shield-alert-outline" size={18} color="#be123c" />
+              <Text style={styles.dangerTitle}>OWNER ROOM ACTIONS</Text>
+            </View>
+            <Text style={styles.dangerNote}>
+              Remove or archive this dorm. Only permitted when all beds in this room are completely vacant.
+            </Text>
+            <TouchableOpacity
+              style={styles.deleteBtn}
+              onPress={handleRemoveRoom}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="trash-outline" size={16} color="#ffffff" />
+              <Text style={styles.deleteBtnText}>Remove / Archive This Dorm</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* ── EDIT DORM MODAL ───────────────────────────────────────── */}
+      <Modal visible={showEditModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Edit Dorm Room</Text>
+              <TouchableOpacity onPress={() => { setShowEditModal(false); setOwnerPin(''); }}>
+                <Ionicons name="close-circle" size={24} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.inputLabel}>Room Label</Text>
+            <TextInput
+              style={styles.input}
+              value={editLabel}
+              onChangeText={setEditLabel}
+              placeholder="e.g. Dorm 201"
+              placeholderTextColor="#94a3b8"
+            />
+
+            <Text style={styles.inputLabel}>Floor Location</Text>
+            <View style={styles.stepperContainer}>
+              <TouchableOpacity 
+                style={[styles.stepperBtn, editFloorNo <= -2 && styles.stepperBtnDisabled]} 
+                onPress={() => setEditFloorNo(prev => Math.max(-2, prev - 1))}
+                disabled={editFloorNo <= -2}
+              >
+                <Ionicons name="remove" size={18} color={editFloorNo <= -2 ? "#cbd5e1" : "#1e293b"} />
+              </TouchableOpacity>
+              <View style={styles.stepperValueBox}>
+                <Text style={styles.stepperFloorTitle}>{floorLabel(editFloorNo)}</Text>
+              </View>
+              <TouchableOpacity 
+                style={[styles.stepperBtn, editFloorNo >= 60 && styles.stepperBtnDisabled]} 
+                onPress={() => setEditFloorNo(prev => Math.min(60, prev + 1))}
+                disabled={editFloorNo >= 60}
+              >
+                <Ionicons name="add" size={18} color={editFloorNo >= 60 ? "#cbd5e1" : "#1e293b"} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.quickFloorChips}>
+              {[-1, 0, 1, 2, 3].map(f => (
+                <TouchableOpacity
+                  key={f}
+                  style={[styles.quickChip, editFloorNo === f && styles.quickChipActive]}
+                  onPress={() => setEditFloorNo(f)}
+                >
+                  <Text style={[styles.quickChipText, editFloorNo === f && styles.quickChipTextActive]}>
+                    {f === -1 ? 'Basement' : f === 0 ? 'Ground' : `F${f}`}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.inputLabel}>Gender Rule</Text>
+            <View style={styles.genderOptions}>
+              {(['any', 'male', 'female'] as const).map(g => (
+                <TouchableOpacity
+                  key={g}
+                  style={[styles.genderBtn, editGenderRule === g && styles.genderBtnActive]}
+                  onPress={() => setEditGenderRule(g)}
+                >
+                  <Text style={[styles.genderBtnText, editGenderRule === g && styles.genderBtnTextActive]}>
+                    {g === 'any' ? 'Any Gender' : g === 'male' ? 'Male Only' : 'Female Only'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.inputLabel}>Owner PIN (Required)</Text>
+            <TextInput
+              style={styles.input}
+              value={ownerPin}
+              onChangeText={setOwnerPin}
+              placeholder="Enter 4-digit Owner PIN"
+              placeholderTextColor="#94a3b8"
+              keyboardType="numeric"
+              secureTextEntry
+              maxLength={6}
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => { setShowEditModal(false); setOwnerPin(''); }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalSaveBtn, { backgroundColor: '#dc2626' }]}
+                onPress={() => executeRemove(ownerPin)}
+                disabled={submittingEdit}
+              >
+                <Text style={styles.modalSaveText}>Delete</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalSaveBtn}
+                onPress={handleSaveEdit}
+                disabled={submittingEdit}
+              >
+                {submittingEdit ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── ADD BED MODAL ─────────────────────────────────────────── */}
+      <Modal visible={showAddBedModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Bed to Dorm</Text>
+              <TouchableOpacity onPress={() => { setShowAddBedModal(false); setOwnerPin(''); }}>
+                <Ionicons name="close-circle" size={24} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.inputLabel}>Bed Label</Text>
+            <TextInput
+              style={styles.input}
+              value={newBedLabel}
+              onChangeText={setNewBedLabel}
+              placeholder={`e.g. Bed ${units.length + 1}`}
+              placeholderTextColor="#94a3b8"
+            />
+
+            <Text style={styles.inputLabel}>Owner PIN (Required)</Text>
+            <TextInput
+              style={styles.input}
+              value={ownerPin}
+              onChangeText={setOwnerPin}
+              placeholder="Enter Owner PIN"
+              placeholderTextColor="#94a3b8"
+              keyboardType="numeric"
+              secureTextEntry
+              maxLength={6}
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => { setShowAddBedModal(false); setOwnerPin(''); }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalSaveBtn}
+                onPress={handleAddBed}
+                disabled={submittingEdit}
+              >
+                {submittingEdit ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Add Bed</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc'
+  },
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc'
+  },
+  headerActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10
+  },
+  headerActionText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 12
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 40
+  },
+  heroCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2
+  },
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16
+  },
+  heroIconBox: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: '#eff6ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12
+  },
+  heroTitleBox: {
+    flex: 1
+  },
+  heroTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  heroBadgeRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 4
+  },
+  heroFloorBadge: {
+    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6
+  },
+  heroFloorText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569'
+  },
+  heroGenderBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6
+  },
+  badgeFemale: {
+    backgroundColor: '#fce7f3'
+  },
+  badgeMale: {
+    backgroundColor: '#dbeafe'
+  },
+  badgeAny: {
+    backgroundColor: '#f3e8ff'
+  },
+  heroGenderText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1e293b'
+  },
+  heroEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#eff6ff',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8
+  },
+  heroEditText: {
+    color: '#2563eb',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9'
+  },
+  metricPill: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderRadius: 12
+  },
+  metricNumber: {
+    fontSize: 16,
+    fontWeight: '700'
+  },
+  metricLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748b',
+    marginTop: 1
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 4
+  },
+  sectionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+    letterSpacing: 0.6
+  },
+  sectionSubtitle: {
+    fontSize: 12,
+    color: '#94a3b8',
+    fontWeight: '500'
+  },
+  bedCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1
+  },
+  bedTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10
+  },
+  bedIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#eff6ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10
+  },
+  bedInfoBox: {
+    flex: 1
+  },
+  bedLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  bedSubrule: {
+    fontSize: 10,
+    color: '#64748b',
+    fontWeight: '600'
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 10
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '700'
+  },
+  occupantBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#f1f5f9'
+  },
+  occupantAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#dbeafe',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10
+  },
+  occupantAvatarText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1e40af'
+  },
+  occupantInfo: {
+    flex: 1
+  },
+  occupantName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  occupantPhone: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 1
+  },
+  chevronBox: {
+    paddingLeft: 6
+  },
+  vacantBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  vacantText: {
+    fontSize: 12,
+    fontWeight: '600'
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    padding: 30,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  emptyIconBox: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 4
+  },
+  emptyText: {
+    fontSize: 13,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 16
+  },
+  addFirstBedBtn: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 8
+  },
+  addFirstBedText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 13
+  },
+  dangerZone: {
+    marginTop: 24,
+    padding: 16,
+    backgroundColor: '#fff1f2',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#fecdd3'
+  },
+  dangerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6
+  },
+  dangerTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#be123c',
+    letterSpacing: 0.5
+  },
+  dangerNote: {
+    fontSize: 12,
+    color: '#9f1239',
+    marginBottom: 14,
+    lineHeight: 16
+  },
+  deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#e11d48',
+    paddingVertical: 11,
+    borderRadius: 10
+  },
+  deleteBtnText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 13
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20
+  },
+  modalCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 22,
+    padding: 20,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 5
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#475569',
+    marginBottom: 6
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    marginBottom: 14,
+    color: '#0f172a',
+    backgroundColor: '#f8fafc'
+  },
+  genderOptions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16
+  },
+  genderBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: '#f8fafc'
+  },
+  genderBtnActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb'
+  },
+  genderBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748b'
+  },
+  genderBtnTextActive: {
+    color: '#ffffff',
+    fontWeight: '700'
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 6
+  },
+  modalCancelBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10
+  },
+  modalCancelText: {
+    color: '#64748b',
+    fontWeight: '600',
+    fontSize: 14
+  },
+  modalSaveBtn: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 10
+  },
+  modalSaveText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 14
+  },
+  stepperContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 6,
+    marginBottom: 8
+  },
+  stepperBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  stepperBtnDisabled: {
+    backgroundColor: '#f8fafc'
+  },
+  stepperValueBox: {
+    flex: 1,
+    alignItems: 'center'
+  },
+  stepperFloorTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0f172a'
+  },
+  quickFloorChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 14
+  },
+  quickChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  quickChipActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb'
+  },
+  quickChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569'
+  },
+  quickChipTextActive: {
+    color: '#ffffff'
+  }
+});

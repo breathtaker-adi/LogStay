@@ -1,9 +1,10 @@
 // src/app/audit-log.tsx
 import React, { useState, useEffect } from 'react';
-import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, FlatList, StyleSheet, ActivityIndicator, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useStaff } from '@/lib/staff-context';
+import { ScreenHeader } from '@/lib/screen-header';
 
 export default function AuditLogScreen() {
   const [logs, setLogs] = useState<any[]>([]);
@@ -49,16 +50,13 @@ export default function AuditLogScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()}>
-          <Text style={styles.backBtn}>← Back</Text>
-        </Pressable>
-        <Text style={styles.title}>Audit Trail</Text>
-        <View style={{ width: 50 }} />
-      </View>
-
-      {loading ? (
+    <View style={styles.root}>
+      <ScreenHeader
+        title="Audit Trail"
+        subtitle="Security & Transaction Trail"
+      />
+      <View style={styles.container}>
+        {loading ? (
         <ActivityIndicator size="large" style={{ marginTop: 40 }} />
       ) : (
         <FlatList
@@ -79,11 +77,13 @@ export default function AuditLogScreen() {
           contentContainerStyle={{ padding: 16 }}
         />
       )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#f8fafc' },
   container: { flex: 1, backgroundColor: '#f8fafc' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
   backBtn: { color: '#2563eb', fontSize: 16 },

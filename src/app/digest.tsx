@@ -7,11 +7,13 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
-  SafeAreaView,
 } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { useFocusEffect } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { getCachedPropertyId } from '../lib/offline';
+import { ScreenHeader } from '@/lib/screen-header';
+import { detectShiftAnomalies, ShiftRecord } from '@/lib/anomaly';
 
 // Configurable thresholds for insider-fraud detection
 export const PETTY_FLAG = 1000; // Flag petty cash entries > ₹1,000
@@ -118,7 +120,7 @@ export default function DailyDigestScreen() {
         // Today's shifts
         supabase
           .from('shifts')
-          .select('id, opening_cash, counted_cash, status, opened_at, closed_at')
+          .select('id, staff_id, opening_cash, counted_cash, status, opened_at, closed_at')
           .eq('property_id', propId)
           .gte('opened_at', todayIso),
 
@@ -215,8 +217,42 @@ export default function DailyDigestScreen() {
         hasOpenShift,
       });
 
-      // --- SECTION B: ALERTS ---
+      // --- SECTION B: ALERTS & CASH ANOMALIES ---
       const generatedAlerts: AlertItem[] = [...lockouts];
+
+      // Robust Statistical Cash Anomaly Flags
+      if (hasClosedShift) {
+        for (const cs of closedShifts) {
+          const shiftObj: ShiftRecord = {
+            id: cs.id,
+            staff_name: staffMap.get(cs.staff_id) || 'Staff',
+            opened_at: cs.opened_at,
+            closed_at: cs.closed_at,
+            opening_cash: Number(cs.opening_cash || 0),
+            cash_collected: collections,
+            upi_collected: 0,
+            petty_cash_expenses: pettyCash,
+            actual_cash: Number(cs.counted_cash || 0),
+            expected_cash: expectedDrawer,
+            variance: Number(cs.counted_cash || 0) - expectedDrawer,
+            refund_count: cashEntries.filter((e: any) => e.kind === 'refund').length,
+            refund_total: refunds,
+            checkin_count: staysRes.data?.length || 0,
+            pay_later_count: staysRes.data?.filter((s: any) => s.pay_mode === 'pay_later').length || 0,
+          };
+          const anomalyFlags = detectShiftAnomalies(shiftObj);
+          for (const af of anomalyFlags) {
+            generatedAlerts.push({
+              id: af.id,
+              type: af.severity === 'critical' ? 'refund' : 'large_petty',
+              title: af.title,
+              subtitle: af.description,
+              detail: af.recommendation,
+              severity: af.severity === 'critical' ? 'high' : af.severity === 'warning' ? 'medium' : 'info',
+            });
+          }
+        }
+      }
 
       // 1. Refunds logged today
       cashEntries
@@ -375,19 +411,16 @@ export default function DailyDigestScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.headerBar}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backButtonText}>‹ Back</Text>
-        </TouchableOpacity>
-        <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={styles.headerTitle}>Daily Digest</Text>
-          <Text style={styles.headerSubtitle}>{propertyName} • {todayDisplay}</Text>
-        </View>
-        <TouchableOpacity style={styles.refreshBtn} onPress={onRefresh}>
-          <Text style={styles.refreshBtnText}>↻</Text>
-        </TouchableOpacity>
-      </View>
+    <View style={styles.safeArea}>
+      <ScreenHeader
+        title="Daily Digest"
+        subtitle={`${propertyName} • ${todayDisplay}`}
+        right={
+          <TouchableOpacity style={styles.refreshBtn} onPress={onRefresh}>
+            <Ionicons name="refresh" size={18} color="#2563eb" />
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView
         style={styles.container}
@@ -553,7 +586,7 @@ export default function DailyDigestScreen() {
           </Text>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 

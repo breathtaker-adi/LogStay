@@ -1,20 +1,30 @@
-import { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useState, useCallback } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  TextInput,
+  RefreshControl
+} from "react-native";
 import { router } from "expo-router";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../lib/supabase";
 import { isOnline, saveToOutbox, removeStayFromCache, updateLocalUnitStatus } from "../lib/offline";
 import { useStaff } from "../lib/staff-context";
+import { ScreenHeader } from "@/lib/screen-header";
 
 export default function CheckoutScreen() {
   const { activeStaff } = useStaff();
   const [activeStays, setActiveStays] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState("");
 
-  useEffect(() => {
-    fetchActiveStays();
-  }, []);
-
-  async function fetchActiveStays() {
+  const fetchActiveStays = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const { data: memberData } = await supabase.from('members').select('property_id').eq('user_id', user?.id).single();
@@ -22,17 +32,28 @@ export default function CheckoutScreen() {
 
       const { data: staysData } = await supabase
         .from('stays')
-        .select('id, guest_id, check_in, unit_id, guests(name), units(label)')
+        .select('id, guest_id, check_in, unit_id, amount, paid_amount, guests(name, phone), units(label)')
         .eq('property_id', memberData.property_id)
-        .eq('status', 'checked_in');
+        .eq('status', 'checked_in')
+        .order('check_in', { ascending: false });
 
       setActiveStays(staysData || []);
     } catch (error) {
       console.error("Error fetching stays", error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }
+  }, []);
+
+  useEffect(() => {
+    fetchActiveStays();
+  }, [fetchActiveStays]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchActiveStays();
+  };
 
   async function handleCheckout(stay: any) {
     const stayId = stay.id;
@@ -58,7 +79,7 @@ export default function CheckoutScreen() {
       if (balance > 0) {
         Alert.alert(
           'Balance Due',
-          `This guest has an unpaid balance of ₹${balance.toFixed(2)}. Please collect payment or authorize write-off.`,
+          `This guest has an unpaid balance of ₹${balance.toFixed(2)}. Please collect payment before checking out.`,
           [
             { text: 'Cancel' },
             { text: 'Go to Folio', onPress: () => router.push(`/guest/${stay.guest_id}?stayId=${stay.id}`) }
@@ -70,7 +91,7 @@ export default function CheckoutScreen() {
 
     Alert.alert(
       "Confirm Check-Out",
-      "Are you sure you want to check out this guest?",
+      `Are you sure you want to check out ${stay.guests?.name || 'this guest'}? The bed will be marked dirty for housekeeping.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -88,6 +109,9 @@ export default function CheckoutScreen() {
                   Alert.alert("Checkout Failed", rpcError.message);
                   return;
                 }
+                // Online success: immediately reflect in local cache
+                await removeStayFromCache(stayId);
+                await updateLocalUnitStatus(unitId, 'dirty');
               } else {
                 // Offline: Queue it
                 await saveToOutbox('guest_checkout', { 
@@ -111,44 +135,315 @@ export default function CheckoutScreen() {
     );
   }
 
-  if (loading) {
-    return <View style={styles.container}><ActivityIndicator size="large" color="#2563eb" /></View>;
-  }
+  const filteredStays = search
+    ? activeStays.filter(s =>
+        s.guests?.name?.toLowerCase().includes(search.toLowerCase()) ||
+        s.units?.label?.toLowerCase().includes(search.toLowerCase()) ||
+        s.guests?.phone?.includes(search)
+      )
+    : activeStays;
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Active Guests (Check-Out)</Text>
-
-      <FlatList
-        data={activeStays}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <View style={styles.cardInfo}>
-              <Text style={styles.guestName}>{item.guests?.name || 'Unknown'}</Text>
-              <Text style={styles.bedLabel}>Bed: {item.units?.label || 'N/A'}</Text>
-              <Text style={styles.dateText}>In: {new Date(item.check_in).toLocaleDateString()}</Text>
-            </View>
-            <TouchableOpacity style={styles.checkoutBtn} onPress={() => handleCheckout(item)}>
-              <Text style={styles.btnText}>Check-Out</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-        ListEmptyComponent={<Text style={styles.emptyText}>No active guests right now.</Text>}
+    <View style={styles.root}>
+      <ScreenHeader
+        title="Check-Out"
+        subtitle={`${activeStays.length} active stay${activeStays.length === 1 ? '' : 's'}`}
       />
+      <View style={styles.container}>
+        {/* Search Bar */}
+        <View style={styles.searchBox}>
+          <Ionicons name="search" size={18} color="#94a3b8" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by guest name or room/bed..."
+            placeholderTextColor="#94a3b8"
+            value={search}
+            onChangeText={setSearch}
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close-circle" size={18} color="#94a3b8" />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {loading ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color="#2563eb" />
+            <Text style={styles.loadingText}>Loading in-house guests...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredStays}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            renderItem={({ item }) => {
+              const guestName = item.guests?.name || 'Guest';
+              const initial = guestName.charAt(0).toUpperCase();
+
+              return (
+                <View style={styles.card}>
+                  <View style={styles.cardTop}>
+                    <View style={styles.avatar}>
+                      <Text style={styles.avatarText}>{initial}</Text>
+                    </View>
+                    <View style={styles.cardInfo}>
+                      <Text style={styles.guestName} numberOfLines={1}>{guestName}</Text>
+                      <View style={styles.pillRow}>
+                        <View style={styles.bedBadge}>
+                          <Ionicons name="bed" size={12} color="#0f766e" />
+                          <Text style={styles.bedLabel}>Bed: {item.units?.label || 'N/A'}</Text>
+                        </View>
+                        <View style={styles.dateBadge}>
+                          <Ionicons name="calendar-outline" size={12} color="#64748b" />
+                          <Text style={styles.dateText}>Since {new Date(item.check_in).toLocaleDateString([], { month: 'short', day: 'numeric' })}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.actionRow}>
+                    <TouchableOpacity
+                      style={styles.folioBtn}
+                      onPress={() => router.push(`/guest/${item.guest_id}?stayId=${item.id}`)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="receipt-outline" size={15} color="#2563eb" />
+                      <Text style={styles.folioBtnText}>Folio</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.checkoutBtn}
+                      onPress={() => handleCheckout(item)}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialCommunityIcons name="door-open" size={18} color="#ffffff" />
+                      <Text style={styles.checkoutBtnText}>Check-Out</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            }}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <View style={styles.emptyIconCircle}>
+                  <Ionicons name="checkmark-done-circle-outline" size={48} color="#16a34a" />
+                </View>
+                <Text style={styles.emptyTitle}>
+                  {search ? 'No Matching Stays' : 'All Clear! No Active Guests'}
+                </Text>
+                <Text style={styles.emptySubtitle}>
+                  {search
+                    ? `No active check-ins matched "${search}".`
+                    : 'There are currently no guests checked in requiring departure.'}
+                </Text>
+              </View>
+            }
+          />
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: "#f3f4f6", paddingTop: 40 },
-  title: { fontSize: 24, fontWeight: "bold", marginBottom: 20, textAlign: "center", color: "#1f2937" },
-  card: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: "white", padding: 15, borderRadius: 8, marginBottom: 10, borderWidth: 1, borderColor: "#e5e7eb" },
-  cardInfo: { flex: 1 },
-  guestName: { fontSize: 18, fontWeight: "bold" },
-  bedLabel: { color: "#6b7280", marginTop: 4 },
-  dateText: { color: "#9ca3af", fontSize: 12, marginTop: 4 },
-  checkoutBtn: { backgroundColor: "#dc2626", paddingVertical: 10, paddingHorizontal: 15, borderRadius: 6 },
-  btnText: { color: "white", fontWeight: "bold" },
-  emptyText: { textAlign: "center", color: "#9ca3af", marginTop: 20 }
+  root: {
+    flex: 1,
+    backgroundColor: "#f8fafc"
+  },
+  container: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 12
+  },
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 46,
+    marginBottom: 14,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1
+  },
+  searchIcon: {
+    marginRight: 8
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: "#0f172a",
+    paddingVertical: 0
+  },
+  loadingBox: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 60,
+    gap: 12
+  },
+  loadingText: {
+    fontSize: 14,
+    color: "#64748b",
+    fontWeight: "500"
+  },
+  listContent: {
+    paddingBottom: 40
+  },
+  card: {
+    backgroundColor: "#ffffff",
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2
+  },
+  cardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 14
+  },
+  avatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: "#eff6ff",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+    borderWidth: 1.5,
+    borderColor: "#bfdbfe"
+  },
+  avatarText: {
+    fontSize: 19,
+    fontWeight: "800",
+    color: "#2563eb"
+  },
+  cardInfo: {
+    flex: 1
+  },
+  guestName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0f172a",
+    marginBottom: 4
+  },
+  pillRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexWrap: "wrap"
+  },
+  bedBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#ccfbf1",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8
+  },
+  bedLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#0f766e"
+  },
+  dateBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#f1f5f9",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8
+  },
+  dateText: {
+    fontSize: 11,
+    color: "#64748b",
+    fontWeight: "600"
+  },
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#f1f5f9"
+  },
+  folioBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: "#eff6ff",
+    borderWidth: 1,
+    borderColor: "#dbeafe"
+  },
+  folioBtnText: {
+    color: "#2563eb",
+    fontSize: 13,
+    fontWeight: "700"
+  },
+  checkoutBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#dc2626",
+    paddingVertical: 11,
+    borderRadius: 10,
+    shadowColor: "#dc2626",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2
+  },
+  checkoutBtnText: {
+    color: "#ffffff",
+    fontWeight: "700",
+    fontSize: 14
+  },
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+    paddingHorizontal: 24
+  },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#dcfce7",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#1e293b",
+    marginBottom: 6
+  },
+  emptySubtitle: {
+    fontSize: 13,
+    color: "#64748b",
+    textAlign: "center",
+    lineHeight: 18
+  }
 });
