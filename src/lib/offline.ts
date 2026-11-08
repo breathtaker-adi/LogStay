@@ -64,7 +64,7 @@ export const initOfflineDB = async () => {
   await db.execAsync(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS outbox (id TEXT PRIMARY KEY NOT NULL, entity TEXT, type TEXT, payload TEXT NOT NULL, created_at INTEGER NOT NULL, status TEXT DEFAULT 'pending', attempts INTEGER DEFAULT 0, last_error TEXT);
-    CREATE TABLE IF NOT EXISTS cache_rooms (id TEXT PRIMARY KEY, property_id TEXT, label TEXT, kind TEXT, floor TEXT, floor_no INTEGER);
+    CREATE TABLE IF NOT EXISTS cache_rooms (id TEXT PRIMARY KEY, property_id TEXT, label TEXT, kind TEXT, floor TEXT, floor_no INTEGER, description TEXT);
     CREATE TABLE IF NOT EXISTS cache_units (id TEXT PRIMARY KEY, room_id TEXT, label TEXT, gender_rule TEXT, housekeeping_status TEXT);
     CREATE TABLE IF NOT EXISTS cache_stays (id TEXT PRIMARY KEY, property_id TEXT, unit_id TEXT, guest_name TEXT, status TEXT);
     CREATE TABLE IF NOT EXISTS cache_guests (id TEXT PRIMARY KEY, name TEXT, phone TEXT, nationality TEXT);
@@ -97,7 +97,7 @@ db.execSync(`
     attempts INTEGER DEFAULT 0,
     last_error TEXT
   );
-  CREATE TABLE IF NOT EXISTS cache_rooms (id TEXT PRIMARY KEY, property_id TEXT, label TEXT, kind TEXT, floor TEXT, floor_no INTEGER);
+  CREATE TABLE IF NOT EXISTS cache_rooms (id TEXT PRIMARY KEY, property_id TEXT, label TEXT, kind TEXT, floor TEXT, floor_no INTEGER, description TEXT);
   CREATE TABLE IF NOT EXISTS cache_units (id TEXT PRIMARY KEY, room_id TEXT, label TEXT, gender_rule TEXT, housekeeping_status TEXT);
   CREATE TABLE IF NOT EXISTS cache_stays (id TEXT PRIMARY KEY, property_id TEXT, unit_id TEXT, guest_name TEXT, status TEXT);
   CREATE TABLE IF NOT EXISTS cache_guests (id TEXT PRIMARY KEY, name TEXT, phone TEXT, nationality TEXT);
@@ -112,6 +112,7 @@ try { db.execSync("ALTER TABLE outbox ADD COLUMN last_error TEXT"); } catch {}
 try { db.execSync("ALTER TABLE outbox ADD COLUMN type TEXT"); } catch {}
 try { db.execSync("ALTER TABLE cache_rooms ADD COLUMN floor TEXT"); } catch {}
 try { db.execSync("ALTER TABLE cache_rooms ADD COLUMN floor_no INTEGER"); } catch {}
+try { db.execSync("ALTER TABLE cache_rooms ADD COLUMN description TEXT"); } catch {}
 try { db.execSync("ALTER TABLE cache_stays ADD COLUMN guest_name TEXT"); } catch {}
 try { db.execSync("ALTER TABLE cache_staff ADD COLUMN pin_hash_local TEXT"); } catch {}
 try { db.execSync("ALTER TABLE cache_staff ADD COLUMN salt TEXT"); } catch {}
@@ -418,8 +419,8 @@ export function cacheRooms(rooms: any[]) {
   db.runSync('DELETE FROM cache_rooms');
   rooms.filter(r => !r.archived_at).forEach(r => {
     db.runSync(
-      'INSERT INTO cache_rooms (id, property_id, label, kind, floor, floor_no) VALUES (?, ?, ?, ?, ?, ?)',
-      [r.id, r.property_id, r.label, r.kind, r.floor || null, r.floor_no !== undefined ? r.floor_no : null]
+      'INSERT INTO cache_rooms (id, property_id, label, kind, floor, floor_no, description) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [r.id, r.property_id, r.label, r.kind, r.floor || null, r.floor_no !== undefined ? r.floor_no : null, r.description || null]
     );
   });
 }

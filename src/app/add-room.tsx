@@ -21,12 +21,15 @@ import { supabase } from '../lib/supabase';
 import { ScreenHeader } from '@/lib/screen-header';
 import { floorLabel } from '@/lib/floors';
 import { useStaff } from '@/lib/staff-context';
+import { useTheme } from '@/hooks/use-theme';
 
 export default function AddRoomScreen() {
+  const theme = useTheme();
   const [label, setLabel] = useState('');
   const [kind, setKind] = useState<'private' | 'dorm'>('private');
   const [floorNo, setFloorNo] = useState<number>(0);
   const [bedCount, setBedCount] = useState('4');
+  const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const { activeStaff, can } = useStaff();
 
@@ -80,7 +83,8 @@ export default function AddRoomScreen() {
         p_unit_ids: unitIds,
         p_unit_labels: null,
         p_gender_rule: 'any',
-        p_floor_no: floorNo
+        p_floor_no: floorNo,
+        p_description: description.trim() || null
       });
 
       if (roomError) {
@@ -92,7 +96,11 @@ export default function AddRoomScreen() {
       await AsyncStorage.setItem('last_created_floor', floorNo.toString());
       setLoading(false);
       Alert.alert('Success', `Room "${label.trim()}" added to ${floorLabel(floorNo)}.`);
-      router.replace('/rooms');
+      if (router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/rooms');
+      }
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to add room.');
       setLoading(false);
@@ -101,8 +109,9 @@ export default function AddRoomScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.root}
+      style={[styles.root, { backgroundColor: theme.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
     >
       <ScreenHeader
         title="Add Room / Dorm"
@@ -113,17 +122,18 @@ export default function AddRoomScreen() {
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
+        automaticallyAdjustKeyboardInsets={true}
       >
-        <View style={styles.formCard}>
+        <View style={[styles.formCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           {/* Room Label */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>ROOM IDENTIFIER / LABEL</Text>
-            <View style={styles.inputWrapper}>
-              <MaterialCommunityIcons name="door" size={20} color="#94a3b8" style={styles.inputIcon} />
+            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>ROOM IDENTIFIER / LABEL</Text>
+            <View style={[styles.inputWrapper, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
+              <MaterialCommunityIcons name="door" size={20} color={theme.textTertiary} style={styles.inputIcon} />
               <TextInput
-                style={styles.textInput}
+                style={[styles.textInput, { color: theme.text }]}
                 placeholder="e.g. 101, 204, Dorm A"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor={theme.textTertiary}
                 value={label}
                 onChangeText={setLabel}
               />
@@ -132,29 +142,37 @@ export default function AddRoomScreen() {
 
           {/* Floor Stepper */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>FLOOR ASSIGNMENT</Text>
-            <View style={styles.stepperContainer}>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>FLOOR ASSIGNMENT</Text>
+            <View style={[styles.stepperContainer, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
               <TouchableOpacity
-                style={[styles.stepperBtn, floorNo <= -2 && styles.stepperBtnDisabled]}
+                style={[
+                  styles.stepperBtn,
+                  { backgroundColor: theme.surface, borderColor: theme.border },
+                  floorNo <= -2 && { opacity: 0.4 }
+                ]}
                 onPress={() => adjustFloor(-1)}
                 disabled={floorNo <= -2}
                 activeOpacity={0.7}
               >
-                <Ionicons name="remove" size={20} color={floorNo <= -2 ? '#cbd5e1' : '#0f172a'} />
+                <Ionicons name="remove" size={20} color={floorNo <= -2 ? theme.textTertiary : theme.text} />
               </TouchableOpacity>
 
               <View style={styles.stepperValueBox}>
-                <Text style={styles.stepperFloorTitle}>{floorLabel(floorNo)}</Text>
-                <Text style={styles.stepperFloorSub}>Index: {floorNo}</Text>
+                <Text style={[styles.stepperFloorTitle, { color: theme.text }]}>{floorLabel(floorNo)}</Text>
+                <Text style={[styles.stepperFloorSub, { color: theme.textSecondary }]}>Index: {floorNo}</Text>
               </View>
 
               <TouchableOpacity
-                style={[styles.stepperBtn, floorNo >= 60 && styles.stepperBtnDisabled]}
+                style={[
+                  styles.stepperBtn,
+                  { backgroundColor: theme.surface, borderColor: theme.border },
+                  floorNo >= 60 && { opacity: 0.4 }
+                ]}
                 onPress={() => adjustFloor(1)}
                 disabled={floorNo >= 60}
                 activeOpacity={0.7}
               >
-                <Ionicons name="add" size={20} color={floorNo >= 60 ? '#cbd5e1' : '#0f172a'} />
+                <Ionicons name="add" size={20} color={floorNo >= 60 ? theme.textTertiary : theme.text} />
               </TouchableOpacity>
             </View>
 
@@ -163,11 +181,17 @@ export default function AddRoomScreen() {
               {[-1, 0, 1, 2, 3].map(f => (
                 <TouchableOpacity
                   key={f}
-                  style={[styles.quickChip, floorNo === f && styles.quickChipActive]}
+                  style={[
+                    styles.quickChip,
+                    { backgroundColor: floorNo === f ? theme.accentSubtle : theme.surfaceSubtle, borderColor: floorNo === f ? theme.accent : theme.border }
+                  ]}
                   onPress={() => setFloorNo(f)}
                   activeOpacity={0.7}
                 >
-                  <Text style={[styles.quickChipText, floorNo === f && styles.quickChipTextActive]}>
+                  <Text style={[
+                    styles.quickChipText,
+                    { color: floorNo === f ? theme.accent : theme.textSecondary, fontWeight: floorNo === f ? '700' : '500' }
+                  ]}>
                     {f === -1 ? 'Basement' : f === 0 ? 'Ground' : `Floor ${f}`}
                   </Text>
                 </TouchableOpacity>
@@ -177,38 +201,56 @@ export default function AddRoomScreen() {
 
           {/* Room Type Selector */}
           <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>ROOM CLASSIFICATION</Text>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>ROOM CLASSIFICATION</Text>
             <View style={styles.typeSelectorRow}>
               <TouchableOpacity
-                style={[styles.typeOption, kind === 'private' && styles.typeOptionActive]}
+                style={[
+                  styles.typeOption,
+                  {
+                    backgroundColor: kind === 'private' ? theme.accentSubtle : theme.surfaceSubtle,
+                    borderColor: kind === 'private' ? theme.accent : theme.border
+                  }
+                ]}
                 onPress={() => handleKindChange('private')}
                 activeOpacity={0.8}
               >
                 <Ionicons
                   name="bed-outline"
                   size={20}
-                  color={kind === 'private' ? '#2563eb' : '#64748b'}
+                  color={kind === 'private' ? theme.accent : theme.textSecondary}
                 />
-                <Text style={[styles.typeOptionText, kind === 'private' && styles.typeOptionTextActive]}>
+                <Text style={[
+                  styles.typeOptionText,
+                  { color: kind === 'private' ? theme.accent : theme.textSecondary }
+                ]}>
                   Private Room
                 </Text>
-                <Text style={styles.typeOptionSub}>1 entire room / 1 unit</Text>
+                <Text style={[styles.typeOptionSub, { color: theme.textTertiary }]}>1 entire room / 1 unit</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.typeOption, kind === 'dorm' && styles.typeOptionActive]}
+                style={[
+                  styles.typeOption,
+                  {
+                    backgroundColor: kind === 'dorm' ? theme.accentSubtle : theme.surfaceSubtle,
+                    borderColor: kind === 'dorm' ? theme.accent : theme.border
+                  }
+                ]}
                 onPress={() => handleKindChange('dorm')}
                 activeOpacity={0.8}
               >
                 <MaterialCommunityIcons
                   name="bunk-bed-outline"
                   size={20}
-                  color={kind === 'dorm' ? '#2563eb' : '#64748b'}
+                  color={kind === 'dorm' ? theme.accent : theme.textSecondary}
                 />
-                <Text style={[styles.typeOptionText, kind === 'dorm' && styles.typeOptionTextActive]}>
+                <Text style={[
+                  styles.typeOptionText,
+                  { color: kind === 'dorm' ? theme.accent : theme.textSecondary }
+                ]}>
                   Dormitory
                 </Text>
-                <Text style={styles.typeOptionSub}>Shared beds matrix</Text>
+                <Text style={[styles.typeOptionSub, { color: theme.textTertiary }]}>Shared beds matrix</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -216,13 +258,13 @@ export default function AddRoomScreen() {
           {/* Dorm Bed Count */}
           {kind === 'dorm' && (
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>NUMBER OF BEDS IN DORM</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="grid-outline" size={18} color="#94a3b8" style={styles.inputIcon} />
+              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>NUMBER OF BEDS IN DORM</Text>
+              <View style={[styles.inputWrapper, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
+                <Ionicons name="grid-outline" size={18} color={theme.textTertiary} style={styles.inputIcon} />
                 <TextInput
-                  style={styles.textInput}
+                  style={[styles.textInput, { color: theme.text }]}
                   placeholder="e.g. 4, 6, 8, 12"
-                  placeholderTextColor="#94a3b8"
+                  placeholderTextColor={theme.textTertiary}
                   value={bedCount}
                   onChangeText={setBedCount}
                   keyboardType="numeric"
@@ -231,9 +273,30 @@ export default function AddRoomScreen() {
             </View>
           )}
 
+          {/* Description / Remark */}
+          <View style={styles.inputGroup}>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>REMARK / DESCRIPTION (OPTIONAL)</Text>
+            <View style={[styles.inputWrapper, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border, minHeight: 76, alignItems: 'flex-start', paddingTop: 8 }]}>
+              <Ionicons name="document-text-outline" size={18} color={theme.textTertiary} style={[styles.inputIcon, { marginTop: 2 }]} />
+              <TextInput
+                style={[styles.textInput, { color: theme.text, minHeight: 60, textAlignVertical: 'top' }]}
+                placeholder="e.g. Balcony view, near elevator, AC deluxe"
+                placeholderTextColor={theme.textTertiary}
+                value={description}
+                onChangeText={setDescription}
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+          </View>
+
           {/* Submit Action */}
           <TouchableOpacity
-            style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
+            style={[
+              styles.submitBtn,
+              { backgroundColor: theme.accent },
+              loading && { opacity: 0.6 }
+            ]}
             onPress={saveRoom}
             disabled={loading}
             activeOpacity={0.8}
@@ -259,6 +322,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc'
   },
   scrollContent: {
+    flexGrow: 1,
     padding: 16,
     paddingBottom: 40
   },

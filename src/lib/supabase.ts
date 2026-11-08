@@ -2,12 +2,9 @@ import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LargeSecureStore } from './secure-storage';
 import { createClient } from '@supabase/supabase-js';
+import { ENV } from '@/config/env';
 
-// Paste your Supabase URL and Anon Key here
-const supabaseUrl = 'https://cmevtjqnztsisldaoghr.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNtZXZ0anFuenRzaXNsZGFvZ2hyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExMDQ2MjMsImV4cCI6MjEwNjY4MDYyM30.6zwBUNXPSFK0g8K-byP9HJa4ZpaQB_YFJLnvuLqRoxM';
-
-const SUPABASE_AUTH_KEY = 'sb-cmevtjqnztsisldaoghr-auth-token';
+const SUPABASE_AUTH_KEY = ENV.SESSION_STORAGE_KEY;
 
 // One-time legacy migration from AsyncStorage to LargeSecureStore to avoid logging out existing pilot users
 export async function migrateLegacySession() {
@@ -25,7 +22,7 @@ export async function migrateLegacySession() {
 // Proactively trigger session migration on launch
 void migrateLegacySession();
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(ENV.SUPABASE_URL, ENV.SUPABASE_ANON_KEY, {
   auth: {
     storage: LargeSecureStore,
     autoRefreshToken: true,

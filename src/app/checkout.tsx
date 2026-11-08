@@ -8,7 +8,9 @@ import {
   TouchableOpacity,
   View,
   TextInput,
-  RefreshControl
+  RefreshControl,
+  KeyboardAvoidingView,
+  Platform
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -16,10 +18,14 @@ import { supabase } from "../lib/supabase";
 import { isOnline, saveToOutbox, removeStayFromCache, updateLocalUnitStatus } from "../lib/offline";
 import { useStaff } from "../lib/staff-context";
 import { ScreenHeader } from "@/lib/screen-header";
+import { useTheme } from "@/hooks/use-theme";
+import { buildCheckoutReceiptMessage, openWhatsApp } from "@/lib/whatsapp";
 
 export default function CheckoutScreen() {
+  const theme = useTheme();
   const { activeStaff } = useStaff();
   const [activeStays, setActiveStays] = useState<any[]>([]);
+  const [propertyData, setPropertyData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
@@ -38,6 +44,13 @@ export default function CheckoutScreen() {
         .order('check_in', { ascending: false });
 
       setActiveStays(staysData || []);
+
+      const { data: prop } = await supabase
+        .from('properties')
+        .select('name, google_review_url')
+        .eq('id', memberData.property_id)
+        .single();
+      if (prop) setPropertyData(prop);
     } catch (error) {
       console.error("Error fetching stays", error);
     } finally {
@@ -123,9 +136,46 @@ export default function CheckoutScreen() {
                 await updateLocalUnitStatus(unitId, 'dirty');
               }
 
-              Alert.alert("Checked Out", "Guest has been checked out successfully.");
-              fetchActiveStays(); // Refresh list
-              router.replace('/home');
+              const guestPhone = stay.guests?.phone;
+              const guestName = stay.guests?.name || 'Guest';
+              const receiptMsg = buildCheckoutReceiptMessage({
+                guestName,
+                propertyName: propertyData?.name || 'LogStay',
+                unitLabel: stay.units?.label || 'Room',
+                checkInDate: stay.check_in ? new Date(stay.check_in).toLocaleDateString('en-GB') : undefined,
+                checkOutDate: new Date().toLocaleDateString('en-GB'),
+                tariffAmount: Number(stay.amount || 0),
+                totalPaid: Number(stay.paid_amount || stay.amount || 0),
+                googleReviewUrl: propertyData?.google_review_url
+              });
+
+              if (guestPhone) {
+                Alert.alert(
+                  "Checked Out",
+                  `Guest ${guestName} checked out successfully.\n\nSend final receipt & review link via WhatsApp?`,
+                  [
+                    {
+                      text: "Done",
+                      onPress: () => {
+                        fetchActiveStays();
+                        router.replace('/home');
+                      }
+                    },
+                    {
+                      text: "Send WhatsApp",
+                      onPress: async () => {
+                        await openWhatsApp(guestPhone, receiptMsg);
+                        fetchActiveStays();
+                        router.replace('/home');
+                      }
+                    }
+                  ]
+                );
+              } else {
+                Alert.alert("Checked Out", "Guest has been checked out successfully.");
+                fetchActiveStays(); // Refresh list
+                router.replace('/home');
+              }
             } catch (error: any) {
               Alert.alert("Error", error.message || "Checkout failed");
             }
@@ -144,78 +194,84 @@ export default function CheckoutScreen() {
     : activeStays;
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: theme.bg }]}>
       <ScreenHeader
         title="Check-Out"
         subtitle={`${activeStays.length} active stay${activeStays.length === 1 ? '' : 's'}`}
       />
-      <View style={styles.container}>
-        {/* Search Bar */}
-        <View style={styles.searchBox}>
-          <Ionicons name="search" size={18} color="#94a3b8" style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by guest name or room/bed..."
-            placeholderTextColor="#94a3b8"
-            value={search}
-            onChangeText={setSearch}
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={18} color="#94a3b8" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {loading ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color="#2563eb" />
-            <Text style={styles.loadingText}>Loading in-house guests...</Text>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+      >
+        <View style={styles.container}>
+          {/* Search Bar */}
+          <View style={[styles.searchBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <Ionicons name="search" size={18} color={theme.textTertiary} style={styles.searchIcon} />
+            <TextInput
+              style={[styles.searchInput, { color: theme.text }]}
+              placeholder="Search by guest name or room/bed..."
+              placeholderTextColor={theme.textTertiary}
+              value={search}
+              onChangeText={setSearch}
+            />
+            {search.length > 0 && (
+              <TouchableOpacity onPress={() => setSearch("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close-circle" size={18} color={theme.textTertiary} />
+              </TouchableOpacity>
+            )}
           </View>
-        ) : (
-          <FlatList
-            data={filteredStays}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+
+          {loading ? (
+            <View style={styles.loadingBox}>
+              <ActivityIndicator size="large" color={theme.accent} />
+              <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading in-house guests...</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={filteredStays}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={[styles.listContent, { flexGrow: 1 }]}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accent} />}
             renderItem={({ item }) => {
               const guestName = item.guests?.name || 'Guest';
               const initial = guestName.charAt(0).toUpperCase();
 
               return (
-                <View style={styles.card}>
+                <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                   <View style={styles.cardTop}>
-                    <View style={styles.avatar}>
-                      <Text style={styles.avatarText}>{initial}</Text>
+                    <View style={[styles.avatar, { backgroundColor: theme.accentSubtle, borderColor: theme.accent }]}>
+                      <Text style={[styles.avatarText, { color: theme.accent }]}>{initial}</Text>
                     </View>
                     <View style={styles.cardInfo}>
-                      <Text style={styles.guestName} numberOfLines={1}>{guestName}</Text>
+                      <Text style={[styles.guestName, { color: theme.text }]} numberOfLines={1}>{guestName}</Text>
                       <View style={styles.pillRow}>
-                        <View style={styles.bedBadge}>
-                          <Ionicons name="bed" size={12} color="#0f766e" />
-                          <Text style={styles.bedLabel}>Bed: {item.units?.label || 'N/A'}</Text>
+                        <View style={[styles.bedBadge, { backgroundColor: theme.freeSubtle }]}>
+                          <Ionicons name="bed" size={12} color={theme.free} />
+                          <Text style={[styles.bedLabel, { color: theme.free }]}>Bed: {item.units?.label || 'N/A'}</Text>
                         </View>
-                        <View style={styles.dateBadge}>
-                          <Ionicons name="calendar-outline" size={12} color="#64748b" />
-                          <Text style={styles.dateText}>Since {new Date(item.check_in).toLocaleDateString([], { month: 'short', day: 'numeric' })}</Text>
+                        <View style={[styles.dateBadge, { backgroundColor: theme.surfaceSubtle }]}>
+                          <Ionicons name="calendar-outline" size={12} color={theme.textSecondary} />
+                          <Text style={[styles.dateText, { color: theme.textSecondary }]}>Since {new Date(item.check_in).toLocaleDateString([], { month: 'short', day: 'numeric' })}</Text>
                         </View>
                       </View>
                     </View>
                   </View>
 
-                  <View style={styles.actionRow}>
+                  <View style={[styles.actionRow, { borderTopColor: theme.borderSubtle }]}>
                     <TouchableOpacity
-                      style={styles.folioBtn}
+                      style={[styles.folioBtn, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}
                       onPress={() => router.push(`/guest/${item.guest_id}?stayId=${item.id}`)}
                       activeOpacity={0.7}
                     >
-                      <Ionicons name="receipt-outline" size={15} color="#2563eb" />
-                      <Text style={styles.folioBtnText}>Folio</Text>
+                      <Ionicons name="receipt-outline" size={15} color={theme.accent} />
+                      <Text style={[styles.folioBtnText, { color: theme.accent }]}>Folio</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={styles.checkoutBtn}
+                      style={[styles.checkoutBtn, { backgroundColor: theme.occupied }]}
                       onPress={() => handleCheckout(item)}
                       activeOpacity={0.8}
                     >
@@ -228,13 +284,13 @@ export default function CheckoutScreen() {
             }}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <View style={styles.emptyIconCircle}>
-                  <Ionicons name="checkmark-done-circle-outline" size={48} color="#16a34a" />
+                <View style={[styles.emptyIconCircle, { backgroundColor: theme.freeSubtle }]}>
+                  <Ionicons name="checkmark-done-circle-outline" size={48} color={theme.free} />
                 </View>
-                <Text style={styles.emptyTitle}>
+                <Text style={[styles.emptyTitle, { color: theme.text }]}>
                   {search ? 'No Matching Stays' : 'All Clear! No Active Guests'}
                 </Text>
-                <Text style={styles.emptySubtitle}>
+                <Text style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
                   {search
                     ? `No active check-ins matched "${search}".`
                     : 'There are currently no guests checked in requiring departure.'}
@@ -243,7 +299,8 @@ export default function CheckoutScreen() {
             }
           />
         )}
-      </View>
+        </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -262,11 +319,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#ffffff",
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#e2e8f0",
     borderRadius: 12,
     paddingHorizontal: 12,
-    height: 46,
+    height: 44,
     marginBottom: 14,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
@@ -299,15 +356,15 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: "#ffffff",
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#e2e8f0",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
-    shadowRadius: 6,
+    shadowRadius: 4,
     elevation: 2
   },
   cardTop: {
@@ -316,18 +373,18 @@ const styles = StyleSheet.create({
     marginBottom: 14
   },
   avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: "#eff6ff",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
-    borderWidth: 1.5,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#bfdbfe"
   },
   avatarText: {
-    fontSize: 19,
+    fontSize: 18,
     fontWeight: "800",
     color: "#2563eb"
   },
@@ -353,7 +410,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#ccfbf1",
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 8
+    borderRadius: 6
   },
   bedLabel: {
     fontSize: 11,
@@ -367,7 +424,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#f1f5f9",
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 8
+    borderRadius: 6
   },
   dateText: {
     fontSize: 11,
@@ -379,7 +436,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     paddingTop: 12,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "#f1f5f9"
   },
   folioBtn: {
@@ -387,11 +444,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 4,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    height: 44,
+    paddingHorizontal: 16,
     borderRadius: 10,
     backgroundColor: "#eff6ff",
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: "#dbeafe"
   },
   folioBtnText: {
@@ -401,12 +458,12 @@ const styles = StyleSheet.create({
   },
   checkoutBtn: {
     flex: 1,
+    height: 44,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
     backgroundColor: "#dc2626",
-    paddingVertical: 11,
     borderRadius: 10,
     shadowColor: "#dc2626",
     shadowOffset: { width: 0, height: 2 },
@@ -426,9 +483,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24
   },
   emptyIconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: "#dcfce7",
     alignItems: "center",
     justifyContent: "center",

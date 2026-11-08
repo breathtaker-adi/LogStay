@@ -15,7 +15,7 @@ import {
   Alert,
   LayoutAnimation
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useStaff } from '@/lib/staff-context';
@@ -32,6 +32,7 @@ import {
 } from '@/lib/offline';
 import { bedState, BED_COLOR, BED_LABELS, BedState } from '@/lib/bed-state';
 import { groupByFloor } from '@/lib/floors';
+import { useTheme } from '@/hooks/use-theme';
 
 interface UnitItem {
   id: string;
@@ -47,6 +48,7 @@ interface RoomGroup {
   kind: 'dorm' | 'private';
   floor?: string | null;
   floor_no?: number | null;
+  description?: string | null;
   units: UnitItem[];
 }
 
@@ -54,6 +56,7 @@ type FilterStatus = 'free' | 'occupied' | 'dirty' | 'maintenance';
 
 export default function RoomsScreen() {
   const { can } = useStaff();
+  const theme = useTheme();
   const params = useLocalSearchParams<{ filter?: string }>();
   const initialFilter = (params.filter as FilterStatus) || null;
 
@@ -90,7 +93,7 @@ export default function RoomsScreen() {
           // 1. Fetch active rooms
           const { data: roomsData } = await supabase
             .from('rooms')
-            .select('id, property_id, label, kind, floor, floor_no')
+            .select('id, property_id, label, kind, floor, floor_no, description')
             .eq('property_id', propId)
             .is('archived_at', null)
             .order('label');
@@ -140,6 +143,7 @@ export default function RoomsScreen() {
           kind: r.kind || 'private',
           floor: r.floor || null,
           floor_no: r.floor_no !== undefined ? r.floor_no : null,
+          description: r.description || null,
           units: roomUnits
         };
       });
@@ -176,9 +180,11 @@ export default function RoomsScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -216,23 +222,25 @@ export default function RoomsScreen() {
 
   if (loading && rooms.length === 0) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#2563eb" />
+      <View style={[styles.center, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.accent} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <ScreenHeader
         title="Rooms & Beds"
         subtitle={lastSynced ? `Synced ${lastSynced} • ${counts.totalBeds} Total Beds` : `${counts.totalBeds} Total Beds`}
         right={
           can('settings') ? (
             <TouchableOpacity
-              style={styles.addRoomBtn}
+              style={[styles.addRoomBtn, { backgroundColor: theme.accent }]}
               onPress={() => router.push('/add-room')}
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Add new room"
             >
               <Ionicons name="add" size={16} color="#ffffff" />
               <Text style={styles.addRoomText}>Add Room</Text>
@@ -243,7 +251,7 @@ export default function RoomsScreen() {
 
       {/* ── FLOOR BAR (ROW OF CHIPS) ─────────────────────────────── */}
       {allFloorGroups.length > 0 && (
-        <View style={styles.floorBarContainer}>
+        <View style={[styles.floorBarContainer, { backgroundColor: theme.backgroundElement, borderBottomColor: theme.separator }]}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -252,18 +260,23 @@ export default function RoomsScreen() {
             <Pressable
               style={[
                 styles.floorChip,
-                selectedFloor === 'all' ? styles.floorChipActive : styles.floorChipInactive
+                selectedFloor === 'all'
+                  ? { backgroundColor: theme.accent, borderColor: theme.accent }
+                  : { backgroundColor: theme.backgroundSubtle, borderColor: theme.separator }
               ]}
               onPress={() => setSelectedFloor('all')}
+              accessibilityRole="button"
+              accessibilityLabel={`All floors, ${rooms.length} rooms`}
             >
               <Ionicons
                 name="layers-outline"
                 size={13}
-                color={selectedFloor === 'all' ? '#ffffff' : '#475569'}
+                color={selectedFloor === 'all' ? '#ffffff' : theme.textSecondary}
               />
               <Text
                 style={[
                   styles.floorChipText,
+                  { color: selectedFloor === 'all' ? '#ffffff' : theme.textSecondary },
                   selectedFloor === 'all' && styles.floorChipTextActive
                 ]}
               >
@@ -278,13 +291,18 @@ export default function RoomsScreen() {
                   key={fg.floor !== null ? `chip_${fg.floor}` : 'chip_none'}
                   style={[
                     styles.floorChip,
-                    isSelected ? styles.floorChipActive : styles.floorChipInactive
+                    isSelected
+                      ? { backgroundColor: theme.accent, borderColor: theme.accent }
+                      : { backgroundColor: theme.backgroundSubtle, borderColor: theme.separator }
                   ]}
                   onPress={() => setSelectedFloor(isSelected ? 'all' : fg.floor)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${fg.chipLabel}, ${fg.data.length} rooms`}
                 >
                   <Text
                     style={[
                       styles.floorChipText,
+                      { color: isSelected ? '#ffffff' : theme.textSecondary },
                       isSelected && styles.floorChipTextActive
                     ]}
                   >
@@ -298,7 +316,7 @@ export default function RoomsScreen() {
       )}
 
       {/* ── INTERACTIVE STATUS FILTER PILLS ───────────────────────── */}
-      <View style={styles.filterBarContainer}>
+      <View style={[styles.filterBarContainer, { backgroundColor: theme.backgroundElement, borderBottomColor: theme.separator }]}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -308,14 +326,18 @@ export default function RoomsScreen() {
           <Pressable
             style={[
               styles.filterPill,
-              activeFilter === null ? styles.filterPillActiveAll : styles.filterPillInactive
+              activeFilter === null
+                ? { backgroundColor: theme.text, borderColor: theme.text }
+                : { backgroundColor: theme.backgroundSubtle, borderColor: theme.separator }
             ]}
             onPress={() => setFilterWithAnimation(null)}
+            accessibilityRole="button"
+            accessibilityLabel={`All beds, ${counts.totalBeds} total`}
           >
             <Text
               style={[
                 styles.filterPillText,
-                activeFilter === null ? styles.filterPillTextActive : styles.filterPillTextInactive
+                { color: activeFilter === null ? theme.backgroundElement : theme.textSecondary }
               ]}
             >
               All Beds ({counts.totalBeds})
@@ -327,21 +349,23 @@ export default function RoomsScreen() {
             style={[
               styles.filterPill,
               activeFilter === 'free'
-                ? { backgroundColor: '#16a34a', borderColor: '#16a34a' }
-                : { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }
+                ? { backgroundColor: theme.free, borderColor: theme.free }
+                : { backgroundColor: theme.freeSubtle, borderColor: theme.freeSubtle }
             ]}
             onPress={() => setFilterWithAnimation(activeFilter === 'free' ? null : 'free')}
+            accessibilityRole="button"
+            accessibilityLabel={`Filter by Free beds, ${counts.free} available`}
           >
             <View
               style={[
                 styles.filterDot,
-                { backgroundColor: activeFilter === 'free' ? '#ffffff' : '#16a34a' }
+                { backgroundColor: activeFilter === 'free' ? '#ffffff' : theme.free }
               ]}
             />
             <Text
               style={[
                 styles.filterPillText,
-                { color: activeFilter === 'free' ? '#ffffff' : '#166534' }
+                { color: activeFilter === 'free' ? '#ffffff' : theme.free }
               ]}
             >
               Free: {counts.free}
@@ -353,21 +377,23 @@ export default function RoomsScreen() {
             style={[
               styles.filterPill,
               activeFilter === 'occupied'
-                ? { backgroundColor: '#dc2626', borderColor: '#dc2626' }
-                : { backgroundColor: '#fef2f2', borderColor: '#fecaca' }
+                ? { backgroundColor: theme.occupied, borderColor: theme.occupied }
+                : { backgroundColor: theme.occupiedSubtle, borderColor: theme.occupiedSubtle }
             ]}
             onPress={() => setFilterWithAnimation(activeFilter === 'occupied' ? null : 'occupied')}
+            accessibilityRole="button"
+            accessibilityLabel={`Filter by Occupied beds, ${counts.occupied} occupied`}
           >
             <View
               style={[
                 styles.filterDot,
-                { backgroundColor: activeFilter === 'occupied' ? '#ffffff' : '#dc2626' }
+                { backgroundColor: activeFilter === 'occupied' ? '#ffffff' : theme.occupied }
               ]}
             />
             <Text
               style={[
                 styles.filterPillText,
-                { color: activeFilter === 'occupied' ? '#ffffff' : '#991b1b' }
+                { color: activeFilter === 'occupied' ? '#ffffff' : theme.occupied }
               ]}
             >
               Occupied: {counts.occupied}
@@ -379,21 +405,23 @@ export default function RoomsScreen() {
             style={[
               styles.filterPill,
               activeFilter === 'dirty'
-                ? { backgroundColor: '#ca8a04', borderColor: '#ca8a04' }
-                : { backgroundColor: '#fffbeb', borderColor: '#fde68a' }
+                ? { backgroundColor: theme.dirty, borderColor: theme.dirty }
+                : { backgroundColor: theme.dirtySubtle, borderColor: theme.dirtySubtle }
             ]}
             onPress={() => setFilterWithAnimation(activeFilter === 'dirty' ? null : 'dirty')}
+            accessibilityRole="button"
+            accessibilityLabel={`Filter by Dirty beds, ${counts.dirty} dirty`}
           >
             <View
               style={[
                 styles.filterDot,
-                { backgroundColor: activeFilter === 'dirty' ? '#ffffff' : '#ca8a04' }
+                { backgroundColor: activeFilter === 'dirty' ? '#ffffff' : theme.dirty }
               ]}
             />
             <Text
               style={[
                 styles.filterPillText,
-                { color: activeFilter === 'dirty' ? '#ffffff' : '#854d0e' }
+                { color: activeFilter === 'dirty' ? '#ffffff' : theme.dirty }
               ]}
             >
               Dirty: {counts.dirty}
@@ -405,24 +433,26 @@ export default function RoomsScreen() {
             style={[
               styles.filterPill,
               activeFilter === 'maintenance'
-                ? { backgroundColor: '#475569', borderColor: '#475569' }
-                : { backgroundColor: '#f1f5f9', borderColor: '#e2e8f0' }
+                ? { backgroundColor: theme.maintenance, borderColor: theme.maintenance }
+                : { backgroundColor: theme.maintenanceSubtle, borderColor: theme.separator }
             ]}
             onPress={() => setFilterWithAnimation(activeFilter === 'maintenance' ? null : 'maintenance')}
+            accessibilityRole="button"
+            accessibilityLabel={`Filter by Maintenance beds, ${counts.maintenance} in maintenance`}
           >
             <View
               style={[
                 styles.filterDot,
-                { backgroundColor: activeFilter === 'maintenance' ? '#ffffff' : '#64748b' }
+                { backgroundColor: activeFilter === 'maintenance' ? '#ffffff' : theme.maintenance }
               ]}
             />
             <Text
               style={[
                 styles.filterPillText,
-                { color: activeFilter === 'maintenance' ? '#ffffff' : '#334155' }
+                { color: activeFilter === 'maintenance' ? '#ffffff' : theme.maintenance }
               ]}
             >
-              Maint: {counts.maintenance}
+              Maintenance: {counts.maintenance}
             </Text>
           </Pressable>
         </ScrollView>
@@ -436,27 +466,27 @@ export default function RoomsScreen() {
       >
         {floorGroups.length === 0 ? (
           <View style={styles.emptyState}>
-            <View style={styles.emptyIconBox}>
-              <Ionicons name="bed-outline" size={42} color="#94a3b8" />
+            <View style={[styles.emptyIconBox, { backgroundColor: theme.backgroundSubtle }]}>
+              <Ionicons name="bed-outline" size={42} color={theme.textTertiary} />
             </View>
-            <Text style={styles.emptyTitle}>
+            <Text style={[styles.emptyTitle, { color: theme.text }]}>
               {activeFilter ? `No ${activeFilter} rooms found` : 'No rooms added yet'}
             </Text>
-            <Text style={styles.emptyText}>
+            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
               {activeFilter
                 ? 'Try selecting another status filter or reset to view all rooms.'
                 : 'Get started by creating your property rooms and dorm beds.'}
             </Text>
             {activeFilter ? (
               <TouchableOpacity
-                style={styles.emptyActionBtn}
+                style={[styles.emptyActionBtn, { backgroundColor: theme.accent }]}
                 onPress={() => setFilterWithAnimation(null)}
               >
                 <Text style={styles.emptyActionText}>Show All Rooms</Text>
               </TouchableOpacity>
             ) : can('settings') ? (
               <TouchableOpacity
-                style={styles.emptyActionBtn}
+                style={[styles.emptyActionBtn, { backgroundColor: theme.accent }]}
                 onPress={() => router.push('/add-room')}
               >
                 <Text style={styles.emptyActionText}>+ Create Your First Room</Text>
@@ -496,11 +526,11 @@ export default function RoomsScreen() {
             return (
               <View key={fg.floor !== null ? `floor_${fg.floor}` : 'floor_none'} style={styles.floorSection}>
                 <View style={styles.floorHeaderRow}>
-                  <View style={styles.floorBadge}>
-                    <Ionicons name="layers-outline" size={13} color="#475569" />
-                    <Text style={styles.floorTitle}>{fg.title.toUpperCase()}</Text>
+                  <View style={[styles.floorBadge, { backgroundColor: theme.backgroundSubtle }]}>
+                    <Ionicons name="layers-outline" size={13} color={theme.textSecondary} />
+                    <Text style={[styles.floorTitle, { color: theme.textSecondary }]}>{fg.title.toUpperCase()}</Text>
                   </View>
-                  <Text style={styles.floorCountText}>{floorCountsText}</Text>
+                  <Text style={[styles.floorCountText, { color: theme.textSecondary }]}>{floorCountsText}</Text>
                 </View>
 
                 {fg.floor === null && can('settings') && (
@@ -520,17 +550,21 @@ export default function RoomsScreen() {
                     const occupiedBeds = units.filter(u => activeUnitIds.has(u.id)).length;
                     const dirtyBeds = units.filter(u => u.housekeeping_status === 'dirty').length;
                     const maintBeds = units.filter(u => u.housekeeping_status === 'maintenance').length;
-                    const cleanBeds = totalBeds - occupiedBeds - dirtyBeds - maintBeds;
 
                     if (isDorm) {
                       // Composite status evaluation
-                      let dormStatusBadge = { text: 'All Free', bg: '#dcfce7', color: '#166534', dot: '#16a34a' };
+                      let dormStatusBadge: { text: string; bg: string; color: string; dot: string } = {
+                        text: 'All Free',
+                        bg: theme.freeSubtle,
+                        color: theme.free,
+                        dot: theme.free
+                      };
                       if (totalBeds > 0 && occupiedBeds === totalBeds) {
-                        dormStatusBadge = { text: 'Full', bg: '#fee2e2', color: '#991b1b', dot: '#dc2626' };
+                        dormStatusBadge = { text: 'Full', bg: theme.occupiedSubtle, color: theme.occupied, dot: theme.occupied };
                       } else if (occupiedBeds > 0) {
-                        dormStatusBadge = { text: `${occupiedBeds}/${totalBeds} Taken`, bg: '#fffbeb', color: '#b45309', dot: '#d97706' };
+                        dormStatusBadge = { text: `${occupiedBeds}/${totalBeds} Taken`, bg: theme.accentSubtle, color: theme.accent, dot: theme.accent };
                       } else if (dirtyBeds > 0) {
-                        dormStatusBadge = { text: 'Needs Clean', bg: '#fef3c7', color: '#92400e', dot: '#ca8a04' };
+                        dormStatusBadge = { text: 'Needs Clean', bg: theme.dirtySubtle, color: theme.dirty, dot: theme.dirty };
                       }
 
                       const occupancyRate = totalBeds > 0 ? (occupiedBeds / totalBeds) : 0;
@@ -538,17 +572,19 @@ export default function RoomsScreen() {
                       return (
                         <Pressable
                           key={room.id}
-                          style={styles.card}
+                          style={[styles.card, { backgroundColor: theme.backgroundElement, borderColor: theme.separator }]}
                           onPress={() => router.push({ pathname: '/dorm/[roomId]', params: { roomId: room.id } })}
                         >
                           {/* Top Header */}
                           <View style={styles.cardHeader}>
-                            <View style={styles.roomIconWrapper}>
-                              <MaterialCommunityIcons name="bunk-bed-outline" size={20} color="#2563eb" />
+                            <View style={[styles.roomIconWrapper, { backgroundColor: theme.accentSubtle }]}>
+                              <MaterialCommunityIcons name="bunk-bed-outline" size={20} color={theme.accent} />
                             </View>
                             <View style={styles.roomTitleGroup}>
-                              <Text style={styles.roomLabel} numberOfLines={1}>{room.label}</Text>
-                              <Text style={styles.roomKindText}>Dorm • {totalBeds} Beds</Text>
+                              <Text style={[styles.roomLabel, { color: theme.text }]} numberOfLines={1}>{room.label}</Text>
+                              <Text style={[styles.roomKindText, { color: theme.textSecondary }]}>
+                                {room.description ? `Dorm • ${room.description}` : `Dorm • ${totalBeds} Beds`}
+                              </Text>
                             </View>
                             <View style={[styles.statusPill, { backgroundColor: dormStatusBadge.bg }]}>
                               <View style={[styles.statusDot, { backgroundColor: dormStatusBadge.dot }]} />
@@ -559,13 +595,13 @@ export default function RoomsScreen() {
                           </View>
 
                           {/* Occupancy Bar */}
-                          <View style={styles.progressContainer}>
+                          <View style={[styles.progressContainer, { backgroundColor: theme.backgroundSubtle }]}>
                             <View
                               style={[
                                 styles.progressBar,
                                 {
                                   width: `${Math.round(occupancyRate * 100)}%`,
-                                  backgroundColor: occupancyRate === 1 ? '#dc2626' : '#2563eb'
+                                  backgroundColor: occupancyRate === 1 ? theme.occupied : theme.accent
                                 }
                               ]}
                             />
@@ -577,41 +613,39 @@ export default function RoomsScreen() {
                               const bState = bedState(u, activeUnitIds);
                               const bColor = BED_COLOR[bState];
                               return (
-                                <View key={u.id} style={styles.miniBedChip}>
+                                <View key={u.id} style={[styles.miniBedChip, { backgroundColor: theme.backgroundSubtle, borderColor: theme.separator }]}>
                                   <View style={[styles.miniBedDot, { backgroundColor: bColor }]} />
-                                  <Text style={styles.miniBedText} numberOfLines={1}>{u.label}</Text>
+                                  <Text style={[styles.miniBedText, { color: theme.text }]} numberOfLines={1}>{u.label}</Text>
                                 </View>
                               );
                             })}
                             {units.length > 8 && (
-                              <Text style={styles.moreBedsText}>+{units.length - 8} more</Text>
+                              <Text style={[styles.moreBedsText, { color: theme.textSecondary }]}>+{units.length - 8} more</Text>
                             )}
                           </View>
 
                           {/* Warnings & Footer */}
-                          <View style={styles.cardFooter}>
+                          <View style={[styles.cardFooter, { borderTopColor: theme.separator }]}>
                             {dirtyBeds > 0 ? (
-                              <View style={styles.dirtyBadge}>
-                                <Ionicons name="sparkles" size={11} color="#b45309" />
-                                <Text style={styles.dirtyBadgeText}>
+                              <View style={[styles.dirtyBadge, { backgroundColor: theme.dirtySubtle }]}>
+                                <Ionicons name="sparkles" size={11} color={theme.dirty} />
+                                <Text style={[styles.dirtyBadgeText, { color: theme.dirty }]}>
                                   {dirtyBeds} dirty
                                 </Text>
                               </View>
                             ) : maintBeds > 0 ? (
-                              <View style={[styles.dirtyBadge, { backgroundColor: '#f1f5f9' }]}>
-                                <Ionicons name="construct" size={11} color="#475569" />
-                                <Text style={[styles.dirtyBadgeText, { color: '#475569' }]}>
+                              <View style={[styles.dirtyBadge, { backgroundColor: theme.maintenanceSubtle }]}>
+                                <Ionicons name="construct" size={11} color={theme.maintenance} />
+                                <Text style={[styles.dirtyBadgeText, { color: theme.maintenance }]}>
                                   {maintBeds} maint
                                 </Text>
                               </View>
                             ) : (
-                              <Text style={styles.cleanBadgeText}>
-                                {cleanBeds} available
-                              </Text>
+                              <View />
                             )}
                             <View style={styles.viewLink}>
-                              <Text style={styles.viewLinkText}>View Beds</Text>
-                              <Ionicons name="chevron-forward" size={14} color="#2563eb" />
+                              <Text style={[styles.viewLinkText, { color: theme.accent }]}>View Beds</Text>
+                              <Ionicons name="chevron-forward" size={14} color={theme.accent} />
                             </View>
                           </View>
                         </Pressable>
@@ -624,16 +658,16 @@ export default function RoomsScreen() {
                     const stateLabel = BED_LABELS[state];
 
                     const stateTheme = {
-                      clean: { bg: '#dcfce7', text: '#166534', dot: '#16a34a', icon: 'checkmark-circle-outline' },
-                      occupied: { bg: '#fee2e2', text: '#991b1b', dot: '#dc2626', icon: 'person-circle-outline' },
-                      dirty: { bg: '#fffbeb', text: '#92400e', dot: '#d97706', icon: 'sparkles-outline' },
-                      maintenance: { bg: '#f1f5f9', text: '#334155', dot: '#64748b', icon: 'construct-outline' }
-                    }[state] || { bg: '#f1f5f9', text: '#334155', dot: '#64748b', icon: 'help-circle-outline' };
+                      clean: { bg: theme.freeSubtle, text: theme.free, dot: theme.free, icon: 'checkmark-circle-outline' },
+                      occupied: { bg: theme.occupiedSubtle, text: theme.occupied, dot: theme.occupied, icon: 'person-circle-outline' },
+                      dirty: { bg: theme.dirtySubtle, text: theme.dirty, dot: theme.dirty, icon: 'sparkles-outline' },
+                      maintenance: { bg: theme.maintenanceSubtle, text: theme.maintenance, dot: theme.maintenance, icon: 'construct-outline' }
+                    }[state] || { bg: theme.maintenanceSubtle, text: theme.maintenance, dot: theme.maintenance, icon: 'help-circle-outline' };
 
                     return (
                       <Pressable
                         key={room.id}
-                        style={styles.card}
+                        style={[styles.card, { backgroundColor: theme.backgroundElement, borderColor: theme.separator }]}
                         onPress={() => {
                           if (unit) {
                             router.push(`/room/${unit.id}`);
@@ -643,12 +677,14 @@ export default function RoomsScreen() {
                         }}
                       >
                         <View style={styles.cardHeader}>
-                          <View style={[styles.roomIconWrapper, { backgroundColor: '#f0fdf4' }]}>
-                            <MaterialCommunityIcons name="bed-king-outline" size={20} color="#059669" />
+                          <View style={[styles.roomIconWrapper, { backgroundColor: theme.freeSubtle }]}>
+                            <MaterialCommunityIcons name="bed-king-outline" size={20} color={theme.free} />
                           </View>
                           <View style={styles.roomTitleGroup}>
-                            <Text style={styles.roomLabel} numberOfLines={1}>{room.label}</Text>
-                            <Text style={styles.roomKindText}>Private Room</Text>
+                            <Text style={[styles.roomLabel, { color: theme.text }]} numberOfLines={1}>{room.label}</Text>
+                            <Text style={[styles.roomKindText, { color: theme.textSecondary }]}>
+                              {room.description ? `Private Room • ${room.description}` : 'Private Room'}
+                            </Text>
                           </View>
                           <View style={[styles.statusPill, { backgroundColor: stateTheme.bg }]}>
                             <View style={[styles.statusDot, { backgroundColor: stateTheme.dot }]} />
@@ -658,24 +694,10 @@ export default function RoomsScreen() {
                           </View>
                         </View>
 
-                        <View style={styles.privateInfoRow}>
-                          <Ionicons name={stateTheme.icon as any} size={15} color={stateTheme.text} />
-                          <Text style={[styles.privateInfoText, { color: stateTheme.text }]}>
-                            {state === 'clean'
-                              ? 'Ready for instant check-in'
-                              : state === 'occupied'
-                              ? 'Currently occupied by guest'
-                              : state === 'dirty'
-                              ? 'Awaiting housekeeping service'
-                              : 'Temporarily out of service'}
-                          </Text>
-                        </View>
-
-                        <View style={styles.cardFooter}>
-                          <Text style={styles.floorPillText}>{room.floor}</Text>
+                        <View style={[styles.cardFooter, { borderTopColor: theme.separator, justifyContent: 'flex-end' }]}>
                           <View style={styles.viewLink}>
-                            <Text style={styles.viewLinkText}>Manage</Text>
-                            <Ionicons name="chevron-forward" size={14} color="#2563eb" />
+                            <Text style={[styles.viewLinkText, { color: theme.accent }]}>Manage</Text>
+                            <Ionicons name="chevron-forward" size={14} color={theme.accent} />
                           </View>
                         </View>
                       </Pressable>
@@ -694,37 +716,27 @@ export default function RoomsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc'
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8fafc'
   },
   addRoomBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#2563eb',
+    gap: 5,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    borderRadius: 10,
-    shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 2
+    borderRadius: 12,
   },
   addRoomText: {
     color: '#ffffff',
-    fontWeight: '700',
-    fontSize: 12
+    fontWeight: '600',
+    fontSize: 13,
   },
   floorBarContainer: {
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomWidth: StyleSheet.hairlineWidth,
     paddingVertical: 8
   },
   floorBarScroll: {
@@ -737,50 +749,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 11,
-    paddingVertical: 5,
-    borderRadius: 16,
-    borderWidth: 1
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
   },
   floorChipActive: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb'
   },
   floorChipInactive: {
-    backgroundColor: '#f8fafc',
-    borderColor: '#e2e8f0'
   },
   floorChipText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#475569'
+    fontWeight: '500',
   },
   floorChipTextActive: {
-    color: '#ffffff',
-    fontWeight: '700'
+    fontWeight: '600'
   },
   noFloorNotice: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#fffbeb',
     paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#fef3c7',
     marginBottom: 10
   },
   noFloorNoticeText: {
-    fontSize: 11,
-    color: '#92400e',
+    fontSize: 12,
     fontWeight: '500',
     flex: 1
   },
   filterBarContainer: {
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomWidth: StyleSheet.hairlineWidth,
     paddingVertical: 10
   },
   filterScroll: {
@@ -795,26 +796,21 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1
+    borderRadius: 12,
+    borderWidth: 1,
+    minHeight: 34,
   },
   filterPillActiveAll: {
-    backgroundColor: '#0f172a',
-    borderColor: '#0f172a'
   },
   filterPillInactive: {
-    backgroundColor: '#f8fafc',
-    borderColor: '#e2e8f0'
   },
   filterPillText: {
     fontSize: 12,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   filterPillTextActive: {
-    color: '#ffffff'
   },
   filterPillTextInactive: {
-    color: '#475569'
   },
   filterDot: {
     width: 7,
@@ -839,34 +835,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#e2e8f0',
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6
+    paddingVertical: 4,
+    borderRadius: 8
   },
   floorTitle: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#334155',
     letterSpacing: 0.6
   },
   floorCountText: {
-    fontSize: 12,
-    color: '#64748b',
-    fontWeight: '500'
+    fontSize: 13,
+    fontWeight: '400'
   },
   grid: {
     gap: 12
   },
   card: {
-    backgroundColor: '#ffffff',
     borderRadius: 18,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderWidth: StyleSheet.hairlineWidth,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.03,
     shadowRadius: 6,
     elevation: 2
   },
@@ -876,10 +867,9 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   roomIconWrapper: {
-    width: 38,
-    height: 38,
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    backgroundColor: '#eff6ff',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10
@@ -888,22 +878,21 @@ const styles = StyleSheet.create({
     flex: 1
   },
   roomLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0f172a'
+    fontSize: 17,
+    fontWeight: '600',
+    letterSpacing: -0.2
   },
   roomKindText: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: 1
+    fontSize: 13,
+    marginTop: 2
   },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 10,
+    paddingHorizontal: 9,
     paddingVertical: 4,
-    borderRadius: 12
+    borderRadius: 8
   },
   statusDot: {
     width: 6,
@@ -911,19 +900,18 @@ const styles = StyleSheet.create({
     borderRadius: 3
   },
   statusPillText: {
-    fontSize: 11,
-    fontWeight: '700'
+    fontSize: 12,
+    fontWeight: '600'
   },
   progressContainer: {
-    height: 5,
-    backgroundColor: '#f1f5f9',
-    borderRadius: 3,
+    height: 4,
+    borderRadius: 2,
     overflow: 'hidden',
     marginBottom: 12
   },
   progressBar: {
     height: '100%',
-    borderRadius: 3
+    borderRadius: 2
   },
   bedChipsRow: {
     flexDirection: 'row',
@@ -934,13 +922,11 @@ const styles = StyleSheet.create({
   miniBedChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6
+    gap: 5,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8
   },
   miniBedDot: {
     width: 6,
@@ -948,14 +934,12 @@ const styles = StyleSheet.create({
     borderRadius: 3
   },
   miniBedText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#334155'
+    fontSize: 11,
+    fontWeight: '500',
   },
   moreBedsText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '500',
     alignSelf: 'center',
     marginLeft: 2
   },
@@ -963,56 +947,49 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#f8fafc',
     padding: 10,
     borderRadius: 10,
     marginBottom: 12
   },
   privateInfoText: {
-    fontSize: 12,
-    fontWeight: '600'
+    fontSize: 13,
+    fontWeight: '500'
   },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#f8fafc'
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   dirtyBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#fef3c7',
     paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 6
   },
   dirtyBadgeText: {
-    fontSize: 11,
-    color: '#92400e',
-    fontWeight: '700'
-  },
-  cleanBadgeText: {
-    fontSize: 11,
-    color: '#16a34a',
+    fontSize: 12,
     fontWeight: '600'
   },
+  cleanBadgeText: {
+    fontSize: 12,
+    fontWeight: '500'
+  },
   floorPillText: {
-    fontSize: 11,
-    color: '#64748b',
+    fontSize: 12,
     fontWeight: '500'
   },
   viewLink: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2
+    gap: 3
   },
   viewLinkText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#2563eb'
+    fontSize: 13,
+    fontWeight: '600',
   },
   emptyState: {
     alignItems: 'center',
@@ -1024,34 +1001,30 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#f1f5f9',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16
   },
   emptyTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '700',
-    color: '#0f172a',
     marginBottom: 6,
     textAlign: 'center'
   },
   emptyText: {
-    fontSize: 13,
-    color: '#64748b',
+    fontSize: 14,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 20,
     marginBottom: 20
   },
   emptyActionBtn: {
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 10
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12
   },
   emptyActionText: {
     color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '700'
+    fontSize: 14,
+    fontWeight: '600'
   }
 });

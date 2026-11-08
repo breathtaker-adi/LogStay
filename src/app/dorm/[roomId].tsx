@@ -14,7 +14,9 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
-  TextInput
+  TextInput,
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -25,10 +27,12 @@ import { bedState, BedState } from '@/lib/bed-state';
 import * as Crypto from 'expo-crypto';
 import { ScreenHeader } from '@/lib/screen-header';
 import { floorLabel, resolveFloorNo } from '@/lib/floors';
+import { useTheme } from '@/hooks/use-theme';
 
 export default function DormDetailScreen() {
   const { roomId } = useLocalSearchParams<{ roomId: string }>();
   const { activeStaff, can } = useStaff();
+  const theme = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -259,8 +263,8 @@ export default function DormDetailScreen() {
 
   if (loading && !room) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#2563eb" />
+      <View style={[styles.center, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.accent} />
       </View>
     );
   }
@@ -273,14 +277,14 @@ export default function DormDetailScreen() {
   const cleanCount = Math.max(0, totalBeds - occupiedCount - dirtyCount - maintCount);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <ScreenHeader
         title={room?.label || 'Dorm'}
         subtitle={`${room?.floor ? `Floor ${room.floor} • ` : ''}${totalBeds} Beds • ${occupiedCount} Taken${lastSynced ? ` • Synced ${lastSynced}` : ''}`}
         right={
           can('settings') ? (
             <TouchableOpacity
-              style={styles.headerActionBtn}
+              style={[styles.headerActionBtn, { backgroundColor: theme.accent }]}
               onPress={() => setShowAddBedModal(true)}
               activeOpacity={0.8}
             >
@@ -295,18 +299,20 @@ export default function DormDetailScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets={true}
       >
         {/* ── HERO DORM SUMMARY CARD ───────────────────────────────── */}
-        <View style={styles.heroCard}>
+        <View style={[styles.heroCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <View style={styles.heroTopRow}>
-            <View style={styles.heroIconBox}>
-              <MaterialCommunityIcons name="bunk-bed-outline" size={26} color="#2563eb" />
+            <View style={[styles.heroIconBox, { backgroundColor: theme.accentSubtle }]}>
+              <MaterialCommunityIcons name="bunk-bed-outline" size={26} color={theme.accent} />
             </View>
             <View style={styles.heroTitleBox}>
-              <Text style={styles.heroTitle}>{room?.label || 'Dorm'}</Text>
+              <Text style={[styles.heroTitle, { color: theme.text }]}>{room?.label || 'Dorm'}</Text>
               <View style={styles.heroBadgeRow}>
-                <View style={styles.heroFloorBadge}>
-                  <Text style={styles.heroFloorText}>Floor {room?.floor || 'G'}</Text>
+                <View style={[styles.heroFloorBadge, { backgroundColor: theme.surfaceSubtle }]}>
+                  <Text style={[styles.heroFloorText, { color: theme.textSecondary }]}>Floor {room?.floor || 'G'}</Text>
                 </View>
                 <View style={[styles.heroGenderBadge, editGenderRule === 'female' ? styles.badgeFemale : editGenderRule === 'male' ? styles.badgeMale : styles.badgeAny]}>
                   <Text style={styles.heroGenderText}>
@@ -317,34 +323,34 @@ export default function DormDetailScreen() {
             </View>
             {can('settings') && (
               <TouchableOpacity
-                style={styles.heroEditBtn}
+                style={[styles.heroEditBtn, { backgroundColor: theme.accentSubtle, borderColor: theme.accent }]}
                 onPress={() => setShowEditModal(true)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="create-outline" size={16} color="#2563eb" />
-                <Text style={styles.heroEditText}>Edit</Text>
+                <Ionicons name="create-outline" size={16} color={theme.accent} />
+                <Text style={[styles.heroEditText, { color: theme.accent }]}>Edit</Text>
               </TouchableOpacity>
             )}
           </View>
 
           {/* Quick Stats Pills */}
           <View style={styles.metricsRow}>
-            <View style={[styles.metricPill, { backgroundColor: '#eff6ff' }]}>
-              <Text style={[styles.metricNumber, { color: '#2563eb' }]}>{totalBeds}</Text>
-              <Text style={styles.metricLabel}>Total Beds</Text>
+            <View style={[styles.metricPill, { backgroundColor: theme.accentSubtle }]}>
+              <Text style={[styles.metricNumber, { color: theme.accent }]}>{totalBeds}</Text>
+              <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Total Beds</Text>
             </View>
-            <View style={[styles.metricPill, { backgroundColor: '#fee2e2' }]}>
-              <Text style={[styles.metricNumber, { color: '#dc2626' }]}>{occupiedCount}</Text>
-              <Text style={styles.metricLabel}>Occupied</Text>
+            <View style={[styles.metricPill, { backgroundColor: theme.occupiedSubtle }]}>
+              <Text style={[styles.metricNumber, { color: theme.occupied }]}>{occupiedCount}</Text>
+              <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Occupied</Text>
             </View>
-            <View style={[styles.metricPill, { backgroundColor: '#dcfce7' }]}>
-              <Text style={[styles.metricNumber, { color: '#16a34a' }]}>{cleanCount}</Text>
-              <Text style={styles.metricLabel}>Available</Text>
+            <View style={[styles.metricPill, { backgroundColor: theme.freeSubtle }]}>
+              <Text style={[styles.metricNumber, { color: theme.free }]}>{cleanCount}</Text>
+              <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Available</Text>
             </View>
             {dirtyCount > 0 && (
-              <View style={[styles.metricPill, { backgroundColor: '#fef3c7' }]}>
-                <Text style={[styles.metricNumber, { color: '#b45309' }]}>{dirtyCount}</Text>
-                <Text style={styles.metricLabel}>Dirty</Text>
+              <View style={[styles.metricPill, { backgroundColor: theme.dirtySubtle }]}>
+                <Text style={[styles.metricNumber, { color: theme.dirty }]}>{dirtyCount}</Text>
+                <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Dirty</Text>
               </View>
             )}
           </View>
@@ -352,20 +358,20 @@ export default function DormDetailScreen() {
 
         {/* ── BEDS LIST SECTION ───────────────────────────────────── */}
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>BEDS IN THIS ROOM</Text>
-          <Text style={styles.sectionSubtitle}>{units.length} total</Text>
+          <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>BEDS IN THIS ROOM</Text>
+          <Text style={[styles.sectionSubtitle, { color: theme.textTertiary }]}>{units.length} total</Text>
         </View>
 
         {units.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconBox}>
-              <MaterialCommunityIcons name="bed-empty" size={38} color="#94a3b8" />
+          <View style={[styles.emptyContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <View style={[styles.emptyIconBox, { backgroundColor: theme.surfaceSubtle }]}>
+              <MaterialCommunityIcons name="bed-empty" size={38} color={theme.textTertiary} />
             </View>
-            <Text style={styles.emptyTitle}>No beds in this dorm yet</Text>
-            <Text style={styles.emptyText}>Add beds to this dorm to begin checking in guests.</Text>
+            <Text style={[styles.emptyTitle, { color: theme.text }]}>No beds in this dorm yet</Text>
+            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>Add beds to this dorm to begin checking in guests.</Text>
             {can('settings') && (
               <TouchableOpacity
-                style={styles.addFirstBedBtn}
+                style={[styles.addFirstBedBtn, { backgroundColor: theme.accent }]}
                 onPress={() => setShowAddBedModal(true)}
               >
                 <Text style={styles.addFirstBedText}>+ Add First Bed</Text>
@@ -380,26 +386,26 @@ export default function DormDetailScreen() {
             const guestPhone = Array.isArray(stay?.guests) ? stay?.guests[0]?.phone : stay?.guests?.phone;
 
             const stateTheme = {
-              clean: { bg: '#dcfce7', text: '#166534', dot: '#16a34a', label: 'Clean / Free' },
-              occupied: { bg: '#fee2e2', text: '#991b1b', dot: '#dc2626', label: 'Occupied' },
-              dirty: { bg: '#fffbeb', text: '#92400e', dot: '#d97706', label: 'Needs Clean' },
-              maintenance: { bg: '#f1f5f9', text: '#334155', dot: '#64748b', label: 'Maintenance' }
-            }[state] || { bg: '#f1f5f9', text: '#334155', dot: '#64748b', label: state };
+              clean: { bg: theme.freeSubtle, text: theme.free, dot: theme.free, label: 'Clean / Free' },
+              occupied: { bg: theme.occupiedSubtle, text: theme.occupied, dot: theme.occupied, label: 'Occupied' },
+              dirty: { bg: theme.dirtySubtle, text: theme.dirty, dot: theme.dirty, label: 'Needs Clean' },
+              maintenance: { bg: theme.maintenanceSubtle, text: theme.maintenance, dot: theme.maintenance, label: 'Maintenance' }
+            }[state] || { bg: theme.surfaceSubtle, text: theme.textSecondary, dot: theme.textSecondary, label: state };
 
             return (
               <Pressable
                 key={unit.id}
-                style={styles.bedCard}
+                style={[styles.bedCard, { backgroundColor: theme.surface, borderColor: theme.border }]}
                 onPress={() => router.push(`/room/${unit.id}`)}
               >
                 <View style={styles.bedTopRow}>
-                  <View style={styles.bedIconBadge}>
-                    <Ionicons name="bed-outline" size={18} color="#2563eb" />
+                  <View style={[styles.bedIconBadge, { backgroundColor: theme.accentSubtle }]}>
+                    <Ionicons name="bed-outline" size={18} color={theme.accent} />
                   </View>
                   <View style={styles.bedInfoBox}>
-                    <Text style={styles.bedLabel}>{unit.label}</Text>
+                    <Text style={[styles.bedLabel, { color: theme.text }]}>{unit.label}</Text>
                     {unit.gender_rule && unit.gender_rule !== 'any' && (
-                      <Text style={styles.bedSubrule}>
+                      <Text style={[styles.bedSubrule, { color: theme.textSecondary }]}>
                         {unit.gender_rule.toUpperCase()}
                       </Text>
                     )}
@@ -415,26 +421,29 @@ export default function DormDetailScreen() {
 
                 {/* Occupant / Vacant Banner */}
                 {stay ? (
-                  <View style={styles.occupantBanner}>
-                    <View style={styles.occupantAvatar}>
-                      <Text style={styles.occupantAvatarText}>
+                  <View style={[styles.occupantBanner, { backgroundColor: theme.surfaceSubtle }]}>
+                    <View style={[styles.occupantAvatar, { backgroundColor: theme.accentSubtle }]}>
+                      <Text style={[styles.occupantAvatarText, { color: theme.accent }]}>
                         {(guestName || 'G').charAt(0).toUpperCase()}
                       </Text>
                     </View>
                     <View style={styles.occupantInfo}>
-                      <Text style={styles.occupantName} numberOfLines={1}>
+                      <Text style={[styles.occupantName, { color: theme.text }]} numberOfLines={1}>
                         {guestName || 'Guest Checked In'}
                       </Text>
                       {activeStaff?.role !== 'housekeeping' && guestPhone ? (
-                        <Text style={styles.occupantPhone}>📞 {guestPhone}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                          <Ionicons name="call-outline" size={12} color={theme.textSecondary} />
+                          <Text style={[styles.occupantPhone, { color: theme.textSecondary }]}>{guestPhone}</Text>
+                        </View>
                       ) : null}
                     </View>
                     <View style={styles.chevronBox}>
-                      <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
+                      <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
                     </View>
                   </View>
                 ) : (
-                  <View style={styles.vacantBanner}>
+                  <View style={[styles.vacantBanner, { backgroundColor: theme.surfaceSubtle }]}>
                     <Ionicons
                       name={state === 'clean' ? 'checkmark-circle-outline' : state === 'dirty' ? 'sparkles-outline' : 'construct-outline'}
                       size={15}
@@ -447,7 +456,7 @@ export default function DormDetailScreen() {
                         ? 'Awaiting housekeeping cleaning'
                         : 'Bed currently out of service'}
                     </Text>
-                    <Ionicons name="chevron-forward" size={14} color="#94a3b8" style={{ marginLeft: 'auto' }} />
+                    <Ionicons name="chevron-forward" size={14} color={theme.textTertiary} style={{ marginLeft: 'auto' }} />
                   </View>
                 )}
               </Pressable>
@@ -479,8 +488,16 @@ export default function DormDetailScreen() {
 
       {/* ── EDIT DORM MODAL ───────────────────────────────────────── */}
       <Modal visible={showEditModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+          style={styles.modalOverlay}
+        >
+          <ScrollView
+            contentContainerStyle={styles.modalCard}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Edit Dorm Room</Text>
               <TouchableOpacity onPress={() => { setShowEditModal(false); setOwnerPin(''); }}>
@@ -584,14 +601,22 @@ export default function DormDetailScreen() {
                 )}
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── ADD BED MODAL ─────────────────────────────────────────── */}
       <Modal visible={showAddBedModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+          style={styles.modalOverlay}
+        >
+          <ScrollView
+            contentContainerStyle={styles.modalCard}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Bed to Dorm</Text>
               <TouchableOpacity onPress={() => { setShowAddBedModal(false); setOwnerPin(''); }}>
@@ -639,8 +664,8 @@ export default function DormDetailScreen() {
                 )}
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -672,6 +697,7 @@ const styles = StyleSheet.create({
     fontSize: 12
   },
   scrollContent: {
+    flexGrow: 1,
     padding: 16,
     paddingBottom: 40
   },

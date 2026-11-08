@@ -73,6 +73,24 @@ export function formatFriendlyError(
     return 'Permission denied. Only the property owner is authorized for this action.';
   }
 
+  // Invite & Join Code
+  if (lower.includes('invalid or expired invite code') || lower.includes('invite code') || lower.includes('invalid code')) {
+    return 'The invite code entered is invalid or has expired. Please ask your property manager for a new code.';
+  }
+
+  // Hierarchy & Removal Rules
+  if (lower.includes('owner is supreme') || lower.includes('cannot be removed')) {
+    return 'The Property Owner has supreme authority and cannot be removed.';
+  }
+
+  if (lower.includes('only be removed by the property owner') || lower.includes('co-admin can only be removed')) {
+    return 'Co-Admins can only be removed by the property Owner.';
+  }
+
+  if (lower.includes('cannot remove yourself')) {
+    return 'You cannot remove yourself from the active team.';
+  }
+
   // Foreign keys
   if (lower.includes('foreign key') || lower.includes('violates foreign key')) {
     return 'Cannot complete this action because other records are linked to this item.';

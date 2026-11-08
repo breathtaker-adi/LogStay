@@ -1,6 +1,6 @@
 /**
- * Learn more about light and dark modes:
- * https://docs.expo.dev/guides/color-schemes/
+ * Returns the correct color token set for the current appearance (light/dark).
+ * Usage in any screen: const theme = useTheme();
  */
 
 import { Colors } from '@/constants/theme';
@@ -8,7 +8,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export function useTheme() {
   const scheme = useColorScheme();
-  const theme = scheme === 'unspecified' ? 'light' : scheme;
-
-  return Colors[theme];
+  // 'unspecified' can occur briefly on first render — default to light
+  const mode: 'light' | 'dark' = scheme === 'dark' ? 'dark' : 'light';
+  return Colors[mode];
 }

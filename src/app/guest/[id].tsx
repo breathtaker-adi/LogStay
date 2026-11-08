@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, StyleSheet, ActivityIndicator, Modal, TextInput, Image, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, ScrollView, Pressable, Alert, StyleSheet, ActivityIndicator, Modal, TextInput, Image, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
@@ -8,8 +8,11 @@ import { isOnline, saveToOutbox } from '@/lib/offline';
 import * as Crypto from 'expo-crypto';
 import { ScreenHeader } from '@/lib/screen-header';
 import { exportGuestRegistrationCardPDF } from '@/lib/pdf-reports';
+import { useTheme } from '@/hooks/use-theme';
+import { openWhatsApp } from '@/lib/whatsapp';
 
 export default function GuestDetailScreen() {
+  const theme = useTheme();
   const { id, stayId } = useLocalSearchParams<{ id: string; stayId: string }>();
   const { activeStaff, can } = useStaff();
 
@@ -49,7 +52,7 @@ export default function GuestDetailScreen() {
   const [payAmount, setPayAmount] = useState('');
   const [payMode, setPayMode] = useState<'cash' | 'upi'>('cash');
 
-  const fetchDetails = async () => {
+  const fetchDetails = useCallback(async () => {
     setLoading(true);
     
     // Fetch Guest
@@ -77,11 +80,11 @@ export default function GuestDetailScreen() {
     setPayments(paymentsData || []);
 
     setLoading(false);
-  };
+  }, [id, stayId]);
 
   useEffect(() => {
     fetchDetails();
-  }, [id, stayId]);
+  }, [fetchDetails]);
 
   const handleViewPhoto = async () => {
     if (!guest?.id_photo_path) return;
@@ -231,50 +234,78 @@ export default function GuestDetailScreen() {
     }
   };
 
+  const handleSendWhatsAppFolio = async () => {
+    if (!guest?.phone) return Alert.alert('Missing Phone', 'Guest does not have a phone number on file.');
+    const totalExtra = charges.reduce((sum, c) => sum + Number(c.unit_price) * (c.qty || 1), 0);
+    const totalTariff = Number(stay?.amount || 0);
+    const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+    const balanceDue = (totalTariff + totalExtra) - totalPaid;
+
+    const folioMsg = [
+      `🏨 *Stay Folio Update — LogStay Hospitality*`,
+      `Hello ${guest.name},\n`,
+      `🛏️ *Stay Reference:* ${stayId ? stayId.slice(0, 8) : 'Active'}`,
+      `💵 *Room Tariff:* ₹${totalTariff.toFixed(2)}`,
+      totalExtra > 0 ? `🧺 *Incidentals / Extras:* ₹${totalExtra.toFixed(2)}` : null,
+      `💳 *Total Paid so far:* ₹${totalPaid.toFixed(2)}`,
+      balanceDue > 0 ? `⚠️ *Current Balance Due:* ₹${balanceDue.toFixed(2)}` : `✅ *Status:* Fully Paid`,
+      `\nNeed any assistance? Reply to this message or visit the front desk. Have a great day! ✨`
+    ].filter(Boolean).join('\n');
+
+    await openWhatsApp(guest.phone, folioMsg);
+  };
+
   if (loading || !guest) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#f8fafc' }}>
+      <View style={{ flex: 1, backgroundColor: theme.bg }}>
         <ScreenHeader title="Guest Details" />
-        <View style={styles.center}><ActivityIndicator size="large" color="#2563eb" /></View>
+        <View style={styles.center}><ActivityIndicator size="large" color={theme.accent} /></View>
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f8fafc' }}>
+    <View style={{ flex: 1, backgroundColor: theme.bg }}>
       <ScreenHeader
         title="Guest Details"
         subtitle={guest?.name || 'In-House'}
       />
-      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={[styles.container, { backgroundColor: theme.bg }]}
+        contentContainerStyle={[styles.scrollContent, { flexGrow: 1 }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets={true}
+      >
         {/* Guest Profile Hero Card */}
-        <View style={styles.heroCard}>
+        <View style={[styles.heroCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <View style={styles.heroTopRow}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
+            <View style={[styles.avatar, { backgroundColor: theme.accentSubtle, borderColor: theme.accent }]}>
+              <Text style={[styles.avatarText, { color: theme.accent }]}>
                 {guest.name ? guest.name.charAt(0).toUpperCase() : 'G'}
               </Text>
             </View>
             <View style={styles.heroNameCol}>
-              <Text style={styles.guestName}>{guest.name}</Text>
+              <Text style={[styles.guestName, { color: theme.text }]}>{guest.name}</Text>
               <View style={styles.badgesRow}>
-                <View style={styles.pillBadge}>
-                  <Ionicons name="call-outline" size={12} color="#64748b" />
-                  <Text style={styles.pillText}>{guest.phone || 'No phone'}</Text>
+                <View style={[styles.pillBadge, { backgroundColor: theme.surfaceSubtle }]}>
+                  <Ionicons name="call-outline" size={12} color={theme.textSecondary} />
+                  <Text style={[styles.pillText, { color: theme.textSecondary }]}>{guest.phone || 'No phone'}</Text>
                 </View>
                 {guest.nationality ? (
                   <View style={[styles.pillBadge, { backgroundColor: '#fef3c7' }]}>
-                    <Text style={[styles.pillText, { color: '#92400e' }]}>🌐 {guest.nationality}</Text>
+                    <Ionicons name="globe-outline" size={12} color="#92400e" />
+                    <Text style={[styles.pillText, { color: '#92400e' }]}>{guest.nationality}</Text>
                   </View>
                 ) : null}
               </View>
             </View>
           </View>
 
-          <View style={styles.idRow}>
+          <View style={[styles.idRow, { borderTopColor: theme.borderSubtle }]}>
             <View style={styles.idBadge}>
-              <Ionicons name="card-outline" size={14} color="#2563eb" />
-              <Text style={styles.idText}>
+              <Ionicons name="card-outline" size={14} color={theme.accent} />
+              <Text style={[styles.idText, { color: theme.textSecondary }]}>
                 {guest.id_type || 'ID'} ••••{guest.id_last4 || '----'}
               </Text>
             </View>
@@ -282,62 +313,67 @@ export default function GuestDetailScreen() {
             {guest.id_photo_path && !guest.id_deleted_at ? (
               can('view_id_photo') && (
                 <TouchableOpacity 
-                  style={styles.viewPhotoBtn} 
+                  style={[styles.viewPhotoBtn, { backgroundColor: theme.accentSubtle, borderColor: theme.accent }]} 
                   onPress={handleViewPhoto}
                   disabled={loadingPhoto}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="image-outline" size={14} color="#2563eb" />
-                  <Text style={styles.viewPhotoText}>
+                  <Ionicons name="image-outline" size={14} color={theme.accent} />
+                  <Text style={[styles.viewPhotoText, { color: theme.accent }]}>
                     {loadingPhoto ? 'Loading...' : 'View ID Photo'}
                   </Text>
                 </TouchableOpacity>
               )
             ) : (
-              <Text style={styles.photoStatusText}>
+              <Text style={[styles.photoStatusText, { color: theme.textTertiary }]}>
                 {guest.id_deleted_at ? 'ID purged per retention' : 'No photo uploaded'}
               </Text>
             )}
           </View>
 
           {guest.id_photo_expires_at && !guest.id_deleted_at && (
-            <Text style={styles.retentionNotice}>
+            <Text style={[styles.retentionNotice, { color: theme.textTertiary }]}>
               Auto-purges on {new Date(guest.id_photo_expires_at).toLocaleDateString()}
             </Text>
           )}
         </View>
 
         {/* Folio Financial Card */}
-        <View style={styles.folioCard}>
-          <View style={styles.folioHeader}>
-            <Ionicons name="receipt-outline" size={20} color="#0f172a" />
-            <Text style={styles.folioHeaderTitle}>Folio Summary</Text>
+        <View style={[styles.folioCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <View style={[styles.folioHeader, { borderBottomColor: theme.borderSubtle }]}>
+            <Ionicons name="receipt-outline" size={19} color={theme.text} />
+            <Text style={[styles.folioHeaderTitle, { color: theme.text }]}>Folio Summary</Text>
           </View>
 
           <View style={styles.folioRow}>
-            <Text style={styles.folioLabel}>Stay Room Rate</Text>
-            <Text style={styles.folioValue}>₹{Number(stay?.amount || 0).toLocaleString('en-IN')}</Text>
+            <Text style={[styles.folioLabel, { color: theme.textSecondary }]}>Stay Room Rate</Text>
+            <Text style={[styles.folioValue, { color: theme.text }]}>₹{Number(stay?.amount || 0).toLocaleString('en-IN')}</Text>
           </View>
           <View style={styles.folioRow}>
-            <Text style={styles.folioLabel}>Extra Purchases / Services</Text>
-            <Text style={styles.folioValue}>+ ₹{Number(totalCharges).toLocaleString('en-IN')}</Text>
+            <Text style={[styles.folioLabel, { color: theme.textSecondary }]}>Extra Purchases / Services</Text>
+            <Text style={[styles.folioValue, { color: theme.text }]}>+ ₹{Number(totalCharges).toLocaleString('en-IN')}</Text>
           </View>
           <View style={styles.folioRow}>
-            <Text style={styles.folioLabel}>Total Amount Paid</Text>
-            <Text style={[styles.folioValue, { color: '#16a34a' }]}>- ₹{Number(totalPaid).toLocaleString('en-IN')}</Text>
+            <Text style={[styles.folioLabel, { color: theme.textSecondary }]}>Total Amount Paid</Text>
+            <Text style={[styles.folioValue, { color: theme.free }]}>- ₹{Number(totalPaid).toLocaleString('en-IN')}</Text>
           </View>
 
           {/* Balance Due Banner */}
-          <View style={[styles.balanceBanner, balance > 0 ? styles.balanceBannerDue : styles.balanceBannerSettled]}>
+          <View style={[
+            styles.balanceBanner, 
+            balance > 0 
+              ? { backgroundColor: theme.occupiedSubtle, borderColor: theme.occupied } 
+              : { backgroundColor: theme.freeSubtle, borderColor: theme.free }
+          ]}>
             <View>
-              <Text style={[styles.balanceBannerTitle, balance > 0 ? styles.balanceTitleDue : styles.balanceTitleSettled]}>
+              <Text style={[styles.balanceBannerTitle, { color: balance > 0 ? theme.occupied : theme.free }]}>
                 {balance > 0 ? 'Balance Pending' : 'Folio Settled'}
               </Text>
-              <Text style={styles.balanceBannerSub}>
+              <Text style={[styles.balanceBannerSub, { color: theme.textSecondary }]}>
                 {balance > 0 ? 'Collect balance before checkout' : 'All charges paid in full'}
               </Text>
             </View>
-            <Text style={[styles.balanceBannerAmount, balance > 0 ? styles.balanceAmountDue : styles.balanceAmountSettled]}>
+            <Text style={[styles.balanceBannerAmount, { color: balance > 0 ? theme.occupied : theme.free }]}>
               ₹{Number(balance).toLocaleString('en-IN')}
             </Text>
           </View>
@@ -349,36 +385,52 @@ export default function GuestDetailScreen() {
             <Ionicons name="cart-outline" size={18} color="#ffffff" />
             <Text style={styles.btnText}>+ Add Purchase</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.payBtn} onPress={() => setShowPayModal(true)} activeOpacity={0.8}>
+          <TouchableOpacity style={[styles.payBtn, { backgroundColor: theme.free }]} onPress={() => setShowPayModal(true)} activeOpacity={0.8}>
             <Ionicons name="cash-outline" size={18} color="#ffffff" />
             <Text style={styles.btnText}>Collect Payment</Text>
           </TouchableOpacity>
         </View>
 
         {/* GRC PDF Export Action */}
-        <TouchableOpacity style={styles.pdfBtn} onPress={handleExportGRCPDF} activeOpacity={0.8}>
-          <Ionicons name="document-text-outline" size={17} color="#0f172a" />
-          <Text style={styles.pdfBtnText}>Print / Share Registration Card (PDF)</Text>
+        <TouchableOpacity style={[styles.pdfBtn, { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={handleExportGRCPDF} activeOpacity={0.8}>
+          <Ionicons name="document-text-outline" size={17} color={theme.text} />
+          <Text style={[styles.pdfBtnText, { color: theme.text }]}>Print / Share Registration Card (PDF)</Text>
         </TouchableOpacity>
+
+        {/* WhatsApp Guest Concierge & Folio Action */}
+        {Boolean(guest.phone) && (
+          <TouchableOpacity
+            style={[styles.pdfBtn, { backgroundColor: '#25D366', borderColor: '#1EBE5D', marginTop: 10 }]}
+            onPress={handleSendWhatsAppFolio}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Send folio to guest via WhatsApp"
+          >
+            <Ionicons name="logo-whatsapp" size={17} color="#ffffff" />
+            <Text style={[styles.pdfBtnText, { color: '#ffffff', fontWeight: '700' }]}>
+              Send Folio & Receipt via WhatsApp
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {/* Charges List */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="list" size={18} color="#475569" />
-            <Text style={styles.sectionTitle}>Extra Purchases ({charges.length})</Text>
+            <Ionicons name="list" size={17} color={theme.textSecondary} />
+            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Extra Purchases ({charges.length})</Text>
           </View>
           {charges.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.empty}>No extra charges added to folio.</Text>
+            <View style={[styles.emptyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Text style={[styles.empty, { color: theme.textTertiary }]}>No extra charges added to folio.</Text>
             </View>
           ) : (
             charges.map(charge => (
-              <View key={charge.id} style={styles.chargeItem}>
+              <View key={charge.id} style={[styles.chargeItem, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={styles.chargeInfo}>
-                  <Text style={styles.chargeName}>{charge.item}</Text>
-                  <Text style={styles.chargeDate}>{new Date(charge.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
+                  <Text style={[styles.chargeName, { color: theme.text }]}>{charge.item}</Text>
+                  <Text style={[styles.chargeDate, { color: theme.textTertiary }]}>{new Date(charge.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
                 </View>
-                <Text style={styles.chargePrice}>+ ₹{Number(charge.unit_price).toLocaleString('en-IN')}</Text>
+                <Text style={[styles.chargePrice, { color: theme.text }]}>+ ₹{Number(charge.unit_price).toLocaleString('en-IN')}</Text>
               </View>
             ))
           )}
@@ -387,25 +439,25 @@ export default function GuestDetailScreen() {
         {/* Payment History */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Ionicons name="wallet-outline" size={18} color="#475569" />
-            <Text style={styles.sectionTitle}>Payment Receipts ({payments.length})</Text>
+            <Ionicons name="wallet-outline" size={17} color={theme.textSecondary} />
+            <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>Payment Receipts ({payments.length})</Text>
           </View>
           {payments.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.empty}>No payments recorded yet.</Text>
+            <View style={[styles.emptyCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Text style={[styles.empty, { color: theme.textTertiary }]}>No payments recorded yet.</Text>
             </View>
           ) : (
             payments.map(pay => (
-              <View key={pay.id} style={styles.chargeItem}>
+              <View key={pay.id} style={[styles.chargeItem, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={styles.chargeInfo}>
-                  <View style={styles.payModePill}>
-                    <Text style={styles.payModePillText}>{pay.pay_mode?.toUpperCase() || 'CASH'}</Text>
+                  <View style={[styles.payModePill, { backgroundColor: theme.accentSubtle }]}>
+                    <Text style={[styles.payModePillText, { color: theme.accent }]}>{pay.pay_mode?.toUpperCase() || 'CASH'}</Text>
                   </View>
-                  <Text style={styles.chargeDate}>{new Date(pay.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
+                  <Text style={[styles.chargeDate, { color: theme.textTertiary }]}>{new Date(pay.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Text>
                   {pay.refunded && <Text style={styles.refundedTag}>REFUNDED</Text>}
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <Text style={[styles.chargePrice, { color: pay.refunded ? '#94a3b8' : '#16a34a' }]}>
+                  <Text style={[styles.chargePrice, { color: pay.refunded ? theme.textTertiary : theme.free }]}>
                     - ₹{Number(pay.amount).toLocaleString('en-IN')}
                   </Text>
                   {!pay.refunded && can('refund_payment') && (
@@ -425,9 +477,17 @@ export default function GuestDetailScreen() {
 
       {/* Add Charge Modal */}
       <Modal visible={showChargeModal} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add Purchase</Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+          style={styles.modalOverlay}
+        >
+          <ScrollView
+            contentContainerStyle={[styles.modalContent, { backgroundColor: theme.surface }]}
+            keyboardShouldPersistTaps="handled"
+            bounces={false}
+          >
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Add Purchase</Text>
             
             {/* Quick Add Buttons */}
             <View style={styles.quickAddRow}>
@@ -437,100 +497,121 @@ export default function GuestDetailScreen() {
                 return (
                   <Pressable 
                     key={q} 
-                    style={styles.quickChip} 
+                    style={[styles.quickChip, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]} 
                     onPress={() => { setItem(name); setPrice(price); }}
                   >
-                    <Text style={styles.quickChipText}>{q}</Text>
+                    <Text style={[styles.quickChipText, { color: theme.text }]}>{q}</Text>
                   </Pressable>
                 );
               })}
             </View>
 
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border, color: theme.text }]}
               placeholder="Item Name"
+              placeholderTextColor={theme.textTertiary}
               value={item}
               onChangeText={setItem}
             />
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border, color: theme.text }]}
               placeholder="Price"
+              placeholderTextColor={theme.textTertiary}
               value={price}
               onChangeText={setPrice}
               keyboardType="numeric"
             />
 
             <View style={styles.modalBtnRow}>
-              <Pressable style={styles.cancelBtn} onPress={() => setShowChargeModal(false)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
+              <Pressable style={[styles.cancelBtn, { backgroundColor: theme.surfaceSubtle }]} onPress={() => setShowChargeModal(false)}>
+                <Text style={[styles.cancelBtnText, { color: theme.textSecondary }]}>Cancel</Text>
               </Pressable>
-              <Pressable style={styles.submitBtn} onPress={handleAddCharge}>
+              <Pressable style={[styles.submitBtn, { backgroundColor: theme.accent }]} onPress={handleAddCharge}>
                 <Text style={styles.submitBtnText}>Add Charge</Text>
               </Pressable>
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Collect Payment Modal */}
       <Modal visible={showPayModal} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Collect Payment</Text>
-            <Text style={styles.balanceText}>Current Balance: ₹{balance}</Text>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+          style={styles.modalOverlay}
+        >
+          <ScrollView
+            contentContainerStyle={[styles.modalContent, { backgroundColor: theme.surface }]}
+            keyboardShouldPersistTaps="handled"
+            bounces={false}
+          >
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Collect Payment</Text>
+            <Text style={[styles.balanceText, { color: theme.textSecondary }]}>Current Balance: ₹{balance}</Text>
             
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border, color: theme.text }]}
               placeholder="Amount to Collect"
+              placeholderTextColor={theme.textTertiary}
               value={payAmount}
               onChangeText={setPayAmount}
               keyboardType="numeric"
             />
 
-            <View style={styles.payModeRow}>
+            <View style={[styles.payModeRow, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
               <Pressable 
-                style={[styles.payModeBtn, payMode === 'cash' && styles.payModeActive]} 
+                style={[styles.payModeBtn, payMode === 'cash' && [styles.payModeActive, { backgroundColor: theme.surface }]]} 
                 onPress={() => setPayMode('cash')}
               >
-                <Text style={[styles.payModeText, payMode === 'cash' && styles.payModeTextActive]}>Cash</Text>
+                <Text style={[styles.payModeText, { color: theme.textSecondary }, payMode === 'cash' && [styles.payModeTextActive, { color: theme.text }]]}>Cash</Text>
               </Pressable>
               <Pressable 
-                style={[styles.payModeBtn, payMode === 'upi' && styles.payModeActive]} 
+                style={[styles.payModeBtn, payMode === 'upi' && [styles.payModeActive, { backgroundColor: theme.surface }]]} 
                 onPress={() => setPayMode('upi')}
               >
-                <Text style={[styles.payModeText, payMode === 'upi' && styles.payModeTextActive]}>UPI</Text>
+                <Text style={[styles.payModeText, { color: theme.textSecondary }, payMode === 'upi' && [styles.payModeTextActive, { color: theme.text }]]}>UPI</Text>
               </Pressable>
             </View>
 
             <View style={styles.modalBtnRow}>
-              <Pressable style={styles.cancelBtn} onPress={() => setShowPayModal(false)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
+              <Pressable style={[styles.cancelBtn, { backgroundColor: theme.surfaceSubtle }]} onPress={() => setShowPayModal(false)}>
+                <Text style={[styles.cancelBtnText, { color: theme.textSecondary }]}>Cancel</Text>
               </Pressable>
-              <Pressable style={styles.submitBtn} onPress={handleCollectPayment}>
+              <Pressable style={[styles.submitBtn, { backgroundColor: theme.free }]} onPress={handleCollectPayment}>
                 <Text style={styles.submitBtnText}>Collect</Text>
               </Pressable>
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Refund Modal */}
       <Modal visible={showRefundModal} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Refund Payment</Text>
-            <Text style={{ fontSize: 14, color: '#64748b', marginBottom: 12 }}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+          style={styles.modalOverlay}
+        >
+          <ScrollView
+            contentContainerStyle={[styles.modalContent, { backgroundColor: theme.surface }]}
+            keyboardShouldPersistTaps="handled"
+            bounces={false}
+          >
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Refund Payment</Text>
+            <Text style={{ fontSize: 13, color: theme.textSecondary, marginBottom: 12 }}>
               Enter a reason for this refund (required). If this was a cash payment, it will deduct from the active shift cash drawer.
             </Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border, color: theme.text }]}
               placeholder="Reason for refund (e.g. Overcharged, cancellation)"
+              placeholderTextColor={theme.textTertiary}
               value={refundReason}
               onChangeText={setRefundReason}
             />
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border, color: theme.text }]}
               placeholder="Owner PIN (Required to authorize)"
+              placeholderTextColor={theme.textTertiary}
               value={ownerPin}
               onChangeText={setOwnerPin}
               secureTextEntry
@@ -539,13 +620,13 @@ export default function GuestDetailScreen() {
             />
             <View style={styles.modalBtnRow}>
               <Pressable 
-                style={styles.cancelBtn} 
+                style={[styles.cancelBtn, { backgroundColor: theme.surfaceSubtle }]} 
                 onPress={() => { setShowRefundModal(false); setRefundPaymentId(null); setRefundReason(''); setOwnerPin(''); }}
               >
-                <Text style={styles.cancelBtnText}>Cancel</Text>
+                <Text style={[styles.cancelBtnText, { color: theme.textSecondary }]}>Cancel</Text>
               </Pressable>
               <Pressable 
-                style={[styles.submitBtn, { backgroundColor: '#ef4444' }]} 
+                style={[styles.submitBtn, { backgroundColor: theme.occupied }]} 
                 onPress={confirmRefund}
                 disabled={refunding}
               >
@@ -554,15 +635,15 @@ export default function GuestDetailScreen() {
                 </Text>
               </Pressable>
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ID Photo Modal */}
       <Modal visible={!!photoUrl} animationType="fade" transparent={true} onRequestClose={() => setPhotoUrl(null)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
           <Pressable style={{ position: 'absolute', top: 40, right: 20, zIndex: 1 }} onPress={() => setPhotoUrl(null)}>
-            <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>Close ✕</Text>
+            <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Close ✕</Text>
           </Pressable>
           {photoUrl && (
             <Image 
@@ -594,15 +675,15 @@ const styles = StyleSheet.create({
   },
   heroCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 20,
-    padding: 18,
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 14,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#e2e8f0',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
-    shadowRadius: 8,
+    shadowRadius: 4,
     elevation: 2
   },
   heroTopRow: {
@@ -611,18 +692,18 @@ const styles = StyleSheet.create({
     marginBottom: 14
   },
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#eff6ff',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
-    borderWidth: 1.5,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#bfdbfe'
   },
   avatarText: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: '#2563eb'
   },
@@ -649,7 +730,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 8
+    borderRadius: 6
   },
   pillText: {
     fontSize: 12,
@@ -661,7 +742,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingTop: 12,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: '#f1f5f9',
     gap: 8
   },
@@ -681,9 +762,9 @@ const styles = StyleSheet.create({
     gap: 4,
     backgroundColor: '#eff6ff',
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 8,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#dbeafe'
   },
   viewPhotoText: {
@@ -703,28 +784,28 @@ const styles = StyleSheet.create({
   },
   folioCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 20,
-    padding: 18,
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 14,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#e2e8f0',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
-    shadowRadius: 8,
+    shadowRadius: 4,
     elevation: 2
   },
   folioHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 14,
+    marginBottom: 12,
     paddingBottom: 10,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#f1f5f9'
   },
   folioHeaderTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#0f172a'
   },
@@ -732,7 +813,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 6
+    paddingVertical: 5
   },
   folioLabel: {
     fontSize: 13,
@@ -750,27 +831,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 12,
     padding: 14,
-    borderRadius: 14
-  },
-  balanceBannerDue: {
-    backgroundColor: '#fef2f2',
-    borderWidth: 1,
-    borderColor: '#fecaca'
-  },
-  balanceBannerSettled: {
-    backgroundColor: '#f0fdf4',
-    borderWidth: 1,
-    borderColor: '#bbf7d0'
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth
   },
   balanceBannerTitle: {
     fontSize: 14,
     fontWeight: '800'
-  },
-  balanceTitleDue: {
-    color: '#991b1b'
-  },
-  balanceTitleSettled: {
-    color: '#166534'
   },
   balanceBannerSub: {
     fontSize: 11,
@@ -781,46 +847,40 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800'
   },
-  balanceAmountDue: {
-    color: '#dc2626'
-  },
-  balanceAmountSettled: {
-    color: '#16a34a'
-  },
   btnRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 16
+    marginBottom: 14
   },
   chargeBtn: {
     flex: 1,
+    height: 46,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
     backgroundColor: '#d97706',
-    paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 12,
     shadowColor: '#d97706',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 2
   },
   payBtn: {
     flex: 1,
+    height: 46,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
     backgroundColor: '#16a34a',
-    paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 12,
     shadowColor: '#16a34a',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 2
   },
   btnText: {
     color: '#ffffff',
@@ -833,10 +893,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     backgroundColor: '#ffffff',
-    borderWidth: 1.5,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#cbd5e1',
-    paddingVertical: 13,
-    borderRadius: 14,
+    height: 46,
+    borderRadius: 12,
     marginBottom: 16
   },
   pdfBtnText: {
@@ -851,20 +911,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 10,
-    paddingLeft: 4
+    marginBottom: 8,
+    paddingLeft: 2
   },
   sectionTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
-    color: '#334155'
+    color: '#334155',
+    letterSpacing: 0.3
   },
   emptyCard: {
     backgroundColor: '#ffffff',
     padding: 16,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: 'center',
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#e2e8f0'
   },
   empty: {
@@ -877,15 +938,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#ffffff',
-    padding: 14,
-    borderRadius: 14,
+    padding: 13,
+    borderRadius: 12,
     marginBottom: 8,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#e2e8f0',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.03,
-    shadowRadius: 3,
+    shadowRadius: 2,
     elevation: 1
   },
   chargeInfo: {
@@ -911,8 +972,8 @@ const styles = StyleSheet.create({
   payModePill: {
     backgroundColor: '#eff6ff',
     paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 6
+    paddingVertical: 2,
+    borderRadius: 5
   },
   payModePillText: {
     fontSize: 10,
@@ -946,27 +1007,28 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: '#ffffff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 34
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
     color: '#0f172a',
-    marginBottom: 16
+    marginBottom: 14
   },
   quickAddRow: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 16
+    marginBottom: 14
   },
   quickChip: {
     backgroundColor: '#f1f5f9',
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
+    paddingVertical: 7,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#e2e8f0'
   },
   quickChipText: {
@@ -976,10 +1038,11 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: '#f8fafc',
-    borderWidth: 1.5,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#e2e8f0',
-    borderRadius: 12,
-    padding: 13,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 46,
     fontSize: 15,
     marginBottom: 12,
     color: '#0f172a'
@@ -987,13 +1050,14 @@ const styles = StyleSheet.create({
   modalBtnRow: {
     flexDirection: 'row',
     gap: 10,
-    marginTop: 8
+    marginTop: 6
   },
   cancelBtn: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
+    height: 44,
+    borderRadius: 10,
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#f1f5f9'
   },
   cancelBtnText: {
@@ -1003,15 +1067,16 @@ const styles = StyleSheet.create({
   },
   submitBtn: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
+    height: 44,
+    borderRadius: 10,
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#2563eb',
     shadowColor: '#2563eb',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 2
   },
   submitBtnText: {
     color: '#ffffff',
@@ -1019,27 +1084,33 @@ const styles = StyleSheet.create({
     fontSize: 14
   },
   balanceText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#64748b',
-    marginBottom: 14
+    marginBottom: 12
   },
   payModeRow: {
     flexDirection: 'row',
-    gap: 10,
+    padding: 3,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#e2e8f0',
     marginBottom: 14
   },
   payModeBtn: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 10,
-    backgroundColor: '#f1f5f9',
+    paddingVertical: 8,
+    borderRadius: 7,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e2e8f0'
+    justifyContent: 'center'
   },
   payModeActive: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb'
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2
   },
   payModeText: {
     color: '#64748b',
@@ -1047,7 +1118,7 @@ const styles = StyleSheet.create({
     fontSize: 13
   },
   payModeTextActive: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontWeight: '700'
   }
 });

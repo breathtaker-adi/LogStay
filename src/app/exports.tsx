@@ -270,10 +270,12 @@ export default function ExportsScreen() {
       <KeyboardAvoidingView
         style={styles.keyboardAvoid}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
           automaticallyAdjustKeyboardInsets={true}
         >
           {/* ── DATE RANGE SELECTION CARD ─────────────────────────── */}
@@ -413,6 +415,7 @@ const styles = StyleSheet.create({
     flex: 1
   },
   scrollContent: {
+    flexGrow: 1,
     padding: 16,
     paddingBottom: 40
   },

@@ -1,12 +1,13 @@
 // src/lib/permissions.ts
 
-export type Role = 'owner' | 'desk' | 'housekeeping';
+export type Role = 'owner' | 'co_admin' | 'desk' | 'housekeeping';
 export type Action = 
   | 'check_in' 
   | 'check_out' 
   | 'guests' 
   | 'shift' 
   | 'add_room' 
+  | 'add_staff'
   | 'export' 
   | 'form_c' 
   | 'settings' 
@@ -17,11 +18,15 @@ export type Action =
 
 const permissions: Record<Role, Action[]> = {
   owner: [
-    'check_in', 'check_out', 'guests', 'shift', 'add_room', 'export', 'form_c', 
+    'check_in', 'check_out', 'guests', 'shift', 'add_room', 'add_staff', 'export', 'form_c', 
+    'settings', 'mark_clean', 'set_maintenance', 'view_id_photo', 'refund_payment'
+  ],
+  co_admin: [
+    'check_in', 'check_out', 'guests', 'shift', 'add_room', 'add_staff', 'export', 'form_c', 
     'settings', 'mark_clean', 'set_maintenance', 'view_id_photo', 'refund_payment'
   ],
   desk: [
-    'check_in', 'check_out', 'guests', 'shift', 'export', 'form_c', 
+    'check_in', 'check_out', 'guests', 'shift', 'add_staff', 'export', 'form_c', 
     'settings', 'mark_clean', 'set_maintenance', 'view_id_photo'
   ],
   housekeeping: [

@@ -14,7 +14,9 @@ import {
   Modal,
   TextInput,
   TouchableOpacity,
-  LayoutAnimation
+  LayoutAnimation,
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -25,10 +27,12 @@ import { bedState, BedState } from '@/lib/bed-state';
 import * as Crypto from 'expo-crypto';
 import { ScreenHeader } from '@/lib/screen-header';
 import { floorLabel, resolveFloorNo } from '@/lib/floors';
+import { useTheme } from '@/hooks/use-theme';
 
 export default function RoomDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { activeStaff, can } = useStaff();
+  const theme = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [unit, setUnit] = useState<any>(null);
@@ -266,8 +270,8 @@ export default function RoomDetailScreen() {
 
   if (loading || !unit) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#2563eb" />
+      <View style={[styles.center, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.accent} />
       </View>
     );
   }
@@ -277,18 +281,18 @@ export default function RoomDetailScreen() {
   const isDorm = unit.rooms?.kind === 'dorm';
 
   const stateTheme = {
-    clean: { bg: '#dcfce7', text: '#166534', dot: '#16a34a', label: 'Clean & Available' },
-    occupied: { bg: '#fee2e2', text: '#991b1b', dot: '#dc2626', label: 'Occupied' },
-    dirty: { bg: '#fffbeb', text: '#92400e', dot: '#d97706', label: 'Needs Cleaning' },
-    maintenance: { bg: '#f1f5f9', text: '#334155', dot: '#64748b', label: 'Maintenance' }
-  }[currentState] || { bg: '#f1f5f9', text: '#334155', dot: '#64748b', label: currentState };
+    clean: { bg: theme.freeSubtle, text: theme.free, dot: theme.free, label: 'Clean & Available' },
+    occupied: { bg: theme.occupiedSubtle, text: theme.occupied, dot: theme.occupied, label: 'Occupied' },
+    dirty: { bg: theme.dirtySubtle, text: theme.dirty, dot: theme.dirty, label: 'Needs Cleaning' },
+    maintenance: { bg: theme.maintenanceSubtle, text: theme.maintenance, dot: theme.maintenance, label: 'Maintenance' }
+  }[currentState] || { bg: theme.surfaceSubtle, text: theme.textSecondary, dot: theme.textSecondary, label: currentState };
 
   const guest = currentStay?.guests;
   const guestName = Array.isArray(guest) ? guest[0]?.name : guest?.name;
   const guestPhone = Array.isArray(guest) ? guest[0]?.phone : guest?.phone;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <ScreenHeader
         title={unit.rooms?.label ? `${unit.rooms.label} • ${unit.label}` : unit.label}
         subtitle={`${isDorm ? 'Dorm Bed' : 'Private Room'} • Floor ${unit.rooms?.floor || 'G'}`}
@@ -297,22 +301,24 @@ export default function RoomDetailScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets={true}
       >
         {/* ── HERO BED CARD ────────────────────────────────────────── */}
-        <View style={styles.heroCard}>
+        <View style={[styles.heroCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <View style={styles.heroTopRow}>
-            <View style={styles.heroIconBox}>
+            <View style={[styles.heroIconBox, { backgroundColor: theme.accentSubtle }]}>
               <MaterialCommunityIcons
                 name={isDorm ? "bunk-bed-outline" : "bed-king-outline"}
                 size={26}
-                color="#2563eb"
+                color={theme.accent}
               />
             </View>
             <View style={styles.heroTitleGroup}>
-              <Text style={styles.heroTitle}>
+              <Text style={[styles.heroTitle, { color: theme.text }]}>
                 {unit.rooms?.label ? `${unit.rooms.label} - ${unit.label}` : unit.label}
               </Text>
-              <Text style={styles.heroSubtitle}>
+              <Text style={[styles.heroSubtitle, { color: theme.textSecondary }]}>
                 {isDorm ? 'Dormitory Unit' : 'Private Suite'} • Floor {unit.rooms?.floor || 'Ground'}
               </Text>
             </View>
@@ -325,9 +331,9 @@ export default function RoomDetailScreen() {
           </View>
 
           {/* Housekeeping Info Bar */}
-          <View style={styles.housekeepingInfoRow}>
-            <Ionicons name="sparkles-outline" size={14} color="#64748b" />
-            <Text style={styles.housekeepingInfoText}>
+          <View style={[styles.housekeepingInfoRow, { borderTopColor: theme.borderSubtle }]}>
+            <Ionicons name="sparkles-outline" size={14} color={theme.textSecondary} />
+            <Text style={[styles.housekeepingInfoText, { color: theme.textSecondary }]}>
               Last cleaned: {unit.last_cleaned_at ? new Date(unit.last_cleaned_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'No cleaning record'}
             </Text>
           </View>
@@ -336,7 +342,7 @@ export default function RoomDetailScreen() {
           <View style={styles.actionRow}>
             {unit.housekeeping_status !== 'clean' && can('mark_clean') && (
               <TouchableOpacity
-                style={[styles.quickBtn, styles.cleanBtn]}
+                style={[styles.quickBtn, { backgroundColor: theme.free }]}
                 onPress={handleMarkClean}
                 activeOpacity={0.8}
               >
@@ -347,7 +353,7 @@ export default function RoomDetailScreen() {
 
             {unit.housekeeping_status !== 'maintenance' && can('set_maintenance') && (
               <TouchableOpacity
-                style={[styles.quickBtn, styles.maintBtn]}
+                style={[styles.quickBtn, { backgroundColor: theme.maintenance }]}
                 onPress={handleSetMaintenance}
                 activeOpacity={0.8}
               >
@@ -357,42 +363,54 @@ export default function RoomDetailScreen() {
             )}
 
             <TouchableOpacity
-              style={[styles.quickBtn, styles.issueBtn]}
+              style={[styles.quickBtn, { backgroundColor: theme.accentSubtle, borderColor: theme.accent, borderWidth: 1 }]}
               onPress={() => setShowIssueModal(true)}
               activeOpacity={0.8}
             >
-              <Ionicons name="warning-outline" size={15} color="#1e40af" />
-              <Text style={[styles.quickBtnText, { color: '#1e40af' }]}>Report Issue</Text>
+              <Ionicons name="warning-outline" size={15} color={theme.accent} />
+              <Text style={[styles.quickBtnText, { color: theme.accent }]}>Report Issue</Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* ── SEGMENTED TAB SELECTOR ───────────────────────────────── */}
-        <View style={styles.tabContainer}>
+        {/* ── SEGMENTED TAB SELECTOR (iOS Segmented Control HIG) ───────── */}
+        <View style={[styles.tabContainer, { backgroundColor: theme.surfaceSubtle }]}>
           <Pressable
-            style={[styles.tabButton, tab === 'overview' && styles.tabButtonActive]}
+            style={[
+              styles.tabButton,
+              tab === 'overview' && [styles.tabButtonActive, { backgroundColor: theme.surface }]
+            ]}
             onPress={() => switchTab('overview')}
           >
             <Ionicons
               name="grid-outline"
               size={15}
-              color={tab === 'overview' ? '#2563eb' : '#64748b'}
+              color={tab === 'overview' ? theme.accent : theme.textSecondary}
             />
-            <Text style={[styles.tabText, tab === 'overview' && styles.tabTextActive]}>
+            <Text style={[
+              styles.tabText,
+              { color: tab === 'overview' ? theme.accent : theme.textSecondary, fontWeight: tab === 'overview' ? '700' : '500' }
+            ]}>
               Overview & Status
             </Text>
           </Pressable>
 
           <Pressable
-            style={[styles.tabButton, tab === 'history' && styles.tabButtonActive]}
+            style={[
+              styles.tabButton,
+              tab === 'history' && [styles.tabButtonActive, { backgroundColor: theme.surface }]
+            ]}
             onPress={() => switchTab('history')}
           >
             <Ionicons
               name="time-outline"
               size={15}
-              color={tab === 'history' ? '#2563eb' : '#64748b'}
+              color={tab === 'history' ? theme.accent : theme.textSecondary}
             />
-            <Text style={[styles.tabText, tab === 'history' && styles.tabTextActive]}>
+            <Text style={[
+              styles.tabText,
+              { color: tab === 'history' ? theme.accent : theme.textSecondary, fontWeight: tab === 'history' ? '700' : '500' }
+            ]}>
               Activity History
             </Text>
           </Pressable>
@@ -401,27 +419,30 @@ export default function RoomDetailScreen() {
         {tab === 'overview' ? (
           <>
             {/* ── CURRENT OCCUPANT CARD ────────────────────────────── */}
-            <View style={styles.card}>
+            <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <View style={styles.cardHeader}>
-                <Ionicons name="person-outline" size={18} color="#2563eb" />
-                <Text style={styles.cardTitle}>Current Occupant</Text>
+                <Ionicons name="person-outline" size={18} color={theme.accent} />
+                <Text style={[styles.cardTitle, { color: theme.text }]}>Current Occupant</Text>
               </View>
 
               {currentStay ? (
                 <View>
                   <View style={styles.guestRow}>
-                    <View style={styles.guestAvatar}>
-                      <Text style={styles.guestAvatarText}>
+                    <View style={[styles.guestAvatar, { backgroundColor: theme.accentSubtle }]}>
+                      <Text style={[styles.guestAvatarText, { color: theme.accent }]}>
                         {(guestName || 'G').charAt(0).toUpperCase()}
                       </Text>
                     </View>
                     <View style={styles.guestInfo}>
-                      <Text style={styles.guestName}>{guestName || 'Registered Guest'}</Text>
+                      <Text style={[styles.guestName, { color: theme.text }]}>{guestName || 'Registered Guest'}</Text>
                       {activeStaff?.role !== 'housekeeping' && guestPhone ? (
-                        <Text style={styles.guestPhone}>📞 {guestPhone}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                          <Ionicons name="call-outline" size={13} color={theme.textSecondary} />
+                          <Text style={[styles.guestPhone, { color: theme.textSecondary }]}>{guestPhone}</Text>
+                        </View>
                       ) : null}
                       {activeStaff?.role !== 'housekeeping' && (
-                        <Text style={styles.guestCheckinDate}>
+                        <Text style={[styles.guestCheckinDate, { color: theme.textTertiary }]}>
                           Checked in: {new Date(currentStay.check_in).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
                         </Text>
                       )}
@@ -430,22 +451,22 @@ export default function RoomDetailScreen() {
 
                   {activeStaff?.role !== 'housekeeping' && (
                     <TouchableOpacity
-                      style={styles.folioActionBtn}
+                      style={[styles.folioActionBtn, { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle }]}
                       onPress={() => router.push(`/guest/${currentStay.guest_id}?stayId=${currentStay.id}`)}
                       activeOpacity={0.8}
                     >
-                      <Ionicons name="receipt-outline" size={16} color="#2563eb" />
-                      <Text style={styles.folioActionText}>View Guest Folio & Payments</Text>
-                      <Ionicons name="chevron-forward" size={16} color="#2563eb" style={{ marginLeft: 'auto' }} />
+                      <Ionicons name="receipt-outline" size={16} color={theme.accent} />
+                      <Text style={[styles.folioActionText, { color: theme.accent }]}>View Guest Folio & Payments</Text>
+                      <Ionicons name="chevron-forward" size={16} color={theme.accent} style={{ marginLeft: 'auto' }} />
                     </TouchableOpacity>
                   )}
                 </View>
               ) : (
                 <View style={styles.vacantState}>
-                  <View style={styles.vacantIconBox}>
-                    <Ionicons name="bed-outline" size={32} color="#16a34a" />
+                  <View style={[styles.vacantIconBox, { backgroundColor: theme.freeSubtle }]}>
+                    <Ionicons name="bed-outline" size={32} color={theme.free} />
                   </View>
-                  <Text style={styles.vacantTitle}>Bed is Currently Vacant</Text>
+                  <Text style={[styles.vacantTitle, { color: theme.text }]}>Bed is Currently Vacant</Text>
                   <Text style={styles.vacantSubtitle}>
                     Ready for walk-in or booked guest check-in.
                   </Text>
@@ -563,8 +584,16 @@ export default function RoomDetailScreen() {
 
       {/* ── REPORT ISSUE MODAL ─────────────────────────────────────── */}
       <Modal visible={showIssueModal} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+          style={styles.modalOverlay}
+        >
+          <ScrollView
+            contentContainerStyle={styles.modalContent}
+            keyboardShouldPersistTaps="handled"
+            bounces={false}
+          >
             <View style={styles.modalTopHeader}>
               <Text style={styles.modalTitle}>Report Room Issue</Text>
               <TouchableOpacity onPress={() => setShowIssueModal(false)}>
@@ -611,14 +640,22 @@ export default function RoomDetailScreen() {
                 <Text style={styles.submitBtnText}>Submit Report</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── OWNER ROOM MANAGEMENT MODAL ────────────────────────────── */}
       <Modal visible={showEditModal} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+          style={styles.modalOverlay}
+        >
+          <ScrollView
+            contentContainerStyle={styles.modalContent}
+            keyboardShouldPersistTaps="handled"
+            bounces={false}
+          >
             <View style={styles.modalTopHeader}>
               <Text style={styles.modalTitle}>Edit Room Details</Text>
               <TouchableOpacity onPress={() => { setShowEditModal(false); setOwnerPin(''); }}>
@@ -703,8 +740,8 @@ export default function RoomDetailScreen() {
                 <Text style={styles.submitBtnText}>Save</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -722,6 +759,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc'
   },
   scrollContent: {
+    flexGrow: 1,
     padding: 16,
     paddingBottom: 40
   },

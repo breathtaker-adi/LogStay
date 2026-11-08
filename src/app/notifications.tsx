@@ -1,5 +1,5 @@
 // src/app/notifications.tsx
-// Notification centre: Real-time room issues + WhatsApp inquiry integration & guest requests
+// Notification centre: Real-time room issues & maintenance alerts
 import React, { useState, useCallback } from 'react';
 import {
   View,
@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   RefreshControl,
   TouchableOpacity,
-  Linking,
   LayoutAnimation,
   Alert
 } from 'react-native';
@@ -21,6 +20,7 @@ import { isOnline } from '@/lib/offline';
 import { useStaff } from '@/lib/staff-context';
 import { ScreenHeader } from '@/lib/screen-header';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '@/hooks/use-theme';
 
 type NotifKind = 'issue' | 'maintenance' | 'system';
 
@@ -29,7 +29,7 @@ interface Notif {
   kind: NotifKind;
   title: string;
   body: string;
-  meta?: string;             // category, room, sender
+  meta?: string;
   guestPhone?: string;
   roomId?: string;
   createdAt: string;
@@ -44,14 +44,9 @@ interface Notif {
   };
 }
 
-const KIND_META: Record<NotifKind, { icon: any; color: string; bg: string; label: string }> = {
-  issue: { icon: 'alert-circle', color: '#dc2626', bg: '#fee2e2', label: 'Room Issue' },
-  maintenance: { icon: 'construct', color: '#d97706', bg: '#fef3c7', label: 'Maintenance' },
-  system: { icon: 'shield-checkmark', color: '#2563eb', bg: '#dbeafe', label: 'System Alert' },
-};
-
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
   const { activeStaff } = useStaff();
   const isHousekeeping = activeStaff?.role === 'housekeeping';
 
@@ -60,7 +55,13 @@ export default function NotificationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'issue' | 'inquiry_wa'>('all');
+  const [selectedFilter, setSelectedFilter] = useState<'all' | 'issue'>('all');
+
+  const kindMeta: Record<NotifKind, { icon: any; color: string; bg: string; label: string }> = {
+    issue: { icon: 'alert-circle', color: theme.occupied, bg: theme.occupiedSubtle, label: 'Room Issue' },
+    maintenance: { icon: 'construct', color: theme.dirty, bg: theme.dirtySubtle, label: 'Maintenance' },
+    system: { icon: 'shield-checkmark', color: theme.accent, bg: theme.accentSubtle, label: 'System Alert' },
+  };
 
   const loadNotifs = useCallback(async () => {
     try {
@@ -106,7 +107,7 @@ export default function NotificationsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [isHousekeeping]);
+  }, []);
 
   useFocusEffect(useCallback(() => { loadNotifs(); }, [loadNotifs]));
 
@@ -126,8 +127,6 @@ export default function NotificationsScreen() {
     setReadIds(new Set(notifs.map(n => n.id)));
   };
 
-
-
   const filteredNotifs = notifs.filter(n => {
     if (selectedFilter === 'all') return true;
     return n.kind === selectedFilter;
@@ -139,11 +138,15 @@ export default function NotificationsScreen() {
   const renderItem = ({ item }: { item: Notif }) => {
     const isRead = readIds.has(item.id);
     const isExpanded = expandedId === item.id;
-    const meta = KIND_META[item.kind] || KIND_META.issue;
+    const meta = kindMeta[item.kind] || kindMeta.issue;
 
     return (
       <Pressable
-        style={[styles.card, isRead && styles.cardRead, isExpanded && styles.cardExpanded]}
+        style={[
+          styles.card,
+          { backgroundColor: theme.surface, borderColor: isExpanded ? theme.accent : theme.border },
+          isRead && { opacity: 0.85 }
+        ]}
         onPress={() => toggleExpand(item.id)}
       >
         <View style={styles.cardHeaderRow}>
@@ -160,88 +163,101 @@ export default function NotificationsScreen() {
                 <View
                   style={[
                     styles.severityBadge,
-                    { backgroundColor: item.severity === 'high' ? '#fef2f2' : '#f1f5f9' }
+                    { backgroundColor: item.severity === 'high' ? theme.occupiedSubtle : theme.surfaceSubtle }
                   ]}
                 >
                   <Text
                     style={[
                       styles.severityText,
-                      { color: item.severity === 'high' ? '#dc2626' : '#475569' }
+                      { color: item.severity === 'high' ? theme.occupied : theme.textSecondary }
                     ]}
                   >
                     {item.meta}
                   </Text>
                 </View>
               )}
-              {!isRead && <View style={styles.unreadDot} />}
+              {!isRead && <View style={[styles.unreadDot, { backgroundColor: theme.accent }]} />}
             </View>
 
-            <Text style={[styles.cardTitle, isRead && styles.cardTitleRead]} numberOfLines={isExpanded ? undefined : 2}>
+            <Text
+              style={[
+                styles.cardTitle,
+                { color: theme.text },
+                isRead && { color: theme.textSecondary, fontWeight: '600' }
+              ]}
+              numberOfLines={isExpanded ? undefined : 2}
+            >
               {item.title}
             </Text>
           </View>
         </View>
 
         {/* Snippet / Expanded Content */}
-        <Text style={[styles.cardBodyText, isExpanded && styles.cardBodyExpanded]}>
+        <Text
+          style={[
+            styles.cardBodyText,
+            { color: theme.textSecondary },
+            isExpanded && { color: theme.text }
+          ]}
+        >
           {item.body}
         </Text>
 
         {/* Expanded Details Panel */}
         {isExpanded && (
-          <View style={styles.expandedPanel}>
-            <View style={styles.detailsGrid}>
+          <View style={[styles.expandedPanel, { borderTopColor: theme.borderSubtle }]}>
+            <View style={[styles.detailsGrid, { backgroundColor: theme.surfaceSubtle }]}>
               {item.details?.senderName && (
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Sender:</Text>
-                  <Text style={styles.detailValue}>{item.details.senderName}</Text>
+                  <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Sender:</Text>
+                  <Text style={[styles.detailValue, { color: theme.text }]}>{item.details.senderName}</Text>
                 </View>
               )}
               {item.guestPhone && (
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Phone:</Text>
-                  <Text style={styles.detailValue}>{item.guestPhone}</Text>
+                  <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Phone:</Text>
+                  <Text style={[styles.detailValue, { color: theme.text }]}>{item.guestPhone}</Text>
                 </View>
               )}
               {item.details?.inquiryDates && (
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Stay Dates:</Text>
-                  <Text style={styles.detailValue}>{item.details.inquiryDates}</Text>
+                  <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Stay Dates:</Text>
+                  <Text style={[styles.detailValue, { color: theme.text }]}>{item.details.inquiryDates}</Text>
                 </View>
               )}
               {item.details?.pax && (
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Guests / Pax:</Text>
-                  <Text style={styles.detailValue}>{item.details.pax}</Text>
+                  <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Guests / Pax:</Text>
+                  <Text style={[styles.detailValue, { color: theme.text }]}>{item.details.pax}</Text>
                 </View>
               )}
               {item.details?.roomType && (
                 <View style={styles.detailRow}>
-                  <Text style={styles.detailLabel}>Category:</Text>
-                  <Text style={styles.detailValue}>{item.details.roomType}</Text>
+                  <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Category:</Text>
+                  <Text style={[styles.detailValue, { color: theme.text }]}>{item.details.roomType}</Text>
                 </View>
               )}
             </View>
 
             {/* Quick Action Buttons */}
             <View style={styles.actionButtonRow}>
-
-
               {item.kind === 'issue' && (
                 <>
                   <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: '#2563eb' }]}
+                    style={[styles.actionBtn, { backgroundColor: theme.accent }]}
                     onPress={() => router.push('/rooms')}
+                    activeOpacity={0.8}
                   >
                     <Ionicons name="bed" size={16} color="#ffffff" />
                     <Text style={styles.actionBtnText}>View Rooms</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: '#059669' }]}
+                    style={[styles.actionBtn, { backgroundColor: theme.free }]}
                     onPress={() => {
                       Alert.alert('Issue Resolved', 'Marked room issue as completed.');
                       setNotifs(prev => prev.filter(n => n.id !== item.id));
                     }}
+                    activeOpacity={0.8}
                   >
                     <Ionicons name="checkmark-done" size={16} color="#ffffff" />
                     <Text style={styles.actionBtnText}>Mark Resolved</Text>
@@ -253,12 +269,12 @@ export default function NotificationsScreen() {
         )}
 
         <View style={styles.cardFooter}>
-          <Text style={styles.cardTime}>
+          <Text style={[styles.cardTime, { color: theme.textTertiary }]}>
             {new Date(item.createdAt).toLocaleDateString('en-IN', {
               day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
             })}
           </Text>
-          <Text style={styles.expandHint}>
+          <Text style={[styles.expandHint, { color: theme.accent }]}>
             {isExpanded ? 'Tap to collapse ▴' : 'Tap to expand ▾'}
           </Text>
         </View>
@@ -267,47 +283,65 @@ export default function NotificationsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
       <ScreenHeader
         title={isHousekeeping ? "Housekeeping Alerts" : "Notifications"}
         subtitle={isHousekeeping ? `${unreadCount} open room issues` : (unreadCount > 0 ? `${unreadCount} unread items` : 'All caught up')}
         right={
           unreadCount > 0 ? (
             <TouchableOpacity onPress={markAllRead} style={styles.markAllBtn}>
-              <Text style={styles.markAllBtnText}>All read</Text>
+              <Text style={[styles.markAllBtnText, { color: theme.accent }]}>All read</Text>
             </TouchableOpacity>
           ) : undefined
         }
       />
 
-      {/* Category Filter Pills */}
-      <View style={styles.filterBar}>
-        <TouchableOpacity
-          style={[styles.filterPill, selectedFilter === 'all' && styles.filterPillActive]}
-          onPress={() => setSelectedFilter('all')}
-        >
-          <Text style={[styles.filterPillText, selectedFilter === 'all' && styles.filterPillTextActive]}>
-            All ({notifs.length})
-          </Text>
-        </TouchableOpacity>
+      {/* Segmented Filter Control */}
+      <View style={styles.filterWrap}>
+        <View style={[styles.segmentedControl, { backgroundColor: theme.surfaceSubtle }]}>
+          <TouchableOpacity
+            style={[
+              styles.segmentedTab,
+              selectedFilter === 'all' && [styles.segmentedTabActive, { backgroundColor: theme.surface }]
+            ]}
+            onPress={() => setSelectedFilter('all')}
+            activeOpacity={0.8}
+          >
+            <Text style={[
+              styles.segmentedText,
+              { color: selectedFilter === 'all' ? theme.text : theme.textSecondary, fontWeight: selectedFilter === 'all' ? '700' : '500' }
+            ]}>
+              All ({notifs.length})
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.filterPill, selectedFilter === 'issue' && styles.filterPillActive]}
-          onPress={() => setSelectedFilter('issue')}
-        >
-          <Ionicons name="alert-circle" size={13} color={selectedFilter === 'issue' ? '#ffffff' : '#dc2626'} />
-          <Text style={[styles.filterPillText, selectedFilter === 'issue' && styles.filterPillTextActive]}>
-            Room Issues ({issueCount})
-          </Text>
-        </TouchableOpacity>
-
-
+          <TouchableOpacity
+            style={[
+              styles.segmentedTab,
+              selectedFilter === 'issue' && [styles.segmentedTabActive, { backgroundColor: theme.surface }]
+            ]}
+            onPress={() => setSelectedFilter('issue')}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="alert-circle"
+              size={13}
+              color={selectedFilter === 'issue' ? theme.occupied : theme.textSecondary}
+            />
+            <Text style={[
+              styles.segmentedText,
+              { color: selectedFilter === 'issue' ? theme.text : theme.textSecondary, fontWeight: selectedFilter === 'issue' ? '700' : '500' }
+            ]}>
+              Room Issues ({issueCount})
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color="#2563eb" />
-          <Text style={styles.loadingText}>Loading notifications...</Text>
+        <View style={[styles.center, { backgroundColor: theme.background }]}>
+          <ActivityIndicator size="large" color={theme.accent} />
+          <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading notifications...</Text>
         </View>
       ) : (
         <FlatList
@@ -318,9 +352,9 @@ export default function NotificationsScreen() {
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 30 }]}
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <MaterialCommunityIcons name="bell-check-outline" size={60} color="#cbd5e1" />
-              <Text style={styles.emptyTitle}>No Notifications</Text>
-              <Text style={styles.emptyBody}>
+              <MaterialCommunityIcons name="bell-check-outline" size={56} color={theme.textTertiary} />
+              <Text style={[styles.emptyTitle, { color: theme.text }]}>No Notifications</Text>
+              <Text style={[styles.emptyBody, { color: theme.textSecondary }]}>
                 {selectedFilter === 'issue'
                   ? 'No open room issues right now.'
                   : 'You have resolved all room issues and maintenance alerts.'}
@@ -334,48 +368,48 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
+  container: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 12, fontSize: 14, color: '#64748b' },
+  loadingText: { marginTop: 12, fontSize: 14 },
   markAllBtn: {
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 6,
+    minHeight: 44,
+    justifyContent: 'center'
   },
   markAllBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#2563eb',
+    fontSize: 13,
+    fontWeight: '700'
   },
 
-  filterBar: {
-    flexDirection: 'row',
+  filterWrap: {
     paddingHorizontal: 16,
-    paddingVertical: 10,
-    gap: 8,
+    paddingVertical: 10
   },
-  filterPill: {
+  segmentedControl: {
+    flexDirection: 'row',
+    borderRadius: 10,
+    padding: 3
+  },
+  segmentedTab: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 8,
+    minHeight: 36
   },
-  filterPillActive: {
-    backgroundColor: '#0f172a',
-    borderColor: '#0f172a',
+  segmentedTabActive: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 2
   },
-  filterPillText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  filterPillTextActive: {
-    color: '#ffffff',
-    fontWeight: '700',
+  segmentedText: {
+    fontSize: 13
   },
 
   list: {
@@ -383,27 +417,15 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
   card: {
-    backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
     marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderWidth: StyleSheet.hairlineWidth,
     shadowColor: '#000',
     shadowOpacity: 0.04,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
-  },
-  cardRead: {
-    backgroundColor: '#ffffff',
-    opacity: 0.85,
-  },
-  cardExpanded: {
-    borderColor: '#cbd5e1',
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 4,
   },
   cardHeaderRow: {
     flexDirection: 'row',
@@ -444,39 +466,25 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#2563eb',
     marginLeft: 'auto',
   },
   cardTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#0f172a',
     letterSpacing: -0.2,
-  },
-  cardTitleRead: {
-    fontWeight: '600',
-    color: '#334155',
   },
   cardBodyText: {
     fontSize: 13,
-    color: '#475569',
     lineHeight: 19,
     marginTop: 8,
-  },
-  cardBodyExpanded: {
-    color: '#1e293b',
-    fontSize: 14,
-    lineHeight: 21,
   },
 
   expandedPanel: {
     marginTop: 12,
     paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
   detailsGrid: {
-    backgroundColor: '#f8fafc',
     borderRadius: 12,
     padding: 12,
     gap: 6,
@@ -490,12 +498,10 @@ const styles = StyleSheet.create({
   detailLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748b',
   },
   detailValue: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#0f172a',
   },
   actionButtonRow: {
     flexDirection: 'row',
@@ -507,6 +513,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+    minHeight: 44,
     paddingVertical: 10,
     borderRadius: 10,
   },
@@ -525,12 +532,10 @@ const styles = StyleSheet.create({
   },
   cardTime: {
     fontSize: 11,
-    color: '#94a3b8',
     fontWeight: '500',
   },
   expandHint: {
     fontSize: 11,
-    color: '#2563eb',
     fontWeight: '600',
   },
 
@@ -542,12 +547,10 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#334155',
     marginTop: 16,
   },
   emptyBody: {
     fontSize: 14,
-    color: '#94a3b8',
     textAlign: 'center',
     marginTop: 8,
     lineHeight: 20,

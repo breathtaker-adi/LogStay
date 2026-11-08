@@ -4,6 +4,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTheme } from '@/hooks/use-theme';
 
 interface ScreenHeaderProps {
   title: string;
@@ -15,24 +16,31 @@ interface ScreenHeaderProps {
 
 export function ScreenHeader({ title, subtitle, right, onBack, showBack = true }: ScreenHeaderProps) {
   const insets = useSafeAreaInsets();
+  const theme = useTheme();
+
   return (
-    <View style={[styles.container, { paddingTop: Math.max(insets.top, 12) + 6 }]}>
+    <View style={[
+      styles.container,
+      { paddingTop: Math.max(insets.top, 12) + 6, backgroundColor: theme.backgroundElement, borderBottomColor: theme.separator }
+    ]}>
       {showBack ? (
         <TouchableOpacity
           style={styles.backBtn}
           onPress={onBack ?? (() => router.back())}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          activeOpacity={0.7}
+          activeOpacity={0.6}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={20} color="#0f172a" />
+          <Ionicons name="chevron-back" size={22} color={theme.accent} />
         </TouchableOpacity>
       ) : (
         <View style={styles.placeholder} />
       )}
 
       <View style={styles.center}>
-        <Text style={styles.title} numberOfLines={1}>{title}</Text>
-        {subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text> : null}
+        <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>{title}</Text>
+        {subtitle ? <Text style={[styles.subtitle, { color: theme.textSecondary }]} numberOfLines={1}>{subtitle}</Text> : null}
       </View>
 
       <View style={styles.right}>
@@ -48,25 +56,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingBottom: 12,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomWidth: StyleSheet.hairlineWidth,
     zIndex: 10,
   },
   backBtn: {
+    // Bare chevron — no box, no border. 44×44 hit area via hitSlop.
     width: 38,
     height: 38,
-    borderRadius: 19,
-    backgroundColor: '#f8fafc',
     justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    alignItems: 'flex-start',
   },
   placeholder: {
     width: 38,
@@ -78,15 +76,13 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 17,
-    fontWeight: '700',
-    color: '#0f172a',
+    fontWeight: '600',
     letterSpacing: -0.2,
   },
   subtitle: {
-    fontSize: 11,
-    color: '#94a3b8',
+    fontSize: 12,
     marginTop: 2,
-    fontWeight: '500',
+    fontWeight: '400',
   },
   right: {
     minWidth: 38,

@@ -17,27 +17,29 @@ import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../lib/supabase";
 import { AppLogo } from "@/components/app-logo";
+import { useTheme } from "@/hooks/use-theme";
+import { Fonts } from "@/constants/theme";
+import { AppleExitModal } from "@/components/apple-exit-modal";
+import { useStaff } from "@/lib/staff-context";
+import { AuthService } from "@/services";
 
 export default function LoginScreen() {
+  const theme = useTheme();
+  const { setActiveStaff } = useStaff();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [focusedField, setFocusedField] = useState<"email" | "password" | null>(null);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [exitModalVisible, setExitModalVisible] = useState(false);
 
   // Requirement 5: Confirmation when user tries to quit app from root login screen
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
-        Alert.alert(
-          "Exit LogStay",
-          "Are you sure you want to exit the application?",
-          [
-            { text: "Cancel", style: "cancel" },
-            { text: "Exit", style: "destructive", onPress: () => BackHandler.exitApp() },
-          ]
-        );
+        setExitModalVisible(true);
         return true;
       };
 
@@ -52,19 +54,47 @@ export default function LoginScreen() {
       return;
     }
 
+    if (mode === "signup" && !agreedToTerms) {
+      Alert.alert(
+        "Terms Required",
+        "Please accept the Terms of Service & Privacy Policy to create your account."
+      );
+      return;
+    }
+
     setLoading(true);
     try {
       if (mode === "signin") {
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data: authData, error } = await supabase.auth.signInWithPassword({
           email: email.trim(),
           password,
         });
 
         if (error) {
           Alert.alert("Sign In Failed", error.message);
-        } else {
-          router.replace("/staff-login");
+          return;
         }
+
+        const user = authData?.user;
+        if (!user) {
+          router.replace("/login");
+          return;
+        }
+
+        // Resolve profile & property membership through AuthService
+        const resolved = await AuthService.resolveUserProfile();
+        if (resolved.session) {
+          await setActiveStaff(resolved.session);
+          router.replace("/home");
+          return;
+        }
+
+        if (resolved.needsPropertySetup) {
+          router.replace("/setup-property");
+          return;
+        }
+
+        router.replace("/setup-property");
       } else {
         const { error } = await supabase.auth.signUp({
           email: email.trim(),
@@ -90,7 +120,7 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.keyboardAvoid}
+      style={[styles.keyboardAvoid, { backgroundColor: theme.background }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
     >
@@ -102,35 +132,38 @@ export default function LoginScreen() {
       >
         {/* Brand Header */}
         <View style={styles.brandContainer}>
-          <AppLogo size={68} style={{ marginBottom: 14 }} />
-          <Text style={styles.title}>LogStay</Text>
-          <Text style={styles.subtitle}>Desk & Owner Management Terminal</Text>
+          <AppLogo size={72} style={{ marginBottom: 16 }} />
+          <Text style={[styles.title, { color: theme.text, fontFamily: Fonts?.serif ?? 'serif' }]}>LogStay</Text>
+          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
+            Desk & Owner Management Terminal
+          </Text>
         </View>
 
         {/* Card Form */}
-        <View style={styles.card}>
-          <Text style={styles.formTitle}>
-            {mode === "signin" ? "Sign In to Your Property" : "Create New Account"}
+        <View style={[styles.card, { backgroundColor: theme.backgroundElement, borderColor: theme.separator }]}>
+          <Text style={[styles.formTitle, { color: theme.text }]}>
+            {mode === "signin" ? "Sign in to your property" : "Create new account"}
           </Text>
 
           {/* Email Input */}
-          <Text style={styles.fieldLabel}>Email Address</Text>
+          <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Email address</Text>
           <View
             style={[
               styles.inputWrapper,
-              focusedField === "email" && styles.inputWrapperFocused,
+              { backgroundColor: theme.backgroundSubtle, borderColor: theme.separator },
+              focusedField === "email" && { borderColor: theme.accent, backgroundColor: theme.backgroundElement },
             ]}
           >
             <Ionicons
               name="mail-outline"
-              size={20}
-              color={focusedField === "email" ? "#2563eb" : "#94a3b8"}
+              size={18}
+              color={focusedField === "email" ? theme.accent : theme.textTertiary}
               style={styles.inputIcon}
             />
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: theme.text }]}
               placeholder="owner@property.com"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={theme.textTertiary}
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -142,29 +175,30 @@ export default function LoginScreen() {
             />
             {email.length > 0 && (
               <TouchableOpacity onPress={() => setEmail("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="close-circle" size={18} color="#cbd5e1" />
+                <Ionicons name="close-circle" size={18} color={theme.textTertiary} />
               </TouchableOpacity>
             )}
           </View>
 
           {/* Password Input */}
-          <Text style={styles.fieldLabel}>Password</Text>
+          <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>Password</Text>
           <View
             style={[
               styles.inputWrapper,
-              focusedField === "password" && styles.inputWrapperFocused,
+              { backgroundColor: theme.backgroundSubtle, borderColor: theme.separator },
+              focusedField === "password" && { borderColor: theme.accent, backgroundColor: theme.backgroundElement },
             ]}
           >
             <Ionicons
               name="lock-closed-outline"
-              size={20}
-              color={focusedField === "password" ? "#2563eb" : "#94a3b8"}
+              size={18}
+              color={focusedField === "password" ? theme.accent : theme.textTertiary}
               style={styles.inputIcon}
             />
             <TextInput
-              style={styles.input}
+              style={[styles.input, { color: theme.text }]}
               placeholder="••••••••••••"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={theme.textTertiary}
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
@@ -178,18 +212,48 @@ export default function LoginScreen() {
             >
               <Ionicons
                 name={showPassword ? "eye-off-outline" : "eye-outline"}
-                size={20}
-                color="#64748b"
+                size={18}
+                color={theme.textSecondary}
               />
             </TouchableOpacity>
           </View>
 
+          {/* Terms & Policy Checkbox on Sign Up */}
+          {mode === "signup" && (
+            <View style={styles.termsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.checkbox,
+                  { borderColor: theme.separator },
+                  agreedToTerms && { backgroundColor: theme.accent, borderColor: theme.accent }
+                ]}
+                onPress={() => setAgreedToTerms(!agreedToTerms)}
+                activeOpacity={0.7}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: agreedToTerms }}
+              >
+                {agreedToTerms && <Ionicons name="checkmark" size={14} color="#ffffff" />}
+              </TouchableOpacity>
+              <Text style={[styles.termsText, { color: theme.textSecondary }]}>
+                I agree to the{" "}
+                <Text
+                  style={[styles.termsLink, { color: theme.accent }]}
+                  onPress={() => router.push("/privacy")}
+                >
+                  Terms & Privacy Policy
+                </Text>
+              </Text>
+            </View>
+          )}
+
           {/* Action Button */}
           <TouchableOpacity
-            style={[styles.primaryBtn, loading && styles.primaryBtnDisabled]}
+            style={[styles.primaryBtn, { backgroundColor: theme.accent }, loading && styles.primaryBtnDisabled]}
             onPress={handleAuth}
             disabled={loading}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={mode === "signin" ? "Sign in" : "Register"}
           >
             {loading ? (
               <ActivityIndicator color="#ffffff" size="small" />
@@ -207,7 +271,7 @@ export default function LoginScreen() {
               setMode(mode === "signin" ? "signup" : "signin");
             }}
           >
-            <Text style={styles.toggleModeText}>
+            <Text style={[styles.toggleModeText, { color: theme.accent }]}>
               {mode === "signin"
                 ? "Don't have an account? Sign Up"
                 : "Already registered? Sign In"}
@@ -217,10 +281,22 @@ export default function LoginScreen() {
 
         {/* Security Footer */}
         <View style={styles.footer}>
-          <Ionicons name="shield-checkmark-outline" size={16} color="#94a3b8" />
-          <Text style={styles.footerText}>Secure Session • Offline-Capable Storage</Text>
+          <Ionicons name="shield-checkmark-outline" size={14} color={theme.textTertiary} />
+          <Text style={[styles.footerText, { color: theme.textTertiary }]}>
+            Secure Session • Offline-Capable Storage
+          </Text>
         </View>
       </ScrollView>
+
+      {/* Apple HIG Exit Confirmation Dialog */}
+      <AppleExitModal
+        visible={exitModalVisible}
+        onCancel={() => setExitModalVisible(false)}
+        onConfirm={() => {
+          setExitModalVisible(false);
+          BackHandler.exitApp();
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -228,7 +304,6 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   keyboardAvoid: {
     flex: 1,
-    backgroundColor: "#f8fafc",
   },
   scrollContent: {
     flexGrow: 1,
@@ -238,98 +313,88 @@ const styles = StyleSheet.create({
   },
   brandContainer: {
     alignItems: "center",
-    marginBottom: 28,
-  },
-  logoBadge: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: "#eff6ff",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 12,
-    borderWidth: 1.5,
-    borderColor: "#bfdbfe",
-    shadowColor: "#2563eb",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    marginBottom: 32,
   },
   title: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#0f172a",
-    letterSpacing: -0.5,
+    fontSize: 32,
+    fontWeight: "700",
+    letterSpacing: 0.5,
   },
   subtitle: {
+    // 13 pt #5E6773 on #FAFAF9 → ~5.1:1 ✓
     fontSize: 13,
-    color: "#64748b",
-    marginTop: 4,
-    fontWeight: "500",
+    marginTop: 6,
+    fontWeight: "400",
   },
   card: {
-    backgroundColor: "#ffffff",
     borderRadius: 20,
     padding: 24,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
     shadowRadius: 12,
     elevation: 4,
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
+    borderWidth: StyleSheet.hairlineWidth,
   },
   formTitle: {
     fontSize: 17,
-    fontWeight: "700",
-    color: "#1e293b",
-    marginBottom: 18,
-    textAlign: "center",
+    fontWeight: "600",
+    marginBottom: 20,
   },
   fieldLabel: {
     fontSize: 13,
-    fontWeight: "600",
-    color: "#475569",
+    fontWeight: "500",
     marginBottom: 6,
     marginTop: 4,
   },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f8fafc",
-    borderWidth: 1.5,
-    borderColor: "#e2e8f0",
+    borderWidth: 1,
     borderRadius: 12,
     paddingHorizontal: 12,
     height: 50,
     marginBottom: 14,
-  },
-  inputWrapperFocused: {
-    borderColor: "#2563eb",
-    backgroundColor: "#ffffff",
   },
   inputIcon: {
     marginRight: 10,
   },
   input: {
     flex: 1,
-    fontSize: 15,
-    color: "#0f172a",
+    fontSize: 16,
     paddingVertical: 0,
   },
-  primaryBtn: {
-    backgroundColor: "#2563eb",
-    borderRadius: 12,
-    height: 50,
+  termsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 4,
+    marginBottom: 16,
+    paddingHorizontal: 2,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 10,
-    shadowColor: "#2563eb",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
+  },
+  termsText: {
+    fontSize: 13,
+    flex: 1,
+    lineHeight: 18,
+  },
+  termsLink: {
+    fontWeight: "600",
+    textDecorationLine: "underline",
+  },
+  primaryBtn: {
+    borderRadius: 12,
+    height: 52,
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 8,
   },
   primaryBtnDisabled: {
     opacity: 0.6,
@@ -337,17 +402,16 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     color: "#ffffff",
     fontSize: 16,
-    fontWeight: "700",
+    fontWeight: "600",
   },
   toggleModeBtn: {
     marginTop: 18,
     alignItems: "center",
-    paddingVertical: 6,
+    paddingVertical: 8,
   },
   toggleModeText: {
-    fontSize: 13,
-    color: "#2563eb",
-    fontWeight: "600",
+    fontSize: 14,
+    fontWeight: "500",
   },
   footer: {
     flexDirection: "row",
@@ -358,6 +422,5 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 12,
-    color: "#94a3b8",
   },
 });

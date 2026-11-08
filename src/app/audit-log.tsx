@@ -18,7 +18,7 @@ export default function AuditLogScreen() {
       return;
     }
     fetchLogs();
-  }, []);
+  }, [can]);
 
   const fetchLogs = async () => {
     setLoading(true);

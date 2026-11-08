@@ -1,5 +1,5 @@
 // src/app/guests.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -20,9 +20,11 @@ import { useStaff } from '@/lib/staff-context';
 import { isOnline, getGuestsCache, cacheGuests } from '@/lib/offline';
 import { ScreenHeader } from '@/lib/screen-header';
 import { exportDailyRegisterPDF, DailyRegisterRow } from '@/lib/pdf-reports';
+import { useTheme } from '@/hooks/use-theme';
 
 export default function GuestsScreen() {
   const { activeStaff, can } = useStaff();
+  const theme = useTheme();
   const [loading, setLoading] = useState(true);
   const [guests, setGuests] = useState<any[]>([]);
   const [tab, setTab] = useState<'in_house' | 'past'>('in_house');
@@ -39,7 +41,7 @@ export default function GuestsScreen() {
     }
   }, [activeStaff, can]);
 
-  const fetchGuests = async () => {
+  const fetchGuests = useCallback(async () => {
     setLoading(true);
 
     // 1. Read from local cache first (for in-house tab)
@@ -91,11 +93,11 @@ export default function GuestsScreen() {
       }
     }
     setLoading(false);
-  };
+  }, [tab]);
 
   useEffect(() => {
     fetchGuests();
-  }, [tab]);
+  }, [fetchGuests]);
 
   const handleTabChange = (newTab: 'in_house' | 'past') => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -153,53 +155,73 @@ export default function GuestsScreen() {
   };
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: theme.background }]}>
       <ScreenHeader
         title="Guests"
         subtitle={lastSynced ? `Last synced ${lastSynced}` : `${guests.length} guest${guests.length === 1 ? '' : 's'}`}
         right={
           <TouchableOpacity
-            style={styles.addGuestHeaderBtn}
+            style={[styles.addGuestHeaderBtn, { backgroundColor: theme.accent }]}
             onPress={() => router.push('/checkin')}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Start Guest Check-In"
           >
-            <Ionicons name="person-add" size={16} color="#ffffff" />
+            <Ionicons name="person-add" size={15} color="#ffffff" />
             <Text style={styles.addGuestHeaderText}>Check-In</Text>
           </TouchableOpacity>
         }
       />
       <View style={styles.container}>
         {/* Segmented Filter Pills */}
-        <View style={styles.tabContainer}>
+        <View style={[styles.tabContainer, { backgroundColor: theme.backgroundSubtle }]}>
           <Pressable 
-            style={[styles.tabPill, tab === 'in_house' && styles.tabPillActive]} 
+            style={[
+              styles.tabPill,
+              tab === 'in_house' && [styles.tabPillActive, { backgroundColor: theme.backgroundElement }]
+            ]} 
             onPress={() => handleTabChange('in_house')}
+            accessibilityRole="tab"
+            accessibilityLabel="In House Guests"
           >
             <Ionicons 
               name="bed" 
-              size={16} 
-              color={tab === 'in_house' ? '#2563eb' : '#64748b'} 
+              size={15} 
+              color={tab === 'in_house' ? theme.accent : theme.textSecondary} 
             />
-            <Text style={[styles.tabPillText, tab === 'in_house' && styles.tabPillTextActive]}>
+            <Text style={[
+              styles.tabPillText,
+              { color: theme.textSecondary },
+              tab === 'in_house' && [styles.tabPillTextActive, { color: theme.text }]
+            ]}>
               In House
             </Text>
             {tab === 'in_house' && guests.length > 0 && (
-              <View style={styles.tabCountBadge}>
-                <Text style={styles.tabCountText}>{guests.length}</Text>
+              <View style={[styles.tabCountBadge, { backgroundColor: theme.accentSubtle }]}>
+                <Text style={[styles.tabCountText, { color: theme.accent }]}>{guests.length}</Text>
               </View>
             )}
           </Pressable>
 
           <Pressable 
-            style={[styles.tabPill, tab === 'past' && styles.tabPillActive]} 
+            style={[
+              styles.tabPill,
+              tab === 'past' && [styles.tabPillActive, { backgroundColor: theme.backgroundElement }]
+            ]} 
             onPress={() => handleTabChange('past')}
+            accessibilityRole="tab"
+            accessibilityLabel="Past Guests"
           >
             <Ionicons 
               name="time" 
-              size={16} 
-              color={tab === 'past' ? '#2563eb' : '#64748b'} 
+              size={15} 
+              color={tab === 'past' ? theme.accent : theme.textSecondary} 
             />
-            <Text style={[styles.tabPillText, tab === 'past' && styles.tabPillTextActive]}>
+            <Text style={[
+              styles.tabPillText,
+              { color: theme.textSecondary },
+              tab === 'past' && [styles.tabPillTextActive, { color: theme.text }]
+            ]}>
               Past Guests
             </Text>
           </Pressable>
@@ -207,43 +229,46 @@ export default function GuestsScreen() {
 
         {/* Daily Police Register PDF Export Button */}
         <TouchableOpacity
-          style={styles.exportRegisterBtn}
+          style={[styles.exportRegisterBtn, { backgroundColor: theme.backgroundElement, borderColor: theme.separator }]}
           onPress={handleExportRegisterPDF}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Export Daily Register PDF"
         >
-          <Ionicons name="document-text-outline" size={15} color="#1d4ed8" />
-          <Text style={styles.exportRegisterText}>Export Daily Register (PDF)</Text>
+          <Ionicons name="document-text-outline" size={15} color={theme.accent} />
+          <Text style={[styles.exportRegisterText, { color: theme.accent }]}>Export Daily Register (PDF)</Text>
         </TouchableOpacity>
 
         {/* Modern Search Input */}
-        <View style={styles.searchBox}>
-          <Ionicons name="search" size={18} color="#94a3b8" style={styles.searchIcon} />
+        <View style={[styles.searchBox, { backgroundColor: theme.backgroundElement, borderColor: theme.separator }]}>
+          <Ionicons name="search" size={18} color={theme.textTertiary} style={styles.searchIcon} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: theme.text }]}
             placeholder="Search guest by name or phone..."
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={theme.textTertiary}
             value={search}
             onChangeText={setSearch}
             autoCorrect={false}
           />
           {search.length > 0 && (
             <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={18} color="#94a3b8" />
+              <Ionicons name="close-circle" size={18} color={theme.textTertiary} />
             </TouchableOpacity>
           )}
         </View>
 
         {loading && guests.length === 0 ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#2563eb" />
-            <Text style={styles.loadingText}>Loading guest records...</Text>
+            <ActivityIndicator size="large" color={theme.accent} />
+            <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading guest records...</Text>
           </View>
         ) : (
           <FlatList
             data={displayGuests}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={[styles.listContent, { flexGrow: 1 }]}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
             renderItem={({ item }) => {
               const guestName = item.guests?.name || 'Guest';
@@ -253,56 +278,74 @@ export default function GuestsScreen() {
 
               return (
                 <TouchableOpacity 
-                  style={styles.guestCard} 
+                  style={[styles.guestCard, { backgroundColor: theme.backgroundElement, borderColor: theme.separator }]} 
                   activeOpacity={0.7}
                   onPress={() => router.push(`/guest/${item.guests?.id || item.id}?stayId=${item.id}`)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${guestName}, ${isInHouse ? 'In House' : 'Checked Out'}`}
                 >
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>{initial}</Text>
+                  <View style={[styles.avatar, { backgroundColor: theme.accentSubtle, borderColor: theme.separator }]}>
+                    <Text style={[styles.avatarText, { color: theme.accent }]}>{initial}</Text>
                   </View>
 
                   <View style={styles.guestDetails}>
                     <View style={styles.nameRow}>
-                      <Text style={styles.guestName} numberOfLines={1}>{guestName}</Text>
+                      <Text style={[styles.guestName, { color: theme.text }]} numberOfLines={1}>{guestName}</Text>
                       {item.guests?.nationality && item.guests.nationality.toLowerCase() !== 'india' && (
-                        <View style={styles.foreignPill}>
-                          <Text style={styles.foreignPillText}>🌐 {item.guests.nationality}</Text>
+                        <View style={[styles.foreignPill, { backgroundColor: theme.accentSubtle }]}>
+                          <Ionicons name="globe-outline" size={10} color={theme.accent} style={{ marginRight: 3 }} />
+                          <Text style={[styles.foreignPillText, { color: theme.accent }]}>{item.guests.nationality}</Text>
                         </View>
                       )}
                     </View>
 
                     <View style={styles.metaRow}>
-                      <Ionicons name="call-outline" size={13} color="#64748b" />
-                      <Text style={styles.guestPhone}>{item.guests?.phone || 'No phone number'}</Text>
+                      <Ionicons name="call-outline" size={13} color={theme.textSecondary} />
+                      <Text style={[styles.guestPhone, { color: theme.textSecondary }]}>{item.guests?.phone || 'No phone number'}</Text>
                     </View>
                   </View>
 
                   <View style={styles.rightSection}>
-                    <View style={[styles.statusBadge, isInHouse ? styles.statusBadgeActive : styles.statusBadgeOut]}>
-                      <View style={[styles.statusDot, isInHouse ? styles.statusDotActive : styles.statusDotOut]} />
-                      <Text style={[styles.statusText, isInHouse ? styles.statusTextActive : styles.statusTextOut]}>
+                    <View style={[
+                      styles.statusBadge,
+                      isInHouse 
+                        ? { backgroundColor: theme.freeSubtle } 
+                        : { backgroundColor: theme.backgroundSubtle }
+                    ]}>
+                      <View style={[
+                        styles.statusDot,
+                        isInHouse 
+                          ? { backgroundColor: theme.free } 
+                          : { backgroundColor: theme.textTertiary }
+                      ]} />
+                      <Text style={[
+                        styles.statusText,
+                        isInHouse 
+                          ? { color: theme.free } 
+                          : { color: theme.textSecondary }
+                      ]}>
                         {isInHouse ? 'In House' : 'Checked Out'}
                       </Text>
                     </View>
 
                     {stayAmount > 0 ? (
-                      <Text style={styles.stayAmount}>₹{stayAmount.toLocaleString('en-IN')}</Text>
+                      <Text style={[styles.stayAmount, { color: theme.text }]}>₹{stayAmount.toLocaleString('en-IN')}</Text>
                     ) : null}
                   </View>
 
-                  <Ionicons name="chevron-forward" size={18} color="#cbd5e1" style={styles.chevron} />
+                  <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} style={styles.chevron} />
                 </TouchableOpacity>
               );
             }}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <View style={styles.emptyIconCircle}>
-                  <Ionicons name="people-outline" size={40} color="#94a3b8" />
+                <View style={[styles.emptyIconCircle, { backgroundColor: theme.backgroundSubtle }]}>
+                  <Ionicons name="people-outline" size={40} color={theme.textTertiary} />
                 </View>
-                <Text style={styles.emptyTitle}>
+                <Text style={[styles.emptyTitle, { color: theme.text }]}>
                   {search ? 'No Matching Guests' : tab === 'in_house' ? 'No Guests In House' : 'No Past Stays Recorded'}
                 </Text>
-                <Text style={styles.emptySubtitle}>
+                <Text style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
                   {search 
                     ? `No records found matching "${search}". Try searching another name or phone number.`
                     : tab === 'in_house' 
@@ -311,7 +354,7 @@ export default function GuestsScreen() {
                 </Text>
                 {tab === 'in_house' && !search && (
                   <TouchableOpacity
-                    style={styles.emptyActionBtn}
+                    style={[styles.emptyActionBtn, { backgroundColor: theme.accent }]}
                     onPress={() => router.push('/checkin')}
                     activeOpacity={0.8}
                   >
@@ -331,7 +374,6 @@ export default function GuestsScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#f8fafc'
   },
   container: {
     flex: 1,
@@ -342,26 +384,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#2563eb',
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 10,
-    shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 2
   },
   addGuestHeaderText: {
     color: '#ffffff',
     fontSize: 12,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: '#e2e8f0',
-    padding: 4,
-    borderRadius: 14,
+    padding: 3,
+    borderRadius: 12,
     marginBottom: 12
   },
   tabPill: {
@@ -370,11 +405,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 10,
-    borderRadius: 10
+    paddingVertical: 9,
+    borderRadius: 9
   },
   tabPillActive: {
-    backgroundColor: '#ffffff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.08,
@@ -383,15 +417,12 @@ const styles = StyleSheet.create({
   },
   tabPillText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: '#64748b'
+    fontWeight: '500',
   },
   tabPillTextActive: {
-    color: '#1e293b',
-    fontWeight: '700'
+    fontWeight: '600'
   },
   tabCountBadge: {
-    backgroundColor: '#dbeafe',
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 8
@@ -399,31 +430,22 @@ const styles = StyleSheet.create({
   tabCountText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#2563eb'
   },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,
     paddingHorizontal: 12,
-    height: 46,
+    height: 44,
     marginBottom: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.03,
-    shadowRadius: 2,
-    elevation: 1
   },
   searchIcon: {
     marginRight: 8
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
-    color: '#0f172a',
+    fontSize: 15,
     paddingVertical: 0
   },
   loadingContainer: {
@@ -434,7 +456,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 14,
-    color: '#64748b',
     fontWeight: '500'
   },
   listContent: {
@@ -443,15 +464,13 @@ const styles = StyleSheet.create({
   guestCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
     padding: 14,
     borderRadius: 16,
     marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderWidth: StyleSheet.hairlineWidth,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.03,
     shadowRadius: 6,
     elevation: 2
   },
@@ -459,17 +478,14 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#eff6ff',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
-    borderWidth: 1,
-    borderColor: '#bfdbfe'
+    borderWidth: StyleSheet.hairlineWidth,
   },
   avatarText: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    color: '#2563eb'
   },
   guestDetails: {
     flex: 1,
@@ -483,20 +499,20 @@ const styles = StyleSheet.create({
     marginBottom: 4
   },
   guestName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0f172a'
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: -0.2
   },
   foreignPill: {
-    backgroundColor: '#fef3c7',
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6
   },
   foreignPillText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#92400e'
+    fontSize: 11,
+    fontWeight: '600',
   },
   metaRow: {
     flexDirection: 'row',
@@ -504,9 +520,8 @@ const styles = StyleSheet.create({
     gap: 4
   },
   guestPhone: {
-    fontSize: 12,
-    color: '#64748b',
-    fontWeight: '500'
+    fontSize: 13,
+    fontWeight: '400'
   },
   rightSection: {
     alignItems: 'flex-end',
@@ -517,14 +532,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8
+    paddingVertical: 3,
+    borderRadius: 6
   },
   statusBadgeActive: {
-    backgroundColor: '#dcfce7'
   },
   statusBadgeOut: {
-    backgroundColor: '#f1f5f9'
   },
   statusDot: {
     width: 6,
@@ -532,25 +545,20 @@ const styles = StyleSheet.create({
     borderRadius: 3
   },
   statusDotActive: {
-    backgroundColor: '#16a34a'
   },
   statusDotOut: {
-    backgroundColor: '#94a3b8'
   },
   statusText: {
-    fontSize: 11,
-    fontWeight: '700'
+    fontSize: 12,
+    fontWeight: '600'
   },
   statusTextActive: {
-    color: '#166534'
   },
   statusTextOut: {
-    color: '#475569'
   },
   stayAmount: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#0f172a'
+    fontWeight: '600',
   },
   chevron: {
     marginLeft: 6
@@ -565,58 +573,47 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16
   },
   emptyTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 6
+    marginBottom: 6,
+    textAlign: 'center'
   },
   emptySubtitle: {
-    fontSize: 13,
-    color: '#64748b',
+    fontSize: 14,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 19,
     marginBottom: 20
   },
   emptyActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#2563eb',
     paddingHorizontal: 18,
     paddingVertical: 11,
     borderRadius: 12,
-    shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3
   },
   emptyActionText: {
     color: '#ffffff',
     fontSize: 14,
-    fontWeight: '700'
+    fontWeight: '600'
   },
   exportRegisterBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 7,
-    backgroundColor: '#eff6ff',
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
+    borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 12,
     paddingVertical: 10,
-    marginBottom: 10
+    marginBottom: 12
   },
   exportRegisterText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#1d4ed8'
+    fontWeight: '600',
   }
 });
