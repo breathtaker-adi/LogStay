@@ -22,9 +22,10 @@ Deno.serve(async (req) => {
     return new Response('unauthorized', { status: 401 });
   }
 
+  const serviceKey = Deno.env.get('SECRET_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const db = createClient(
     Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    serviceKey
   );
 
   // 1. Expired, not-yet-purged guests with photos (batch of 200)
