@@ -60,3 +60,11 @@ TEST_FINDINGS.md
 # Documentation / drafts
 Docs/
 graphify-out/
+
+# Video production & Hyperframes artifacts
+.hyperframes/
+**/.hyperframes/
+*.mp4
+*.webm
+*.mov
+*.poster.*
