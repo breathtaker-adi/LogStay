@@ -4,4 +4,9 @@
 export * from './auth.service';
 export * from './team.service';
 export * from './property.service';
-
+export * from './approval.service';
+export * from './stay.service';
+export * from './shift.service';
+export * from './housekeeping.service';
+export * from './audit.service';
+export * from './room.service';

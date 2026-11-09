@@ -22,7 +22,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { useStaff } from '@/lib/staff-context';
-import { isOnline, processOutbox } from '@/lib/offline';
+import { isOnline, processOutbox, saveToOutbox } from '@/lib/offline';
 import { bedState, BedState } from '@/lib/bed-state';
 import * as Crypto from 'expo-crypto';
 import { ScreenHeader } from '@/lib/screen-header';
@@ -40,6 +40,14 @@ export default function DormDetailScreen() {
   const [units, setUnits] = useState<any[]>([]);
   const [activeStaysMap, setActiveStaysMap] = useState<Record<string, any>>({});
   const [lastSynced, setLastSynced] = useState<string>('');
+
+  // Maintenance & Issues States
+  const [issues, setIssues] = useState<any[]>([]);
+  const [showIssueModal, setShowIssueModal] = useState(false);
+  const [issueTargetUnitId, setIssueTargetUnitId] = useState<string>('');
+  const [issueCategory, setIssueCategory] = useState<'ac' | 'water' | 'cleanliness' | 'electrical' | 'noise' | 'other'>('cleanliness');
+  const [issueNote, setIssueNote] = useState('');
+  const [submittingIssue, setSubmittingIssue] = useState(false);
 
   // Edit Room Modal State
   const [showEditModal, setShowEditModal] = useState(false);
@@ -101,6 +109,16 @@ export default function DormDetailScreen() {
           map[s.unit_id] = s;
         });
         setActiveStaysMap(map);
+
+        // 4. Fetch Open Issues for these beds
+        const { data: issuesData } = await supabase
+          .from('issues')
+          .select('id, unit_id, category, note, created_at, status')
+          .in('unit_id', unitIds)
+          .eq('status', 'open')
+          .order('created_at', { ascending: false });
+
+        setIssues(issuesData || []);
       }
 
       setLastSynced(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
@@ -203,6 +221,133 @@ export default function DormDetailScreen() {
       Alert.alert('Error', err.message);
     } finally {
       setSubmittingEdit(false);
+    }
+  };
+
+  // Maintenance & Issue Handlers
+  const handleToggleBedMaintenance = async (unitId: string, currentStatus: string) => {
+    if (!can('set_maintenance')) {
+      return Alert.alert('Unauthorized', 'You do not have permission to change maintenance status.');
+    }
+    const newStatus = currentStatus === 'maintenance' ? 'clean' : 'maintenance';
+    const rpcName = newStatus === 'maintenance' ? 'set_unit_maintenance' : 'mark_unit_clean';
+
+    try {
+      if (await isOnline()) {
+        const { error } = await supabase.rpc(rpcName, {
+          p_unit_id: unitId,
+          p_staff_id: activeStaff?.id || null
+        });
+        if (error) return Alert.alert('Error', error.message);
+      } else {
+        await saveToOutbox(newStatus === 'maintenance' ? 'set_maintenance' : 'mark_clean', {
+          unit_id: unitId,
+          staff_id: activeStaff?.id || null
+        });
+      }
+      Alert.alert('Status Updated', `Bed marked as ${newStatus}.`);
+      fetchDormData();
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
+    }
+  };
+
+  const handleSetDormMaintenance = () => {
+    if (!can('set_maintenance')) return;
+    if (units.length === 0) return;
+
+    Alert.alert(
+      'Dorm Maintenance',
+      'Set all vacant beds in this dorm to maintenance status?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Set All to Maintenance',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const vacantUnits = units.filter(u => !activeStaysMap[u.id]);
+              for (const u of vacantUnits) {
+                if (await isOnline()) {
+                  await supabase.rpc('set_unit_maintenance', {
+                    p_unit_id: u.id,
+                    p_staff_id: activeStaff?.id || null
+                  });
+                } else {
+                  await saveToOutbox('set_maintenance', { unit_id: u.id, staff_id: activeStaff?.id || null });
+                }
+              }
+              Alert.alert('Success', 'Vacant beds set to maintenance.');
+              fetchDormData();
+            } catch (err: any) {
+              Alert.alert('Error', err.message);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleReportIssue = async () => {
+    if (!activeStaff) return;
+    const targetUnit = issueTargetUnitId || units[0]?.id;
+    if (!targetUnit) {
+      return Alert.alert('Error', 'No bed selected to attach issue to.');
+    }
+
+    setSubmittingIssue(true);
+    const issueId = Crypto.randomUUID();
+    const activeStay = activeStaysMap[targetUnit];
+
+    try {
+      if (await isOnline()) {
+        const { error } = await supabase.rpc('report_issue', {
+          p_issue_id: issueId,
+          p_unit_id: targetUnit,
+          p_stay_id: activeStay?.id || null,
+          p_category: issueCategory,
+          p_note: issueNote.trim() || null,
+          p_staff_id: activeStaff.id
+        });
+        if (error) throw error;
+      } else {
+        await saveToOutbox('report_issue', {
+          issue_id: issueId,
+          unit_id: targetUnit,
+          stay_id: activeStay?.id || null,
+          category: issueCategory,
+          note: issueNote.trim() || null,
+          staff_id: activeStaff.id
+        });
+      }
+
+      setShowIssueModal(false);
+      setIssueNote('');
+      Alert.alert('Issue Reported', 'The maintenance issue has been logged for this dorm.');
+      fetchDormData();
+    } catch (err: any) {
+      Alert.alert('Report Failed', err.message);
+    } finally {
+      setSubmittingIssue(false);
+    }
+  };
+
+  const handleResolveIssue = async (issueId: string) => {
+    try {
+      const { error } = await supabase.rpc('resolve_issue', {
+        p_issue_id: issueId,
+        p_staff_id: activeStaff?.id || null
+      });
+      if (error) {
+        await supabase
+          .from('issues')
+          .update({ status: 'resolved', resolved_at: new Date().toISOString() })
+          .eq('id', issueId);
+      }
+      Alert.alert('Resolved', 'Issue has been marked as resolved.');
+      fetchDormData();
+    } catch (err: any) {
+      Alert.alert('Error', err.message);
     }
   };
 
@@ -356,6 +501,32 @@ export default function DormDetailScreen() {
           </View>
         </View>
 
+        {/* Quick Operations Bar (Apple HIG Segmented Action Row) */}
+        <View style={styles.quickOpsRow}>
+          <TouchableOpacity
+            style={[styles.quickOpBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
+            onPress={() => {
+              setIssueTargetUnitId(units[0]?.id || '');
+              setShowIssueModal(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="warning-outline" size={16} color="#f59e0b" />
+            <Text style={[styles.quickOpText, { color: theme.text }]}>Report Issue</Text>
+          </TouchableOpacity>
+
+          {can('set_maintenance') && (
+            <TouchableOpacity
+              style={[styles.quickOpBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
+              onPress={handleSetDormMaintenance}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="construct-outline" size={16} color="#6366f1" />
+              <Text style={[styles.quickOpText, { color: theme.text }]}>Dorm Maintenance</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
         {/* ── BEDS LIST SECTION ───────────────────────────────────── */}
         <View style={styles.sectionHeaderRow}>
           <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>BEDS IN THIS ROOM</Text>
@@ -459,10 +630,103 @@ export default function DormDetailScreen() {
                     <Ionicons name="chevron-forward" size={14} color={theme.textTertiary} style={{ marginLeft: 'auto' }} />
                   </View>
                 )}
+
+                {/* Quick Maintenance Toggle for Vacant Beds */}
+                {!stay && can('set_maintenance') && (
+                  <View style={[styles.bedActionRow, { borderTopColor: theme.borderSubtle }]}>
+                    <TouchableOpacity
+                      style={[
+                        styles.bedQuickMaintBtn,
+                        state === 'maintenance'
+                          ? { backgroundColor: '#dcfce7', borderColor: '#86efac' }
+                          : { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }
+                      ]}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleToggleBedMaintenance(unit.id, state);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={state === 'maintenance' ? "checkmark-circle-outline" : "construct-outline"}
+                        size={13}
+                        color={state === 'maintenance' ? "#15803d" : "#6366f1"}
+                      />
+                      <Text
+                        style={[
+                          styles.bedQuickMaintText,
+                          { color: state === 'maintenance' ? "#15803d" : "#6366f1" }
+                        ]}
+                      >
+                        {state === 'maintenance' ? 'Mark Available (Clean)' : 'Set Maintenance'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </Pressable>
             );
           })
         )}
+
+        {/* ── OPEN ISSUES CARD ────────────────────────────────────── */}
+        <View style={[styles.issuesCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <View style={[styles.issuesHeaderRow, { borderBottomColor: theme.borderSubtle }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="construct-outline" size={18} color="#f59e0b" />
+              <Text style={[styles.issuesTitle, { color: theme.text }]}>Open Issues ({issues.length})</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.reportIssueLink, { backgroundColor: theme.accentSubtle }]}
+              onPress={() => {
+                setIssueTargetUnitId(units[0]?.id || '');
+                setShowIssueModal(true);
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="add" size={14} color={theme.accent} />
+              <Text style={[styles.reportIssueLinkText, { color: theme.accent }]}>Report</Text>
+            </TouchableOpacity>
+          </View>
+
+          {issues.length === 0 ? (
+            <View style={styles.noIssuesBox}>
+              <Ionicons name="checkmark-circle-outline" size={20} color="#16a34a" />
+              <Text style={[styles.noIssuesText, { color: theme.textSecondary }]}>
+                No open issues reported for this dorm.
+              </Text>
+            </View>
+          ) : (
+            <View style={{ gap: 10, marginTop: 4 }}>
+              {issues.map((iss) => {
+                const targetBed = units.find(u => u.id === iss.unit_id);
+                return (
+                  <View key={iss.id} style={[styles.issueItem, { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle }]}>
+                    <View style={styles.issueItemTop}>
+                      <View style={[styles.issueCategoryChip, { backgroundColor: '#fef3c7' }]}>
+                        <Text style={[styles.issueCategoryText, { color: '#92400e' }]}>{iss.category.toUpperCase()}</Text>
+                      </View>
+                      <Text style={[styles.issueBedBadge, { color: theme.textSecondary }]}>
+                        {targetBed?.label || 'Dorm Bed'}
+                      </Text>
+                      <Text style={[styles.issueTimeText, { color: theme.textTertiary }]}>
+                        {new Date(iss.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                      </Text>
+                    </View>
+                    <Text style={[styles.issueNoteText, { color: theme.text }]}>{iss.note || 'No description provided'}</Text>
+                    <TouchableOpacity
+                      style={[styles.resolveBtn, { backgroundColor: '#10b981' }]}
+                      onPress={() => handleResolveIssue(iss.id)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="checkmark" size={14} color="#ffffff" />
+                      <Text style={styles.resolveBtnText}>Mark Resolved</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
 
         {/* ── OWNER ACTIONS CARD ──────────────────────────────────── */}
         {can('settings') && (
@@ -661,6 +925,121 @@ export default function DormDetailScreen() {
                   <ActivityIndicator color="#fff" size="small" />
                 ) : (
                   <Text style={styles.modalSaveText}>Add Bed</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ── REPORT ISSUE MODAL ─────────────────────────────────────── */}
+      <Modal visible={showIssueModal} transparent animationType="slide">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+          style={styles.modalOverlay}
+        >
+          <ScrollView
+            contentContainerStyle={styles.modalCard}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="warning-outline" size={22} color="#f59e0b" />
+                <Text style={styles.modalTitle}>Report Dorm Issue</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowIssueModal(false)}>
+                <Ionicons name="close-circle" size={24} color="#94a3b8" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Target Bed Selector */}
+            <Text style={styles.inputLabel}>Select Bed / Location</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.unitPickerRow}>
+              {units.map((u) => {
+                const isSelected = (issueTargetUnitId || units[0]?.id) === u.id;
+                return (
+                  <TouchableOpacity
+                    key={u.id}
+                    style={[styles.unitPickerChip, isSelected && styles.unitPickerChipActive]}
+                    onPress={() => setIssueTargetUnitId(u.id)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="bed-outline"
+                      size={13}
+                      color={isSelected ? '#ffffff' : '#64748b'}
+                    />
+                    <Text style={[styles.unitPickerChipText, isSelected && styles.unitPickerChipTextActive]}>
+                      {u.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* Category Selector */}
+            <Text style={[styles.inputLabel, { marginTop: 8 }]}>Issue Category</Text>
+            <View style={styles.categoryChipsRow}>
+              {[
+                { id: 'cleanliness', label: 'Cleanliness', icon: 'sparkles-outline' },
+                { id: 'ac', label: 'AC / Climate', icon: 'thermometer-outline' },
+                { id: 'water', label: 'Water / Plumbing', icon: 'water-outline' },
+                { id: 'electrical', label: 'Electrical', icon: 'flash-outline' },
+                { id: 'noise', label: 'Noise / Disturbance', icon: 'volume-high-outline' },
+                { id: 'other', label: 'Other', icon: 'help-circle-outline' },
+              ].map((c) => {
+                const isSelected = issueCategory === c.id;
+                return (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={[styles.categoryChip, isSelected && styles.categoryChipActive]}
+                    onPress={() => setIssueCategory(c.id as any)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name={c.icon as any}
+                      size={14}
+                      color={isSelected ? '#ffffff' : '#475569'}
+                    />
+                    <Text style={[styles.categoryChipText, isSelected && styles.categoryChipTextActive]}>
+                      {c.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Note / Description */}
+            <Text style={[styles.inputLabel, { marginTop: 8 }]}>Details / Notes</Text>
+            <TextInput
+              style={styles.textAreaInput}
+              value={issueNote}
+              onChangeText={setIssueNote}
+              placeholder="Describe the issue (e.g. AC leaking water on Bed 3)..."
+              placeholderTextColor="#94a3b8"
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => { setShowIssueModal(false); setIssueNote(''); }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalSaveBtn, { backgroundColor: '#f59e0b' }]}
+                onPress={handleReportIssue}
+                disabled={submittingIssue}
+              >
+                {submittingIssue ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveText}>Submit Report</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1170,5 +1549,210 @@ const styles = StyleSheet.create({
   },
   quickChipTextActive: {
     color: '#ffffff'
-  }
+  },
+
+  // ── Quick Operations Bar ─────────────────────────────────────────
+  quickOpsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  quickOpBtn: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  quickOpText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  // ── Bed Action Row ───────────────────────────────────────────────
+  bedActionRow: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 8,
+    marginTop: 8,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  bedQuickMaintBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  bedQuickMaintText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  // ── Open Issues Card ─────────────────────────────────────────────
+  issuesCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 16,
+  },
+  issuesHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    marginBottom: 8,
+  },
+  issuesTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  reportIssueLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  reportIssueLinkText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  noIssuesBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
+  noIssuesText: {
+    fontSize: 13,
+  },
+  issueItem: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 10,
+    gap: 6,
+  },
+  issueItemTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  issueCategoryChip: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  issueCategoryText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  issueBedBadge: {
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
+  },
+  issueTimeText: {
+    fontSize: 11,
+  },
+  issueNoteText: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  resolveBtn: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginTop: 2,
+  },
+  resolveBtnText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  // ── Report Issue Modal Picker Styles ─────────────────────────────
+  unitPickerRow: {
+    gap: 8,
+    paddingVertical: 4,
+    marginBottom: 8,
+  },
+  unitPickerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  unitPickerChipActive: {
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
+  },
+  unitPickerChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  unitPickerChipTextActive: {
+    color: '#ffffff',
+    fontWeight: '700',
+  },
+  categoryChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 10,
+  },
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  categoryChipActive: {
+    backgroundColor: '#f59e0b',
+    borderColor: '#f59e0b',
+  },
+  categoryChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  categoryChipTextActive: {
+    color: '#ffffff',
+    fontWeight: '700',
+  },
+  textAreaInput: {
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    minHeight: 70,
+    marginBottom: 14,
+    color: '#0f172a',
+    backgroundColor: '#f8fafc',
+  },
 });

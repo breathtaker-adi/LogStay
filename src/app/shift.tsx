@@ -10,6 +10,7 @@ import { can } from "../lib/permissions";
 import { ScreenHeader } from "@/lib/screen-header";
 import { exportShiftReportPDF } from "@/lib/pdf-reports";
 import { useTheme } from "@/hooks/use-theme";
+import { ShiftService } from "@/services/shift.service";
 
 export default function ShiftScreen() {
   const theme = useTheme();
@@ -35,6 +36,8 @@ export default function ShiftScreen() {
   const [pettyAmount, setPettyAmount] = useState("");
   const [pettyNote, setPettyNote] = useState("");
   const [countedCash, setCountedCash] = useState("");
+  const [pendingHandover, setPendingHandover] = useState<any | null>(null);
+  const [handoverCountedCash, setHandoverCountedCash] = useState("");
 
   useEffect(() => {
     fetchShiftData();
@@ -98,7 +101,22 @@ export default function ShiftScreen() {
           .eq('shift_id', shiftData.id)
           .order('created_at', { ascending: false });
         setEntries(entriesData || []);
+      } else {
+        setActiveShift(null);
+        setEntries([]);
       }
+
+      // 1.5. Fetch Pending Handover Shift (if any)
+      const { data: handoverShift } = await supabase
+        .from('shifts')
+        .select('*')
+        .eq('property_id', memberData.property_id)
+        .eq('status', 'pending_handover')
+        .order('closed_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      setPendingHandover(handoverShift || null);
 
       // 2. Fetch Past Shifts (For Owner History)
       const { data: historyData } = await supabase
@@ -230,6 +248,50 @@ export default function ShiftScreen() {
     }
   }
 
+  async function submitHandover() {
+    if (!(await isOnline())) {
+      Alert.alert('Internet Required', "You must be online to submit shift for handover.");
+      return;
+    }
+
+    if (!countedCash) {
+      return Alert.alert("Missing Info", "Please enter counted drawer cash.");
+    }
+
+    try {
+      await ShiftService.submitShiftHandover(activeShift.id, parseFloat(countedCash));
+      Alert.alert("Shift Locked", "Shift submitted for two-person handover. Waiting for incoming staff to count drawer and accept.");
+      setActiveShift(null);
+      setEntries([]);
+      setCountedCash("");
+      fetchShiftData();
+    } catch (error: any) {
+      Alert.alert("Handover Error", error.message || "Failed to submit handover.");
+    }
+  }
+
+  async function acceptHandover() {
+    if (!pendingHandover) return;
+    if (!(await isOnline())) {
+      Alert.alert('Internet Required', "You must be online to accept shift handover.");
+      return;
+    }
+
+    if (!handoverCountedCash) {
+      return Alert.alert("Missing Info", "Please enter the physical drawer cash counted.");
+    }
+
+    try {
+      await ShiftService.acceptShiftHandover(pendingHandover.id, parseFloat(handoverCountedCash));
+      Alert.alert("Handover Accepted", "Two-person handover verified! Your new shift is now open.");
+      setPendingHandover(null);
+      setHandoverCountedCash("");
+      fetchShiftData();
+    } catch (error: any) {
+      Alert.alert("Acceptance Error", error.message || "Failed to accept handover.");
+    }
+  }
+
   async function closeShift() {
     if (!(await isOnline())) {
       Alert.alert('Internet Required', "You must be online to verify and close the shift.");
@@ -306,6 +368,44 @@ export default function ShiftScreen() {
           showsVerticalScrollIndicator={false}
           automaticallyAdjustKeyboardInsets={true}
         >
+        {pendingHandover && !activeShift && (
+          <View style={[styles.card, { backgroundColor: theme.surface, borderColor: '#f59e0b', borderWidth: 2 }]}>
+            <View style={styles.cardIconHeader}>
+              <View style={[styles.iconCircle, { backgroundColor: '#fef3c7', borderColor: '#f59e0b' }]}>
+                <Ionicons name="people" size={24} color="#d97706" />
+              </View>
+              <View style={styles.cardHeaderText}>
+                <Text style={[styles.cardTitle, { color: theme.text }]}>Shift Handover Waiting</Text>
+                <Text style={[styles.cardSubtitle, { color: theme.textSecondary }]}>
+                  Previous staff locked drawer. Count physical cash to accept custody.
+                </Text>
+              </View>
+            </View>
+
+            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Your Blind Count in Drawer (₹)</Text>
+            <View style={[styles.inputWrapper, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
+              <Text style={[styles.currencyPrefix, { color: theme.textSecondary }]}>₹</Text>
+              <TextInput
+                style={[styles.textInput, { color: theme.text }]}
+                placeholder="Count physical cash in drawer..."
+                placeholderTextColor={theme.textTertiary}
+                value={handoverCountedCash}
+                onChangeText={setHandoverCountedCash}
+                keyboardType="numeric"
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.primaryActionBtn, { backgroundColor: '#16a34a', marginTop: 12 }]}
+              onPress={acceptHandover}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="checkmark-circle" size={18} color="#ffffff" />
+              <Text style={styles.primaryActionText}>Accept Handover & Open My Shift</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {!activeShift ? (
           /* Start Shift Card */
           <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -478,18 +578,18 @@ export default function ShiftScreen() {
             </View>
 
             {/* Handover & Close Shift Card */}
-            <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.occupiedSubtle }]}>
+            <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <View style={styles.sectionTitleRow}>
-                <Ionicons name="lock-closed" size={18} color={theme.occupied} />
-                <Text style={[styles.sectionTitle, { color: theme.occupied }]}>Close Shift & Handover</Text>
+                <Ionicons name="swap-horizontal" size={18} color={theme.accent} />
+                <Text style={[styles.sectionTitle, { color: theme.text }]}>Shift Handover (Two-Person Blind Count)</Text>
               </View>
 
-              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Counted Physical Cash in Drawer (₹)</Text>
+              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Your Blind Physical Count in Drawer (₹)</Text>
               <View style={[styles.inputWrapper, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
                 <Text style={[styles.currencyPrefix, { color: theme.textSecondary }]}>₹</Text>
                 <TextInput
                   style={[styles.textInput, { color: theme.text }]}
-                  placeholder="Counted cash amount"
+                  placeholder="Enter drawer cash counted..."
                   placeholderTextColor={theme.textTertiary}
                   value={countedCash}
                   onChangeText={setCountedCash}
@@ -497,10 +597,27 @@ export default function ShiftScreen() {
                 />
               </View>
 
-              <TouchableOpacity style={[styles.destructiveBtn, { backgroundColor: theme.occupied, marginTop: 14 }]} onPress={closeShift} activeOpacity={0.8}>
-                <Ionicons name="log-out-outline" size={18} color="#ffffff" />
-                <Text style={styles.destructiveBtnText}>Close Shift</Text>
+              <TouchableOpacity
+                style={[styles.primaryActionBtn, { backgroundColor: theme.accent, marginTop: 14 }]}
+                onPress={submitHandover}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="lock-closed" size={18} color="#ffffff" />
+                <Text style={styles.primaryActionText}>Lock Drawer & Submit Handover</Text>
               </TouchableOpacity>
+
+              {/* Owner Solo Direct Close Fallback */}
+              {activeStaff?.role === 'owner' && (
+                <TouchableOpacity
+                  style={{ marginTop: 12, paddingVertical: 10, alignItems: 'center' }}
+                  onPress={closeShift}
+                  activeOpacity={0.7}
+                >
+                  <Text style={{ fontSize: 13, color: theme.textSecondary, textDecorationLine: 'underline' }}>
+                    Solo Property Owner Direct Close (Bypass Handover)
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </>
         )}

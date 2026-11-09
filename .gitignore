@@ -21,35 +21,42 @@ expo-env.d.ts
 # Metro
 .metro-health-check*
 
-# debug
+# debug & logs
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+*.log
 
 # macOS
 .DS_Store
 *.pem
 
-# local env files
+# Environment files & secrets
 .env
 .env*.local
 .env.*
+!.env.example
 
-# typescript
+# TypeScript
 *.tsbuildinfo
 
-example
+example/
 
-# generated native folders
+# Generated native folders
 /ios
 /android
 
-# database dumps and backups
+# Database dumps and sensitive SQL data
 logstay-*.sql
 *.backup
 *.dump
+supabase/.temp/
 
-# graphify
-graphify-out/
+# Test coverage & reports
+coverage/
+*.lcov
+TEST_FINDINGS.md
 
+# Documentation / drafts
 Docs/
+graphify-out/

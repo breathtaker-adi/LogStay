@@ -74,10 +74,15 @@ export default function HomeScreen() {
     checkOuts: 0,
     paymentsTotal: 0,
     paymentsCount: 0,
-    shiftStatus: 'No Shift' as 'Open' | 'Closed' | 'No Shift',
+    shiftStatus: 'No Shift' as 'Open' | 'Closed' | 'Pending Handover' | 'No Shift',
     shiftCash: 0,
     paymentDueCount: 0,
     paymentDueTotal: 0,
+    dueOutCount: 0,
+    overdueCount: 0,
+    pendingApprovals: 0,
+    handoverPending: false,
+    unverifiedUpiCount: 0,
   });
 
   // Drawer Animation State
@@ -339,12 +344,17 @@ export default function HomeScreen() {
         } else if (state === 'maintenance') maintC++;
         else freeC++;
 
+        const isDorm = room?.kind === 'dorm';
+        const displayLabel = !isDorm || u.label === room?.label
+          ? (room?.label ? `Room ${room.label}` : u.label)
+          : `${room?.label || 'Dorm'} • Bed ${u.label}`;
+
         return {
           id: u.id,
-          label: `${room?.label || 'Room'} - ${u.label}`,
+          label: displayLabel,
           status: state,
           roomId: room?.id,
-          isDorm: room?.kind === 'dorm'
+          isDorm
         };
       });
 
@@ -459,9 +469,18 @@ export default function HomeScreen() {
         const paymentsTotal = (paymentsData || []).reduce((acc: number, p: any) => acc + (parseFloat(p.amount) || 0), 0);
         const paymentsCount = paymentsData?.length || 0;
 
-        // 4. Payment Due on Active Stays
+        // 4. Payment Due on Active Stays + Due Out / Overdue + UPI verification
         let dueCount = 0;
         let dueTotal = 0;
+        let dueOutCount = 0;
+        let overdueCount = 0;
+        let unverifiedUpiCount = 0;
+
+        const now = new Date();
+        const nowIso = now.toISOString();
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+        const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999).toISOString();
+
         (activeStays || []).forEach((s: any) => {
           const tot = parseFloat(s.amount) || 0;
           const paid = parseFloat(s.paid_amount) || 0;
@@ -469,17 +488,54 @@ export default function HomeScreen() {
             dueCount++;
             dueTotal += (tot - paid);
           }
+          if (s.pay_mode === 'upi' && !s.upi_verified) {
+            unverifiedUpiCount++;
+          }
+          if (s.expected_checkout) {
+            if (s.expected_checkout < nowIso) {
+              overdueCount++;
+            } else if (s.expected_checkout >= startOfDay && s.expected_checkout <= endOfDay) {
+              dueOutCount++;
+            }
+          }
         });
+
+        // 5. Shift Handover status
+        const { data: handoverShift } = await supabase
+          .from('shifts')
+          .select('id, closing_cash, status')
+          .eq('property_id', memberData.property_id)
+          .eq('status', 'pending_handover')
+          .limit(1)
+          .maybeSingle();
+
+        // 6. Pending Managerial Approvals
+        let pendingApprovalsCount = 0;
+        try {
+          const { count: appCount } = await supabase
+            .from('approval_requests')
+            .select('id', { count: 'exact', head: true })
+            .eq('property_id', memberData.property_id)
+            .eq('status', 'pending');
+          pendingApprovalsCount = appCount || 0;
+        } catch {
+          // Non-blocking
+        }
 
         setTodayActivities({
           checkIns: checkInsCount || (activeStays?.length || 0),
           checkOuts: checkOutsCount || 0,
           paymentsTotal,
           paymentsCount,
-          shiftStatus: shiftData ? 'Open' : 'Closed',
-          shiftCash: shiftData ? (shiftData.opening_cash || 0) : 0,
+          shiftStatus: handoverShift ? 'Pending Handover' : (shiftData ? 'Open' : 'Closed'),
+          shiftCash: shiftData ? (shiftData.opening_cash || 0) : (handoverShift ? (handoverShift.closing_cash || 0) : 0),
           paymentDueCount: dueCount,
           paymentDueTotal: dueTotal,
+          dueOutCount,
+          overdueCount,
+          pendingApprovals: pendingApprovalsCount,
+          handoverPending: Boolean(handoverShift),
+          unverifiedUpiCount,
         });
       } catch (opErr) {
         console.error('Error fetching today operations:', opErr);
@@ -871,6 +927,50 @@ export default function HomeScreen() {
               </View>
             </TouchableOpacity>
 
+            {/* 2.5. Due Out & Overdue Stays Row */}
+            <TouchableOpacity
+              style={[styles.operationRow, styles.operationRowBorder, { borderBottomColor: theme.separator }]}
+              onPress={() => router.push('/rooms')}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+            >
+              <View style={[styles.operationIconBox, { backgroundColor: todayActivities.overdueCount > 0 ? theme.occupiedSubtle : theme.freeSubtle }]}>
+                <Ionicons
+                  name={todayActivities.overdueCount > 0 ? "alert-circle" : "time-outline"}
+                  size={20}
+                  color={todayActivities.overdueCount > 0 ? theme.occupied : theme.free}
+                />
+              </View>
+              <View style={styles.operationContent}>
+                <Text style={[styles.operationTitle, { color: theme.text }]}>Due Out & Overdue</Text>
+                <Text style={[styles.operationSub, { color: todayActivities.overdueCount > 0 ? theme.occupied : theme.textSecondary }]}>
+                  {todayActivities.overdueCount > 0
+                    ? `⚠️ ${todayActivities.overdueCount} guest(s) overdue for checkout`
+                    : (todayActivities.dueOutCount > 0
+                        ? `${todayActivities.dueOutCount} guest(s) expected to depart today`
+                        : 'All active guests within booked duration')}
+                </Text>
+              </View>
+              <View style={styles.operationTrailing}>
+                <View
+                  style={[
+                    styles.operationBadge,
+                    { backgroundColor: todayActivities.overdueCount > 0 ? theme.occupiedSubtle : theme.freeSubtle }
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.operationBadgeText,
+                      { color: todayActivities.overdueCount > 0 ? theme.occupied : theme.free }
+                    ]}
+                  >
+                    {todayActivities.overdueCount > 0 ? `${todayActivities.overdueCount} Overdue` : `${todayActivities.dueOutCount} Due`}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
+              </View>
+            </TouchableOpacity>
+
             {/* 3. Payments Collected Row */}
             <TouchableOpacity
               style={[styles.operationRow, styles.operationRowBorder, { borderBottomColor: theme.separator }]}
@@ -879,8 +979,8 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityLabel={`Payments collected: ₹${todayActivities.paymentsTotal}`}
             >
-              <View style={[styles.operationIconBox, { backgroundColor: '#ecfdf5' }]}>
-                <Ionicons name="cash-outline" size={20} color="#16a34a" />
+              <View style={[styles.operationIconBox, { backgroundColor: theme.freeSubtle }]}>
+                <Ionicons name="cash-outline" size={20} color={theme.free} />
               </View>
               <View style={styles.operationContent}>
                 <Text style={[styles.operationTitle, { color: theme.text }]}>Payments Collected</Text>
@@ -889,8 +989,8 @@ export default function HomeScreen() {
                 </Text>
               </View>
               <View style={styles.operationTrailing}>
-                <View style={[styles.operationBadge, { backgroundColor: '#ecfdf5' }]}>
-                  <Text style={[styles.operationBadgeText, { color: '#16a34a' }]}>
+                <View style={[styles.operationBadge, { backgroundColor: theme.freeSubtle }]}>
+                  <Text style={[styles.operationBadgeText, { color: theme.free }]}>
                     ₹{todayActivities.paymentsTotal.toLocaleString('en-IN')}
                   </Text>
                 </View>
@@ -906,29 +1006,35 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityLabel={`Shift status: ${todayActivities.shiftStatus}`}
             >
-              <View style={[styles.operationIconBox, { backgroundColor: '#fff7ed' }]}>
-                <Ionicons name="swap-horizontal-outline" size={20} color="#ea580c" />
+              <View style={[styles.operationIconBox, { backgroundColor: todayActivities.handoverPending ? theme.dirtySubtle : theme.surfaceSubtle }]}>
+                <Ionicons
+                  name={todayActivities.handoverPending ? "people" : "swap-horizontal-outline"}
+                  size={20}
+                  color={todayActivities.handoverPending ? theme.dirty : theme.accent}
+                />
               </View>
               <View style={styles.operationContent}>
                 <Text style={[styles.operationTitle, { color: theme.text }]}>Shift Change & Drawer</Text>
-                <Text style={[styles.operationSub, { color: theme.textSecondary }]}>
-                  {todayActivities.shiftStatus === 'Open' ? `Active Drawer • ₹${todayActivities.shiftCash} float` : 'No active shift open'}
+                <Text style={[styles.operationSub, { color: todayActivities.handoverPending ? theme.dirty : theme.textSecondary }]}>
+                  {todayActivities.handoverPending
+                    ? '🤝 Handover pending: incoming staff please accept'
+                    : (todayActivities.shiftStatus === 'Open' ? `Active Drawer • ₹${todayActivities.shiftCash} float` : 'No active shift open')}
                 </Text>
               </View>
               <View style={styles.operationTrailing}>
                 <View
                   style={[
                     styles.operationBadge,
-                    { backgroundColor: todayActivities.shiftStatus === 'Open' ? '#dcfce7' : '#f3f4f6' }
+                    { backgroundColor: todayActivities.handoverPending ? theme.dirtySubtle : (todayActivities.shiftStatus === 'Open' ? theme.freeSubtle : theme.surfaceSubtle) }
                   ]}
                 >
                   <Text
                     style={[
                       styles.operationBadgeText,
-                      { color: todayActivities.shiftStatus === 'Open' ? '#15803d' : '#6b7280' }
+                      { color: todayActivities.handoverPending ? theme.dirty : (todayActivities.shiftStatus === 'Open' ? theme.free : theme.textSecondary) }
                     ]}
                   >
-                    {todayActivities.shiftStatus}
+                    {todayActivities.handoverPending ? 'Handover' : todayActivities.shiftStatus}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
@@ -937,17 +1043,17 @@ export default function HomeScreen() {
 
             {/* 5. Payment Due / Unsettled Folios */}
             <TouchableOpacity
-              style={styles.operationRow}
+              style={[styles.operationRow, styles.operationRowBorder, { borderBottomColor: theme.separator }]}
               onPress={() => router.push(can('guests') ? '/guests' : '/rooms')}
               activeOpacity={0.7}
               accessibilityRole="button"
               accessibilityLabel={`Payment Due: ${todayActivities.paymentDueCount} folios, ₹${todayActivities.paymentDueTotal}`}
             >
-              <View style={[styles.operationIconBox, { backgroundColor: todayActivities.paymentDueCount > 0 ? '#fef2f2' : '#f0fdf4' }]}>
+              <View style={[styles.operationIconBox, { backgroundColor: todayActivities.paymentDueCount > 0 ? theme.occupiedSubtle : theme.freeSubtle }]}>
                 <Ionicons
                   name={todayActivities.paymentDueCount > 0 ? "alert-circle-outline" : "checkmark-circle-outline"}
                   size={20}
-                  color={todayActivities.paymentDueCount > 0 ? "#dc2626" : "#16a34a"}
+                  color={todayActivities.paymentDueCount > 0 ? theme.occupied : theme.free}
                 />
               </View>
               <View style={styles.operationContent}>
@@ -962,13 +1068,13 @@ export default function HomeScreen() {
                 <View
                   style={[
                     styles.operationBadge,
-                    { backgroundColor: todayActivities.paymentDueCount > 0 ? '#fee2e2' : '#dcfce7' }
+                    { backgroundColor: todayActivities.paymentDueCount > 0 ? theme.occupiedSubtle : theme.freeSubtle }
                   ]}
                 >
                   <Text
                     style={[
                       styles.operationBadgeText,
-                      { color: todayActivities.paymentDueCount > 0 ? '#dc2626' : '#15803d' }
+                      { color: todayActivities.paymentDueCount > 0 ? theme.occupied : theme.free }
                     ]}
                   >
                     {todayActivities.paymentDueCount > 0 ? `₹${todayActivities.paymentDueTotal.toLocaleString('en-IN')}` : 'Settled'}
@@ -977,6 +1083,92 @@ export default function HomeScreen() {
                 <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
               </View>
             </TouchableOpacity>
+
+            {/* 6. Manager Approvals Row */}
+            <TouchableOpacity
+              style={[styles.operationRow, (activeStaff?.role === 'owner' || activeStaff?.role === 'co_admin') ? [styles.operationRowBorder, { borderBottomColor: theme.separator }] : null]}
+              onPress={() => router.push('/approvals')}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+            >
+              <View style={[styles.operationIconBox, { backgroundColor: todayActivities.pendingApprovals > 0 ? theme.dirtySubtle : theme.freeSubtle }]}>
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={20}
+                  color={todayActivities.pendingApprovals > 0 ? theme.dirty : theme.free}
+                />
+              </View>
+              <View style={styles.operationContent}>
+                <Text style={[styles.operationTitle, { color: theme.text }]}>Manager Approvals</Text>
+                <Text style={[styles.operationSub, { color: theme.textSecondary }]}>
+                  {todayActivities.pendingApprovals > 0
+                    ? `${todayActivities.pendingApprovals} refund/discount requests awaiting decision`
+                    : 'All discount & refund requests reviewed'}
+                </Text>
+              </View>
+              <View style={styles.operationTrailing}>
+                <View
+                  style={[
+                    styles.operationBadge,
+                    { backgroundColor: todayActivities.pendingApprovals > 0 ? theme.dirtySubtle : theme.freeSubtle }
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.operationBadgeText,
+                      { color: todayActivities.pendingApprovals > 0 ? theme.dirty : theme.free }
+                    ]}
+                  >
+                    {todayActivities.pendingApprovals > 0 ? `${todayActivities.pendingApprovals} Pending` : 'Clear'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
+              </View>
+            </TouchableOpacity>
+
+            {/* 7. UPI Reconciliation Row (Owner & Co-Admin only) */}
+            {(activeStaff?.role === 'owner' || activeStaff?.role === 'co_admin') && (
+              <TouchableOpacity
+                style={styles.operationRow}
+                onPress={() => router.push('/upi-reconciliation')}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+              >
+                <View style={[styles.operationIconBox, { backgroundColor: todayActivities.unverifiedUpiCount > 0 ? '#fff7ed' : '#ecfdf5' }]}>
+                  <Ionicons
+                    name="qr-code-outline"
+                    size={20}
+                    color={todayActivities.unverifiedUpiCount > 0 ? "#ea580c" : "#16a34a"}
+                  />
+                </View>
+                <View style={styles.operationContent}>
+                  <Text style={[styles.operationTitle, { color: theme.text }]}>UPI Reconciliation</Text>
+                  <Text style={[styles.operationSub, { color: theme.textSecondary }]}>
+                    {todayActivities.unverifiedUpiCount > 0
+                      ? `⚠️ ${todayActivities.unverifiedUpiCount} UPI payment(s) awaiting bank statement match`
+                      : 'All UPI payments matched with bank'}
+                  </Text>
+                </View>
+                <View style={styles.operationTrailing}>
+                  <View
+                    style={[
+                      styles.operationBadge,
+                      { backgroundColor: todayActivities.unverifiedUpiCount > 0 ? '#ffedd5' : '#dcfce7' }
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.operationBadgeText,
+                        { color: todayActivities.unverifiedUpiCount > 0 ? '#c2410c' : '#15803d' }
+                      ]}
+                    >
+                      {todayActivities.unverifiedUpiCount > 0 ? `${todayActivities.unverifiedUpiCount} Unverified` : 'Matched'}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
+                </View>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </ScrollView>
@@ -1305,7 +1497,10 @@ export default function HomeScreen() {
                               router.push(`/checkin?unitId=${u.id}` as any);
                             });
                           }}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                           activeOpacity={0.8}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Check in to ${u.label}`}
                         >
                           <Text style={styles.sheetCheckInPillText}>Check In</Text>
                         </TouchableOpacity>

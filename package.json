@@ -46,9 +46,11 @@
   },
   "devDependencies": {
     "@types/react": "~19.3.0",
+    "@vitest/coverage-v8": "^5.1.0",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~58.0.4",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "^5.1.0"
   },
   "scripts": {
     "start": "expo start",
@@ -57,7 +59,8 @@
     "web": "expo start --web",
     "start:router": "expo-router/entry",
     "lint": "expo lint",
-    "test": "node scripts/test-floors.mjs && node scripts/test-mrz.mjs && node scripts/test-anomaly.mjs && node scripts/fault-injection-tests.mjs && node scripts/test-whatsapp.mjs && node scripts/test-invites.mjs && node scripts/test-team-hierarchy.mjs",
+    "test": "vitest run && node scripts/test-floors.mjs && node scripts/test-mrz.mjs && node scripts/test-anomaly.mjs && node scripts/fault-injection-tests.mjs && node scripts/test-whatsapp.mjs && node scripts/test-invites.mjs && node scripts/test-team-hierarchy.mjs && node scripts/test-hardening-handover-approvals.mjs",
+    "test:unit": "vitest run",
     "test:mrz": "node scripts/test-mrz.mjs",
     "test:anomaly": "node scripts/test-anomaly.mjs",
     "test:faults": "node scripts/fault-injection-tests.mjs",

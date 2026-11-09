@@ -1,6 +1,7 @@
 // src/app/concierge.tsx
 // Guest Wi-Fi & Info — Apple HIG Dedicated Configuration Screen
 // Manages Wi-Fi credentials, maps location, Google reviews link, and house rules.
+// Supports direct save by Owner & Co-Admin, and approval workflow for Front Desk.
 
 import React, { useState, useEffect } from "react";
 import {
@@ -14,7 +15,7 @@ import {
   TouchableOpacity,
   Linking,
   KeyboardAvoidingView,
-  Platform
+  Platform,
 } from "react-native";
 import { router } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -27,12 +28,19 @@ import { Fonts } from "@/constants/theme";
 export default function GuestConciergeScreen() {
   const theme = useTheme();
   const { activeStaff } = useStaff();
+
   const isOwner = activeStaff?.role === 'owner';
+  const isCoAdmin = activeStaff?.role === 'co_admin';
+  const isDesk = activeStaff?.role === 'desk';
+  const canDirectSave = isOwner || isCoAdmin;
+  const canPropose = isDesk;
+  const canEdit = canDirectSave || canPropose;
 
   const [propertyId, setPropertyId] = useState<string>("");
   const [propertyName, setPropertyName] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [reviewing, setReviewing] = useState(false);
 
   // Form inputs
   const [wifiSsid, setWifiSsid] = useState("");
@@ -40,6 +48,9 @@ export default function GuestConciergeScreen() {
   const [googleMapsUrl, setGoogleMapsUrl] = useState("");
   const [googleReviewUrl, setGoogleReviewUrl] = useState("");
   const [houseRules, setHouseRules] = useState("");
+
+  // Pending proposal state
+  const [pendingConcierge, setPendingConcierge] = useState<any>(null);
 
   const loadData = async () => {
     try {
@@ -58,7 +69,7 @@ export default function GuestConciergeScreen() {
 
       const { data: prop } = await supabase
         .from('properties')
-        .select('name, wifi_ssid, wifi_password, google_maps_url, google_review_url, house_rules')
+        .select('name, wifi_ssid, wifi_password, google_maps_url, google_review_url, house_rules, pending_concierge')
         .eq('id', member.property_id)
         .single();
 
@@ -69,6 +80,7 @@ export default function GuestConciergeScreen() {
         setGoogleMapsUrl(prop.google_maps_url || "");
         setGoogleReviewUrl(prop.google_review_url || "");
         setHouseRules(prop.house_rules || "");
+        setPendingConcierge(prop.pending_concierge || null);
       }
     } catch (err) {
       console.error("Error loading concierge data", err);
@@ -82,43 +94,130 @@ export default function GuestConciergeScreen() {
   }, []);
 
   const handleSave = async () => {
-    if (!isOwner) {
-      return Alert.alert('Restricted', 'Only the property owner can update guest concierge settings.');
+    if (!canEdit) {
+      return Alert.alert('Restricted', 'Only the Owner, Co-Admin, or Front Desk staff can edit concierge settings.');
     }
     if (!propertyId) return;
 
     setSaving(true);
     try {
       const payload = {
-        wifi_ssid: wifiSsid.trim(),
-        wifi_password: wifiPassword.trim(),
-        google_maps_url: googleMapsUrl.trim(),
-        google_review_url: googleReviewUrl.trim(),
-        house_rules: houseRules.trim(),
+        p_prop_id: propertyId,
+        p_wifi_ssid: wifiSsid.trim(),
+        p_wifi_password: wifiPassword.trim(),
+        p_google_maps_url: googleMapsUrl.trim(),
+        p_google_review_url: googleReviewUrl.trim(),
+        p_house_rules: houseRules.trim(),
       };
 
-      const { error: rpcError } = await supabase.rpc('owner_update_concierge_settings', {
-        p_prop_id: propertyId,
-        p_wifi_ssid: payload.wifi_ssid,
-        p_wifi_password: payload.wifi_password,
-        p_google_maps_url: payload.google_maps_url,
-        p_google_review_url: payload.google_review_url,
-        p_house_rules: payload.house_rules,
-      });
+      const { data: resultAction, error: rpcError } = await supabase.rpc('save_concierge_settings', payload);
 
       if (rpcError) {
-        const { error: tblError } = await supabase
-          .from('properties')
-          .update(payload)
-          .eq('id', propertyId);
-        if (tblError) throw tblError;
+        // Fallback if RPC fails or table direct update
+        if (canDirectSave) {
+          const { error: tblError } = await supabase
+            .from('properties')
+            .update({
+              wifi_ssid: payload.p_wifi_ssid,
+              wifi_password: payload.p_wifi_password,
+              google_maps_url: payload.p_google_maps_url,
+              google_review_url: payload.p_google_review_url,
+              house_rules: payload.p_house_rules,
+              pending_concierge: null,
+            })
+            .eq('id', propertyId);
+          if (tblError) throw tblError;
+          setPendingConcierge(null);
+          Alert.alert('Saved', 'Guest Wi-Fi and concierge info updated successfully.');
+        } else {
+          // Front desk fallback
+          const pendingObj = {
+            wifi_ssid: payload.p_wifi_ssid,
+            wifi_password: payload.p_wifi_password,
+            google_maps_url: payload.p_google_maps_url,
+            google_review_url: payload.p_google_review_url,
+            house_rules: payload.p_house_rules,
+            submitted_by: activeStaff?.name || 'Front Desk',
+            submitted_at: new Date().toISOString(),
+          };
+          const { error: tblError } = await supabase
+            .from('properties')
+            .update({ pending_concierge: pendingObj })
+            .eq('id', propertyId);
+          if (tblError) throw tblError;
+          setPendingConcierge(pendingObj);
+          Alert.alert('Proposal Submitted', 'Your concierge changes have been submitted to the Owner / Co-Admin for review.');
+        }
+      } else {
+        if (resultAction === 'saved' || canDirectSave) {
+          setPendingConcierge(null);
+          Alert.alert('Saved', 'Guest Wi-Fi and concierge info updated successfully.');
+        } else {
+          setPendingConcierge({
+            wifi_ssid: payload.p_wifi_ssid,
+            wifi_password: payload.p_wifi_password,
+            google_maps_url: payload.p_google_maps_url,
+            google_review_url: payload.p_google_review_url,
+            house_rules: payload.p_house_rules,
+            submitted_by: activeStaff?.name || 'Front Desk',
+            submitted_at: new Date().toISOString(),
+          });
+          Alert.alert('Proposal Submitted', 'Your concierge update has been submitted for Owner / Co-Admin approval.');
+        }
       }
-
-      Alert.alert('Saved', 'Guest Wi-Fi and concierge info updated successfully.');
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Could not save concierge settings.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleReviewProposal = async (approve: boolean) => {
+    if (!canDirectSave) return;
+    setReviewing(true);
+    try {
+      const { error } = await supabase.rpc('review_concierge_proposal', {
+        p_prop_id: propertyId,
+        p_approve: approve,
+      });
+
+      if (error) {
+        // Fallback direct table update
+        if (approve && pendingConcierge) {
+          await supabase
+            .from('properties')
+            .update({
+              wifi_ssid: pendingConcierge.wifi_ssid,
+              wifi_password: pendingConcierge.wifi_password,
+              google_maps_url: pendingConcierge.google_maps_url,
+              google_review_url: pendingConcierge.google_review_url,
+              house_rules: pendingConcierge.house_rules,
+              pending_concierge: null,
+            })
+            .eq('id', propertyId);
+        } else {
+          await supabase
+            .from('properties')
+            .update({ pending_concierge: null })
+            .eq('id', propertyId);
+        }
+      }
+
+      if (approve && pendingConcierge) {
+        setWifiSsid(pendingConcierge.wifi_ssid || "");
+        setWifiPassword(pendingConcierge.wifi_password || "");
+        setGoogleMapsUrl(pendingConcierge.google_maps_url || "");
+        setGoogleReviewUrl(pendingConcierge.google_review_url || "");
+        setHouseRules(pendingConcierge.house_rules || "");
+        Alert.alert('Proposal Approved', 'The concierge updates are now live for all guests and WhatsApp kits.');
+      } else {
+        Alert.alert('Proposal Declined', 'The proposed changes were discarded.');
+      }
+      setPendingConcierge(null);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Could not review proposal.');
+    } finally {
+      setReviewing(false);
     }
   };
 
@@ -181,6 +280,97 @@ export default function GuestConciergeScreen() {
               </View>
             </View>
 
+            {/* Pending Proposal Review Card for Owner / Co-Admin */}
+            {pendingConcierge && canDirectSave && (
+              <View style={[styles.reviewCard, { backgroundColor: theme.dirtySubtle, borderColor: theme.dirty }]}>
+                <View style={styles.reviewHeaderRow}>
+                  <Ionicons name="time" size={18} color={theme.dirty} />
+                  <Text style={[styles.reviewHeaderTitle, { color: theme.dirty }]}>
+                    Pending Update from {pendingConcierge.submitted_by || 'Front Desk'}
+                  </Text>
+                </View>
+                <Text style={[styles.reviewSubText, { color: theme.textSecondary }]}>
+                  Front Desk has proposed the following changes to guest concierge info:
+                </Text>
+
+                <View style={[styles.reviewDetailsBox, { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1 }]}>
+                  {pendingConcierge.wifi_ssid ? (
+                    <Text style={[styles.reviewDetailItem, { color: theme.text }]}>
+                      <Text style={{ fontWeight: '700' }}>Wi-Fi SSID: </Text>
+                      {pendingConcierge.wifi_ssid}
+                    </Text>
+                  ) : null}
+                  {pendingConcierge.wifi_password ? (
+                    <Text style={[styles.reviewDetailItem, { color: theme.text }]}>
+                      <Text style={{ fontWeight: '700' }}>Password: </Text>
+                      {pendingConcierge.wifi_password}
+                    </Text>
+                  ) : null}
+                  {pendingConcierge.google_maps_url ? (
+                    <Text style={[styles.reviewDetailItem, { color: theme.text }]}>
+                      <Text style={{ fontWeight: '700' }}>Maps: </Text>
+                      {pendingConcierge.google_maps_url}
+                    </Text>
+                  ) : null}
+                  {pendingConcierge.google_review_url ? (
+                    <Text style={[styles.reviewDetailItem, { color: theme.text }]}>
+                      <Text style={{ fontWeight: '700' }}>Reviews: </Text>
+                      {pendingConcierge.google_review_url}
+                    </Text>
+                  ) : null}
+                  {pendingConcierge.house_rules ? (
+                    <Text style={[styles.reviewDetailItem, { color: theme.text }]}>
+                      <Text style={{ fontWeight: '700' }}>Rules: </Text>
+                      {pendingConcierge.house_rules}
+                    </Text>
+                  ) : null}
+                </View>
+
+                <View style={styles.reviewBtnRow}>
+                  <TouchableOpacity
+                    style={[styles.reviewDeclineBtn, { borderColor: theme.destructive, backgroundColor: theme.surface }]}
+                    onPress={() => handleReviewProposal(false)}
+                    disabled={reviewing}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close" size={16} color={theme.destructive} />
+                    <Text style={[styles.reviewDeclineText, { color: theme.destructive }]}>Decline</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.reviewApproveBtn, { backgroundColor: theme.free }]}
+                    onPress={() => handleReviewProposal(true)}
+                    disabled={reviewing}
+                    activeOpacity={0.8}
+                  >
+                    {reviewing ? (
+                      <ActivityIndicator size="small" color="#ffffff" />
+                    ) : (
+                      <>
+                        <Ionicons name="checkmark" size={16} color="#ffffff" />
+                        <Text style={styles.reviewApproveText}>Approve & Apply</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* Pending Notice for Front Desk */}
+            {pendingConcierge && isDesk && (
+              <View style={[styles.infoBanner, { backgroundColor: theme.dirtySubtle, borderColor: theme.dirty }]}>
+                <Ionicons name="hourglass-outline" size={20} color={theme.dirty} style={{ marginTop: 2 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.infoBannerTitle, { color: theme.dirty }]}>
+                    Update Awaiting Approval
+                  </Text>
+                  <Text style={[styles.infoBannerBody, { color: theme.textSecondary }]}>
+                    Your submitted concierge modifications are currently waiting for Owner or Co-Admin review.
+                  </Text>
+                </View>
+              </View>
+            )}
+
             {/* Inset Group 1: Wi-Fi Credentials */}
             <Text style={[styles.groupHeader, { color: theme.textSecondary }]}>WI-FI ACCESS</Text>
             <View style={[styles.groupedCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
@@ -195,7 +385,7 @@ export default function GuestConciergeScreen() {
                   placeholderTextColor={theme.textTertiary}
                   value={wifiSsid}
                   onChangeText={setWifiSsid}
-                  editable={isOwner}
+                  editable={canEdit}
                   autoCapitalize="none"
                 />
               </View>
@@ -211,7 +401,7 @@ export default function GuestConciergeScreen() {
                   placeholderTextColor={theme.textTertiary}
                   value={wifiPassword}
                   onChangeText={setWifiPassword}
-                  editable={isOwner}
+                  editable={canEdit}
                   autoCapitalize="none"
                 />
               </View>
@@ -243,7 +433,7 @@ export default function GuestConciergeScreen() {
                   placeholderTextColor={theme.textTertiary}
                   value={googleMapsUrl}
                   onChangeText={setGoogleMapsUrl}
-                  editable={isOwner}
+                  editable={canEdit}
                   autoCapitalize="none"
                   keyboardType="url"
                 />
@@ -272,7 +462,7 @@ export default function GuestConciergeScreen() {
                   placeholderTextColor={theme.textTertiary}
                   value={googleReviewUrl}
                   onChangeText={setGoogleReviewUrl}
-                  editable={isOwner}
+                  editable={canEdit}
                   autoCapitalize="none"
                   keyboardType="url"
                 />
@@ -289,7 +479,7 @@ export default function GuestConciergeScreen() {
                   placeholderTextColor={theme.textTertiary}
                   value={houseRules}
                   onChangeText={setHouseRules}
-                  editable={isOwner}
+                  editable={canEdit}
                   multiline
                   numberOfLines={4}
                   textAlignVertical="top"
@@ -297,10 +487,13 @@ export default function GuestConciergeScreen() {
               </View>
             </View>
 
-            {/* Save Button for Owner */}
-            {isOwner ? (
+            {/* Save / Submit Button */}
+            {canEdit ? (
               <TouchableOpacity
-                style={[styles.saveBtn, { backgroundColor: theme.accent }]}
+                style={[
+                  styles.saveBtn,
+                  { backgroundColor: canDirectSave ? theme.accent : '#f59e0b' },
+                ]}
                 onPress={handleSave}
                 disabled={saving}
                 activeOpacity={0.8}
@@ -309,8 +502,14 @@ export default function GuestConciergeScreen() {
                   <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
                   <>
-                    <Ionicons name="checkmark-sharp" size={18} color="#ffffff" />
-                    <Text style={styles.saveBtnText}>Save Concierge Info</Text>
+                    <Ionicons
+                      name={canDirectSave ? "checkmark-sharp" : "paper-plane-outline"}
+                      size={18}
+                      color="#ffffff"
+                    />
+                    <Text style={styles.saveBtnText}>
+                      {canDirectSave ? "Save Concierge Info" : "Submit Update for Approval"}
+                    </Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -318,7 +517,7 @@ export default function GuestConciergeScreen() {
               <View style={[styles.readOnlyNote, { backgroundColor: theme.surfaceSubtle }]}>
                 <Ionicons name="lock-closed-outline" size={15} color={theme.textTertiary} />
                 <Text style={[styles.readOnlyNoteText, { color: theme.textSecondary }]}>
-                  Concierge details can only be edited by the property owner.
+                  Concierge details can only be edited by the Owner, Co-Admin, or Front Desk.
                 </Text>
               </View>
             )}
@@ -365,6 +564,73 @@ const styles = StyleSheet.create({
   },
   infoBannerTitle: { fontSize: 14, fontWeight: '700', marginBottom: 2 },
   infoBannerBody: { fontSize: 12, lineHeight: 17 },
+
+  // Review card styles
+  reviewCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 20,
+  },
+  reviewHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  reviewHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  reviewSubText: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 10,
+  },
+  reviewDetailsBox: {
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 12,
+    gap: 4,
+  },
+  reviewDetailItem: {
+    fontSize: 13,
+    color: '#1f2937',
+  },
+  reviewBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  reviewDeclineBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 10,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#ffffff',
+  },
+  reviewDeclineText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  reviewApproveBtn: {
+    flex: 1.4,
+    height: 38,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  reviewApproveText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
   groupHeader: {
     fontSize: 12,
     fontWeight: '700',
@@ -476,4 +742,3 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.sans,
   },
 });
-

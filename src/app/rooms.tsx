@@ -265,6 +265,7 @@ export default function RoomsScreen() {
                   : { backgroundColor: theme.backgroundSubtle, borderColor: theme.separator }
               ]}
               onPress={() => setSelectedFloor('all')}
+              hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
               accessibilityRole="button"
               accessibilityLabel={`All floors, ${rooms.length} rooms`}
             >
@@ -296,6 +297,7 @@ export default function RoomsScreen() {
                       : { backgroundColor: theme.backgroundSubtle, borderColor: theme.separator }
                   ]}
                   onPress={() => setSelectedFloor(isSelected ? 'all' : fg.floor)}
+                  hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
                   accessibilityRole="button"
                   accessibilityLabel={`${fg.chipLabel}, ${fg.data.length} rooms`}
                 >
@@ -331,6 +333,7 @@ export default function RoomsScreen() {
                 : { backgroundColor: theme.backgroundSubtle, borderColor: theme.separator }
             ]}
             onPress={() => setFilterWithAnimation(null)}
+            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
             accessibilityRole="button"
             accessibilityLabel={`All beds, ${counts.totalBeds} total`}
           >
@@ -353,6 +356,7 @@ export default function RoomsScreen() {
                 : { backgroundColor: theme.freeSubtle, borderColor: theme.freeSubtle }
             ]}
             onPress={() => setFilterWithAnimation(activeFilter === 'free' ? null : 'free')}
+            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
             accessibilityRole="button"
             accessibilityLabel={`Filter by Free beds, ${counts.free} available`}
           >
@@ -381,6 +385,7 @@ export default function RoomsScreen() {
                 : { backgroundColor: theme.occupiedSubtle, borderColor: theme.occupiedSubtle }
             ]}
             onPress={() => setFilterWithAnimation(activeFilter === 'occupied' ? null : 'occupied')}
+            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
             accessibilityRole="button"
             accessibilityLabel={`Filter by Occupied beds, ${counts.occupied} occupied`}
           >
@@ -409,6 +414,7 @@ export default function RoomsScreen() {
                 : { backgroundColor: theme.dirtySubtle, borderColor: theme.dirtySubtle }
             ]}
             onPress={() => setFilterWithAnimation(activeFilter === 'dirty' ? null : 'dirty')}
+            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
             accessibilityRole="button"
             accessibilityLabel={`Filter by Dirty beds, ${counts.dirty} dirty`}
           >
@@ -437,6 +443,7 @@ export default function RoomsScreen() {
                 : { backgroundColor: theme.maintenanceSubtle, borderColor: theme.separator }
             ]}
             onPress={() => setFilterWithAnimation(activeFilter === 'maintenance' ? null : 'maintenance')}
+            hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
             accessibilityRole="button"
             accessibilityLabel={`Filter by Maintenance beds, ${counts.maintenance} in maintenance`}
           >

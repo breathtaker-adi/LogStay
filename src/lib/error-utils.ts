@@ -91,9 +91,19 @@ export function formatFriendlyError(
     return 'You cannot remove yourself from the active team.';
   }
 
-  // Foreign keys
-  if (lower.includes('foreign key') || lower.includes('violates foreign key')) {
+  // PostgREST & Database Error Codes
+  const code = String(err?.code || '').toUpperCase();
+  if (code === '22P02' || lower.includes('invalid input syntax for type uuid')) {
+    return 'Invalid ID or format provided.';
+  }
+  if (code === '23505' || lower.includes('unique constraint') || lower.includes('duplicate key')) {
+    return 'This record already exists in the system.';
+  }
+  if (code === '23503' || lower.includes('foreign key') || lower.includes('violates foreign key')) {
     return 'Cannot complete this action because other records are linked to this item.';
+  }
+  if (code === '23P01' || lower.includes('exclusion constraint')) {
+    return 'This resource conflicts with an existing active record.';
   }
 
   // Safe user-friendly message passthrough if short and devoid of tech jargon

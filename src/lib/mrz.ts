@@ -125,7 +125,7 @@ export function parseTD3(line1: string, line2: string): ParsedMRZ | null {
   const fullName = `${givenNames} ${surname}`.trim();
 
   // Line 2 data
-  const rawPassportNo = normalizeDigits(b.slice(0, 9));
+  const rawPassportNo = b.slice(0, 9);
   const passportCheck = Number(normalizeDigits(b[9]));
   const passportValid = checkDigit(rawPassportNo) === passportCheck;
 

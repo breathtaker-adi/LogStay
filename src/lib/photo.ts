@@ -88,3 +88,45 @@ export async function uploadBannerPhoto(
   }
 }
 
+/**
+ * Uploads a UPI barcode/QR photo to the storage bucket and returns a signed URL.
+ */
+export async function uploadUpiQrPhoto(
+  propertyId: string,
+  localUri: string
+): Promise<string> {
+  const filename = `upi_qr_${Date.now()}.jpg`;
+  const path = `${propertyId}/${filename}`;
+
+  try {
+    let uploadData: Uint8Array | Blob;
+    try {
+      const file = new File(localUri);
+      uploadData = await file.bytes();
+    } catch {
+      const response = await fetch(localUri);
+      uploadData = await response.blob();
+    }
+
+    const { error } = await supabase.storage.from("id_photos").upload(path, uploadData, {
+      contentType: "image/jpeg",
+      upsert: true,
+    });
+
+    if (error) {
+      console.warn("UPI QR storage upload fallback:", error.message);
+      return localUri;
+    }
+
+    const { data: signedData } = await supabase.storage
+      .from("id_photos")
+      .createSignedUrl(path, 60 * 60 * 24 * 365 * 2);
+
+    return signedData?.signedUrl || localUri;
+  } catch (e) {
+    console.warn("UPI QR photo upload failed, using local URI:", e);
+    return localUri;
+  }
+}
+
+

@@ -30,6 +30,7 @@ import { floorLabel, resolveFloorNo } from '@/lib/floors';
 import { parseTD3, ParsedMRZ } from '@/lib/mrz';
 import { useTheme } from '@/hooks/use-theme';
 import { buildWelcomeKitMessage, openWhatsApp } from '@/lib/whatsapp';
+import { StayCalendarModal } from '@/components/stay-calendar-modal';
 
 const ALL_DOCS = [
   { id: 'Passport', label: 'Passport', icon: 'book-outline' as const, tag: 'Form C' },
@@ -49,6 +50,9 @@ export default function CheckInScreen() {
   // Payment States
   const [amount, setAmount] = useState("");
   const [payMode, setPayMode] = useState<"cash" | "upi" | "pay_later">("cash");
+  const [nights, setNights] = useState<number>(1);
+  const [checkoutTime, setCheckoutTime] = useState<{ hours: number; minutes: number }>({ hours: 11, minutes: 0 });
+  const [showCalendarModal, setShowCalendarModal] = useState<boolean>(false);
   
   // Gender & Nationality
   const [gender, setGender] = useState("male");
@@ -75,7 +79,11 @@ export default function CheckInScreen() {
   const [mrzVerified, setMrzVerified] = useState(false);
 
   const [failedAttempts, setFailedAttempts] = useState(0);
-  const [selectedCheckinFloor, setSelectedCheckinFloor] = useState<string | null>(null);
+
+  // Dedicated Room / Bed Selector Modal states
+  const [showBedModal, setShowBedModal] = useState(false);
+  const [modalFloor, setModalFloor] = useState<string | null>(null);
+  const [bedSearchQuery, setBedSearchQuery] = useState("");
 
   const [units, setUnits] = useState<any[]>([]);
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
@@ -84,6 +92,17 @@ export default function CheckInScreen() {
 
   // Progressive disclosure threshold: >20 beds shows floors first, then rooms/beds
   const isLargeInventory = units.length > 20;
+
+  const filteredModalUnits = useMemo(() => {
+    const q = bedSearchQuery.trim().toLowerCase();
+    if (q) {
+      return units.filter(u => u.label.toLowerCase().includes(q) || u.floorTitle.toLowerCase().includes(q));
+    }
+    if (modalFloor) {
+      return units.filter(u => u.floorTitle === modalFloor);
+    }
+    return units;
+  }, [units, bedSearchQuery, modalFloor]);
 
   // Auto-split MRZ text helper
   const handleLine1Change = (t: string) => {
@@ -197,6 +216,13 @@ export default function CheckInScreen() {
     return [...map.values()].sort((a, b) => floorRank(a.floorNo) - floorRank(b.floorNo));
   }, [units]);
 
+  const expectedCheckoutDate = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + (Number(nights) || 1));
+    d.setHours(checkoutTime.hours, checkoutTime.minutes, 0, 0);
+    return d;
+  }, [nights, checkoutTime]);
+
   // Auto-detect if foreign guest for Form C
   const isForeign = nationality !== "" && nationality !== "India" && nationality !== "Nepal" && nationality !== "Bhutan";
 
@@ -252,7 +278,7 @@ export default function CheckInScreen() {
 
       const { data: prop } = await supabase
         .from('properties')
-        .select('name, wifi_ssid, wifi_password, google_maps_url, house_rules')
+        .select('name, wifi_ssid, wifi_password, google_maps_url, house_rules, upi_id, upi_qr_url')
         .eq('id', memberData.property_id)
         .single();
       if (prop) setPropertyData(prop);
@@ -331,8 +357,9 @@ export default function CheckInScreen() {
   async function completeCheckIn(isFlaggedOverride = false) {
     if (!isFlaggedOverride) {
       const missingFields: string[] = [];
+      const cleanDigits = phone.replace(/\D/g, '');
       if (!name.trim()) missingFields.push('Full Name');
-      if (!phone.trim() || phone.trim().length !== 10) missingFields.push('10-digit Phone Number');
+      if (!phone.trim() || cleanDigits.length < 7 || cleanDigits.length > 15) missingFields.push('Phone Number (7-15 digits)');
       if (!selectedUnit) missingFields.push('Assigned Room / Bed');
       if (!nationality.trim()) missingFields.push('Nationality');
       if (!idType) missingFields.push('Document Type');
@@ -473,7 +500,9 @@ export default function CheckInScreen() {
           p_unit_id: selectedUnit, p_amount: finalAmount, p_pay_mode: rpcPayMode,
           p_is_foreign: isForeign, p_passport_no: passportNo, p_visa_no: visaNo, p_visa_type: '',
           p_arrived_from: arrivedFrom, p_next_dest: nextDest,
-          p_staff_id: activeStaff?.id
+          p_staff_id: activeStaff?.id,
+          p_nights: Number(nights) || 1,
+          p_expected_checkout: expectedCheckoutDate.toISOString()
         });
 
         if (rpcError) {
@@ -497,6 +526,8 @@ export default function CheckInScreen() {
           photoUri: checkinPhotoUri, selectedUnit, amount: finalAmount.toString(), 
           payMode: rpcPayMode,
           pay_mode: rpcPayMode,
+          nights: Number(nights) || 1,
+          expected_checkout: expectedCheckoutDate.toISOString(),
           isForeign, passportNo, visaNo, arrivedFrom, nextDest,
           property_id: validPropertyId,
           staff_id: activeStaff?.id
@@ -631,6 +662,7 @@ export default function CheckInScreen() {
                 placeholderTextColor={theme.textTertiary}
                 value={name}
                 onChangeText={setName}
+                maxLength={60}
               />
             </View>
 
@@ -639,12 +671,12 @@ export default function CheckInScreen() {
               <Ionicons name="call-outline" size={18} color={theme.textTertiary} style={styles.inputIcon} />
               <TextInput
                 style={[styles.textInput, { color: theme.text }]}
-                placeholder="10-digit mobile number"
+                placeholder="Phone number (e.g. +91 9876543210)"
                 placeholderTextColor={theme.textTertiary}
                 value={phone}
                 onChangeText={setPhone}
                 keyboardType="phone-pad"
-                maxLength={10}
+                maxLength={16}
                 textContentType="none"
                 autoComplete="off"
               />
@@ -759,7 +791,9 @@ export default function CheckInScreen() {
           <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <View style={[styles.cardHeader, { borderBottomColor: theme.borderSubtle }]}>
               <Ionicons name="bed-outline" size={18} color={theme.accent} />
-              <Text style={[styles.cardTitle, { color: theme.text }]}>Assign Room / Bed <Text style={{ color: '#dc2626' }}>*</Text> ({units.length} available)</Text>
+              <Text style={[styles.cardTitle, { color: theme.text }]}>
+                Assign Room / Bed <Text style={{ color: '#dc2626' }}>*</Text> ({units.length} available)
+              </Text>
             </View>
 
             {units.length === 0 ? (
@@ -767,109 +801,91 @@ export default function CheckInScreen() {
                 <Text style={[styles.emptyText, { color: theme.textTertiary }]}>No vacant beds available. Add rooms first.</Text>
               </View>
             ) : (
-              <View style={{ gap: 12, marginBottom: 4 }}>
-                {/* Progressive disclosure: If >20 beds, show floor chips first to easily filter */}
-                {isLargeInventory && (
-                  <View style={styles.checkinFloorBar}>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.checkinFloorBarScroll}>
-                      <TouchableOpacity
-                        style={[
-                          styles.checkinFloorChip,
-                          (!selectedCheckinFloor || selectedCheckinFloor === 'all')
-                            ? { backgroundColor: theme.accent, borderColor: theme.accent }
-                            : { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }
-                        ]}
-                        onPress={() => setSelectedCheckinFloor('all')}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons
-                          name="layers-outline"
-                          size={13}
-                          color={(!selectedCheckinFloor || selectedCheckinFloor === 'all') ? '#ffffff' : theme.textSecondary}
-                        />
-                        <Text
-                          style={[
-                            styles.checkinFloorChipText,
-                            { color: (!selectedCheckinFloor || selectedCheckinFloor === 'all') ? '#ffffff' : theme.textSecondary }
-                          ]}
-                        >
-                          All Floors ({units.length})
-                        </Text>
-                      </TouchableOpacity>
-
-                      {groupedFloorUnits.map((fg) => {
-                        const isSelected = selectedCheckinFloor === fg.floorTitle;
-                        return (
-                          <TouchableOpacity
-                            key={fg.floorTitle}
-                            style={[
-                              styles.checkinFloorChip,
-                              isSelected
-                                ? { backgroundColor: theme.accent, borderColor: theme.accent }
-                                : { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }
-                            ]}
-                            onPress={() => setSelectedCheckinFloor(fg.floorTitle)}
-                            activeOpacity={0.7}
-                          >
-                            <Text
-                              style={[
-                                styles.checkinFloorChipText,
-                                { color: isSelected ? '#ffffff' : theme.textSecondary }
-                              ]}
-                            >
-                              {fg.floorTitle} ({fg.units.length})
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
-                )}
-
-                {(isLargeInventory && selectedCheckinFloor && selectedCheckinFloor !== 'all'
-                  ? groupedFloorUnits.filter(fg => fg.floorTitle === selectedCheckinFloor)
-                  : groupedFloorUnits
-                ).map((floorGroup) => (
-                  <View key={floorGroup.floorTitle} style={styles.checkinFloorSection}>
-                    <View style={styles.checkinFloorBadge}>
-                      <Ionicons name="layers-outline" size={12} color={theme.textSecondary} />
-                      <Text style={[styles.checkinFloorTitle, { color: theme.textSecondary }]}>{floorGroup.floorTitle.toUpperCase()}</Text>
-                      <Text style={[styles.checkinFloorCount, { color: theme.textTertiary }]}>({floorGroup.units.length} free)</Text>
-                    </View>
-                    <View style={{ gap: 6 }}>
-                      {floorGroup.units.map((item) => (
-                        <TouchableOpacity 
-                          key={item.id}
-                          style={[
-                            styles.unitItem, 
-                            { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
-                            selectedUnit === item.id && [styles.unitItemSelected, { backgroundColor: theme.accentSubtle, borderColor: theme.accent }]
-                          ]} 
-                          onPress={() => setSelectedUnit(item.id)}
-                          activeOpacity={0.7}
-                        >
-                          <View style={styles.unitLeft}>
-                            <Ionicons 
-                              name="bed" 
-                              size={18} 
-                              color={selectedUnit === item.id ? theme.accent : theme.textSecondary} 
-                            />
-                            <Text style={[styles.unitText, { color: theme.text }, selectedUnit === item.id && [styles.unitTextSelected, { color: theme.accent }]]}>
-                              {item.label}
-                            </Text>
-                          </View>
-                          {selectedUnit === item.id ? (
-                            <View style={[styles.selectedCheck, { backgroundColor: theme.accent }]}>
-                              <Ionicons name="checkmark" size={14} color="#ffffff" />
-                            </View>
-                          ) : null}
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                ))}
-              </View>
+              <TouchableOpacity 
+                style={[styles.selectInput, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]} 
+                onPress={() => {
+                  setBedSearchQuery('');
+                  setModalFloor(null);
+                  setShowBedModal(true);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="bed-outline" size={18} color={theme.accent} style={styles.inputIcon} />
+                <Text style={{ color: selectedUnit ? theme.text : theme.textTertiary, fontSize: 14, flex: 1, fontWeight: selectedUnit ? '600' : '400' }}>
+                  {selectedUnit
+                    ? (() => {
+                        const u = units.find(item => item.id === selectedUnit);
+                        return u ? `${u.label} (${u.floorTitle})` : 'Bed Selected';
+                      })()
+                    : `Tap to select room / bed (${units.length} free)...`}
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
+              </TouchableOpacity>
             )}
+          </View>
+
+          {/* Section 3.5: Stay Duration & Checkout (Apple HIG Customizable Days & Calendar) */}
+          <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <View style={[styles.cardHeader, { borderBottomColor: theme.borderSubtle }]}>
+              <Ionicons name="calendar-outline" size={18} color={theme.accent} />
+              <Text style={[styles.cardTitle, { color: theme.text }]}>Stay Duration &amp; Checkout</Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <Text style={[styles.inputLabel, { color: theme.textSecondary, marginBottom: 0 }]}>NUMBER OF NIGHTS</Text>
+              <Text style={{ fontSize: 13, fontWeight: '800', color: theme.accent }}>
+                {nights} {nights === 1 ? 'Night' : 'Nights'}
+              </Text>
+            </View>
+
+            {/* Quick Segmented Presets */}
+            <View style={[styles.segmentedRow, { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle, marginBottom: 12 }]}>
+              {[1, 2, 3, 5, 7, 14, 30].map((n) => (
+                <TouchableOpacity
+                  key={n}
+                  style={[styles.segmentBtn, nights === n && [styles.segmentBtnActive, { backgroundColor: theme.surface }]]}
+                  onPress={() => setNights(n)}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 6, bottom: 6, left: 2, right: 2 }}
+                >
+                  <Text style={[styles.segmentText, { color: theme.textSecondary }, nights === n && [styles.segmentTextActive, { color: theme.text }]]}>
+                    {n}N
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Interactive Apple Checkout Date & Time Card */}
+            <TouchableOpacity
+              style={[styles.checkoutPickerCard, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}
+              onPress={() => setShowCalendarModal(true)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`Select checkout date and time on calendar. Currently ${expectedCheckoutDate.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })} at ${expectedCheckoutDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`}
+            >
+              <View style={[styles.calendarIconCircle, { backgroundColor: theme.accentSubtle }]}>
+                <Ionicons name="calendar" size={20} color={theme.accent} />
+              </View>
+
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={[styles.checkoutPickerLabel, { color: theme.textSecondary }]}>EXPECTED CHECKOUT (DATE &amp; TIME)</Text>
+                <Text style={[styles.checkoutPickerValue, { color: theme.text }]}>
+                  {expectedCheckoutDate.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                  <Ionicons name="time-outline" size={13} color={theme.accent} />
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.accent }}>
+                    {expectedCheckoutDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: theme.textTertiary }}>• Tap to open calendar</Text>
+                </View>
+              </View>
+
+              <View style={[styles.calendarOpenBadge, { backgroundColor: theme.accent }]}>
+                <Text style={styles.calendarOpenBadgeText}>Calendar</Text>
+                <Ionicons name="chevron-forward" size={13} color="#ffffff" />
+              </View>
+            </TouchableOpacity>
           </View>
 
           {/* Section 4: Payment Details */}
@@ -909,61 +925,136 @@ export default function CheckInScreen() {
                 value={amount}
                 onChangeText={setAmount}
                 keyboardType="numeric"
+                maxLength={9}
                 textContentType="none"
                 autoComplete="off"
               />
             </View>
+
+            {/* UPI Barcode & QR Display for Front Desk */}
+            {payMode === 'upi' && (
+              <View style={[styles.upiPaymentCard, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
+                <View style={styles.upiCardHeaderRow}>
+                  <Ionicons name="qr-code" size={18} color="#f59e0b" />
+                  <Text style={[styles.upiCardTitle, { color: theme.text }]}>Direct UPI Barcode</Text>
+                  <View style={[styles.upiLiveBadge, { backgroundColor: '#fef3c7' }]}>
+                    <Text style={[styles.upiLiveBadgeText, { color: '#b45309' }]}>UNVERIFIED</Text>
+                  </View>
+                </View>
+
+                <View style={{ marginVertical: 8, padding: 8, borderRadius: 6, backgroundColor: '#fef3c7', borderColor: '#fde68a', borderWidth: 1 }}>
+                  <Text style={{ fontSize: 12, color: '#92400e', lineHeight: 16 }}>
+                    Recorded as &quot;UPI (Unverified)&quot;. Property Owner will match against bank statement.
+                  </Text>
+                </View>
+
+                {propertyData?.upi_qr_url ? (
+                  <View style={styles.upiQrImageWrapper}>
+                    <Image
+                      source={{ uri: propertyData.upi_qr_url }}
+                      style={styles.upiQrImage}
+                      resizeMode="contain"
+                    />
+                    <Text style={[styles.upiScanInstruction, { color: theme.textSecondary }]}>
+                      Guest can scan with Google Pay, PhonePe, Paytm, or BHIM
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={[styles.upiMissingBox, { borderColor: '#fde68a', backgroundColor: '#fffbeb' }]}>
+                    <Ionicons name="information-circle-outline" size={20} color="#b45309" />
+                    <Text style={[styles.upiMissingText, { color: '#92400e' }]}>
+                      No UPI QR image set by property owner yet. Set it in Settings &gt; UPI Barcode &amp; QR.
+                    </Text>
+                  </View>
+                )}
+
+                {propertyData?.upi_id ? (
+                  <View style={[styles.upiIdRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.upiIdLabel, { color: theme.textSecondary }]}>UPI ID / VPA</Text>
+                      <Text style={[styles.upiIdValue, { color: theme.text }]} numberOfLines={1}>
+                        {propertyData.upi_id}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.copyUpiBtn, { backgroundColor: theme.accent }]}
+                      onPress={async () => {
+                        await Clipboard.setStringAsync(propertyData.upi_id);
+                        Alert.alert('Copied', `UPI ID ${propertyData.upi_id} copied to clipboard.`);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name="copy-outline" size={14} color="#ffffff" />
+                      <Text style={styles.copyUpiBtnText}>Copy UPI</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+
+                <View style={styles.upiAmountPill}>
+                  <Text style={[styles.upiAmountPillLabel, { color: theme.textSecondary }]}>Amount to Collect:</Text>
+                  <Text style={[styles.upiAmountPillValue, { color: '#10b981' }]}>
+                    ₹{amount && !isNaN(parseFloat(amount)) ? parseFloat(amount).toLocaleString('en-IN') : '0'}
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
 
           {/* Section 5: Foreign Guest Form C (Conditional) */}
           {isForeign && (
-            <View style={[styles.card, { backgroundColor: '#fffbeb', borderColor: '#fde68a' }]}>
-              <View style={[styles.cardHeader, { borderBottomColor: '#fef3c7' }]}>
-                <Ionicons name="airplane-outline" size={18} color="#92400e" />
-                <Text style={[styles.cardTitle, { color: '#92400e' }]}>Form C Details (Foreign National)</Text>
+            <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <View style={[styles.cardHeader, { borderBottomColor: theme.borderSubtle }]}>
+                <Ionicons name="airplane-outline" size={18} color={theme.accent} />
+                <Text style={[styles.cardTitle, { color: theme.text }]}>Form C Details (Foreign National)</Text>
               </View>
 
-              <Text style={[styles.inputLabel, { color: '#92400e' }]}>Passport Number</Text>
-              <View style={[styles.inputWrapper, { backgroundColor: '#ffffff', borderColor: '#fde68a' }]}>
+              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Passport Number</Text>
+              <View style={[styles.inputWrapper, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
                 <TextInput 
                   style={[styles.textInput, { color: theme.text }]} 
                   placeholder="Passport No." 
                   placeholderTextColor={theme.textTertiary} 
                   value={passportNo} 
                   onChangeText={setPassportNo} 
+                  maxLength={20}
+                  autoCapitalize="characters"
                 />
               </View>
 
-              <Text style={[styles.inputLabel, { color: '#92400e' }]}>Visa Number</Text>
-              <View style={[styles.inputWrapper, { backgroundColor: '#ffffff', borderColor: '#fde68a' }]}>
+              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Visa Number</Text>
+              <View style={[styles.inputWrapper, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
                 <TextInput 
                   style={[styles.textInput, { color: theme.text }]} 
                   placeholder="Visa No." 
                   placeholderTextColor={theme.textTertiary} 
                   value={visaNo} 
                   onChangeText={setVisaNo} 
+                  maxLength={20}
+                  autoCapitalize="characters"
                 />
               </View>
 
-              <Text style={[styles.inputLabel, { color: '#92400e' }]}>Arrived From</Text>
-              <View style={[styles.inputWrapper, { backgroundColor: '#ffffff', borderColor: '#fde68a' }]}>
+              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Arrived From</Text>
+              <View style={[styles.inputWrapper, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
                 <TextInput 
                   style={[styles.textInput, { color: theme.text }]} 
                   placeholder="e.g. Bangkok / Mumbai" 
                   placeholderTextColor={theme.textTertiary} 
                   value={arrivedFrom} 
                   onChangeText={setArrivedFrom} 
+                  maxLength={40}
                 />
               </View>
 
-              <Text style={[styles.inputLabel, { color: '#92400e' }]}>Next Destination</Text>
-              <View style={[styles.inputWrapper, { backgroundColor: '#ffffff', borderColor: '#fde68a' }]}>
+              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Next Destination</Text>
+              <View style={[styles.inputWrapper, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
                 <TextInput 
                   style={[styles.textInput, { color: theme.text }]} 
                   placeholder="e.g. Goa / New Delhi" 
                   placeholderTextColor={theme.textTertiary} 
                   value={nextDest} 
                   onChangeText={setNextDest} 
+                  maxLength={40}
                 />
               </View>
             </View>
@@ -985,6 +1076,215 @@ export default function CheckInScreen() {
               </>
             )}
           </TouchableOpacity>
+
+          {/* ROOM / BED SELECTION MODAL */}
+          <Modal visible={showBedModal} animationType="slide" transparent={false}>
+            <View style={[styles.modalContainer, { backgroundColor: theme.bg }]}>
+              <View style={[styles.modalHeader, { backgroundColor: theme.surface, borderBottomColor: theme.borderSubtle }]}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.modalTitle, { color: theme.text }]}>Assign Room / Bed</Text>
+                  <Text style={{ fontSize: 12, color: theme.textSecondary }}>
+                    {units.length} free beds available
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowBedModal(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Text style={[styles.closeText, { color: theme.accent }]}>Done</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Search Bar */}
+              <View style={[styles.modalSearchBox, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
+                <Ionicons name="search" size={17} color={theme.textTertiary} style={{ marginRight: 8 }} />
+                <TextInput 
+                  style={[styles.modalSearchInput, { color: theme.text }]} 
+                  placeholder="Search room or bed (e.g. 101, Bed 2)..." 
+                  placeholderTextColor={theme.textTertiary}
+                  value={bedSearchQuery} 
+                  onChangeText={setBedSearchQuery} 
+                />
+                {bedSearchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setBedSearchQuery('')}>
+                    <Ionicons name="close-circle" size={16} color={theme.textTertiary} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+                {bedSearchQuery.trim().length > 0 ? (
+                  // Search Results across all floors
+                  <View style={{ gap: 8 }}>
+                    <Text style={[styles.modalSectionLabel, { color: theme.textSecondary }]}>
+                      SEARCH RESULTS ({filteredModalUnits.length})
+                    </Text>
+                    {filteredModalUnits.length === 0 ? (
+                      <Text style={[styles.modalEmptySearch, { color: theme.textTertiary }]}>
+                        No free rooms or beds match &ldquo;{bedSearchQuery}&rdquo;
+                      </Text>
+                    ) : (
+                      filteredModalUnits.map(item => (
+                        <TouchableOpacity
+                          key={item.id}
+                          style={[
+                            styles.unitItem,
+                            { backgroundColor: theme.surface, borderColor: theme.border },
+                            selectedUnit === item.id && { backgroundColor: theme.accentSubtle, borderColor: theme.accent }
+                          ]}
+                          onPress={() => {
+                            setSelectedUnit(item.id);
+                            setShowBedModal(false);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <View style={styles.unitLeft}>
+                            <Ionicons
+                              name="bed"
+                              size={18}
+                              color={selectedUnit === item.id ? theme.accent : theme.textSecondary}
+                            />
+                            <View>
+                              <Text style={[styles.unitText, { color: theme.text }, selectedUnit === item.id && { color: theme.accent }]}>
+                                {item.label}
+                              </Text>
+                              <Text style={{ fontSize: 11, color: theme.textTertiary }}>{item.floorTitle}</Text>
+                            </View>
+                          </View>
+                          {selectedUnit === item.id && (
+                            <View style={[styles.selectedCheck, { backgroundColor: theme.accent }]}>
+                              <Ionicons name="checkmark" size={14} color="#ffffff" />
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      ))
+                    )}
+                  </View>
+                ) : isLargeInventory ? (
+                  modalFloor === null ? (
+                    // Floor List (> 20 beds)
+                    <View style={{ gap: 10 }}>
+                      <Text style={[styles.modalSectionLabel, { color: theme.textSecondary }]}>
+                        SELECT A FLOOR ({groupedFloorUnits.length} FLOORS)
+                      </Text>
+                      {groupedFloorUnits.map(fg => (
+                        <TouchableOpacity
+                          key={fg.floorTitle}
+                          style={[styles.floorCardRow, { backgroundColor: theme.surface, borderColor: theme.border }]}
+                          onPress={() => setModalFloor(fg.floorTitle)}
+                          activeOpacity={0.7}
+                        >
+                          <View style={[styles.floorIconBox, { backgroundColor: theme.accentSubtle }]}>
+                            <Ionicons name="layers-outline" size={20} color={theme.accent} />
+                          </View>
+                          <View style={{ flex: 1, marginLeft: 12 }}>
+                            <Text style={[styles.floorRowTitle, { color: theme.text }]}>{fg.floorTitle}</Text>
+                            <Text style={[styles.floorRowSub, { color: theme.textSecondary }]}>
+                              {fg.units.length} free bed{fg.units.length > 1 ? 's' : ''} available
+                            </Text>
+                          </View>
+                          <View style={[styles.floorPill, { backgroundColor: theme.surfaceSubtle }]}>
+                            <Text style={[styles.floorPillText, { color: theme.accent }]}>{fg.units.length}</Text>
+                          </View>
+                          <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} style={{ marginLeft: 6 }} />
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  ) : (
+                    // Selected Floor's Beds
+                    <View style={{ gap: 10 }}>
+                      <TouchableOpacity
+                        style={[styles.backToFloorsBtn, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}
+                        onPress={() => setModalFloor(null)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="arrow-back" size={16} color={theme.accent} />
+                        <Text style={[styles.backToFloorsText, { color: theme.accent }]}>All Floors</Text>
+                        <Text style={[styles.backFloorActive, { color: theme.textSecondary }]}>• {modalFloor}</Text>
+                      </TouchableOpacity>
+
+                      <View style={{ gap: 8 }}>
+                        {groupedFloorUnits.find(f => f.floorTitle === modalFloor)?.units.map(item => (
+                          <TouchableOpacity
+                            key={item.id}
+                            style={[
+                              styles.unitItem,
+                              { backgroundColor: theme.surface, borderColor: theme.border },
+                              selectedUnit === item.id && { backgroundColor: theme.accentSubtle, borderColor: theme.accent }
+                            ]}
+                            onPress={() => {
+                              setSelectedUnit(item.id);
+                              setShowBedModal(false);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <View style={styles.unitLeft}>
+                              <Ionicons
+                                name="bed"
+                                size={18}
+                                color={selectedUnit === item.id ? theme.accent : theme.textSecondary}
+                              />
+                              <Text style={[styles.unitText, { color: theme.text }, selectedUnit === item.id && { color: theme.accent }]}>
+                                {item.label}
+                              </Text>
+                            </View>
+                            {selectedUnit === item.id && (
+                              <View style={[styles.selectedCheck, { backgroundColor: theme.accent }]}>
+                                <Ionicons name="checkmark" size={14} color="#ffffff" />
+                              </View>
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  )
+                ) : (
+                  // <= 20 beds: directly show rooms/beds grouped by floor
+                  <View style={{ gap: 16 }}>
+                    {groupedFloorUnits.map(floorGroup => (
+                      <View key={floorGroup.floorTitle} style={styles.checkinFloorSection}>
+                        <View style={styles.checkinFloorBadge}>
+                          <Ionicons name="layers-outline" size={12} color={theme.textSecondary} />
+                          <Text style={[styles.checkinFloorTitle, { color: theme.textSecondary }]}>{floorGroup.floorTitle.toUpperCase()}</Text>
+                          <Text style={[styles.checkinFloorCount, { color: theme.textTertiary }]}>({floorGroup.units.length} free)</Text>
+                        </View>
+                        <View style={{ gap: 6 }}>
+                          {floorGroup.units.map(item => (
+                            <TouchableOpacity
+                              key={item.id}
+                              style={[
+                                styles.unitItem,
+                                { backgroundColor: theme.surface, borderColor: theme.border },
+                                selectedUnit === item.id && { backgroundColor: theme.accentSubtle, borderColor: theme.accent }
+                              ]}
+                              onPress={() => {
+                                setSelectedUnit(item.id);
+                                setShowBedModal(false);
+                              }}
+                              activeOpacity={0.7}
+                            >
+                              <View style={styles.unitLeft}>
+                                <Ionicons
+                                  name="bed"
+                                  size={18}
+                                  color={selectedUnit === item.id ? theme.accent : theme.textSecondary}
+                                />
+                                <Text style={[styles.unitText, { color: theme.text }, selectedUnit === item.id && { color: theme.accent }]}>
+                                  {item.label}
+                                </Text>
+                              </View>
+                              {selectedUnit === item.id && (
+                                <View style={[styles.selectedCheck, { backgroundColor: theme.accent }]}>
+                                  <Ionicons name="checkmark" size={14} color="#ffffff" />
+                                </View>
+                              )}
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          </Modal>
 
           {/* COUNTRY MODAL */}
           <Modal visible={showCountryModal} animationType="slide" transparent={false}>
@@ -1361,6 +1661,22 @@ export default function CheckInScreen() {
               </ScrollView>
             </View>
           </Modal>
+
+          {/* DEDICATED APPLE STAY CALENDAR & CHECKOUT TIME PICKER MODAL */}
+          <StayCalendarModal
+            visible={showCalendarModal}
+            onClose={() => setShowCalendarModal(false)}
+            checkinDate={new Date()}
+            initialCheckoutDate={expectedCheckoutDate}
+            initialNights={nights}
+            onApply={(newCheckoutDate, newNights) => {
+              setNights(newNights);
+              setCheckoutTime({
+                hours: newCheckoutDate.getHours(),
+                minutes: newCheckoutDate.getMinutes(),
+              });
+            }}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -1531,6 +1847,44 @@ const styles = StyleSheet.create({
   segmentTextActive: {
     color: "#0f172a",
     fontWeight: "700"
+  },
+  checkoutPickerCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 13,
+    borderRadius: 14,
+    borderWidth: 1,
+    minHeight: 56,
+  },
+  calendarIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkoutPickerLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  checkoutPickerValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  calendarOpenBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  calendarOpenBadgeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
   },
   selectInput: {
     flexDirection: "row",
@@ -1941,5 +2295,173 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 13,
     fontWeight: '700',
-  }
+  },
+
+  // ── UPI Card Styles in Checkin ────────────────────────────────────
+  upiPaymentCard: {
+    marginTop: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+    gap: 12,
+  },
+  upiCardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  upiCardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    flex: 1,
+  },
+  upiLiveBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  upiLiveBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  upiQrImageWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+  },
+  upiQrImage: {
+    width: 170,
+    height: 170,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  upiScanInstruction: {
+    fontSize: 12,
+    textAlign: 'center',
+    paddingHorizontal: 12,
+  },
+  upiMissingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  upiMissingText: {
+    fontSize: 12,
+    flex: 1,
+    lineHeight: 16,
+  },
+  upiIdRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  upiIdLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  upiIdValue: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  copyUpiBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  copyUpiBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  upiAmountPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 4,
+  },
+  upiAmountPillLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  upiAmountPillValue: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+
+  // ── Modal Room & Bed Picker Styles ─────────────────────────────────
+  modalSectionLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  modalEmptySearch: {
+    fontSize: 13,
+    fontStyle: 'italic',
+    paddingVertical: 20,
+    textAlign: 'center',
+  },
+  floorCardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  floorIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  floorRowTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  floorRowSub: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  floorPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  floorPillText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  backToFloorsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 4,
+  },
+  backToFloorsText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  backFloorActive: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
 });

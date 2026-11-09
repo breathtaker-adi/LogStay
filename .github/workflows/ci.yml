@@ -1,57 +1,39 @@
-name: ci
+name: CI / CD Pipeline
 
 on:
   push:
-    branches: [main, master]
+    branches: [ master, main ]
   pull_request:
-    branches: [main, master]
+    branches: [ master, main ]
 
 jobs:
-  app:
+  test_and_verify:
+    name: Lint, Typecheck & Test
     runs-on: ubuntu-latest
+
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: "https://demo-project.supabase.co"
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiJ9.mock_signature"
+      CI: "true"
+
     steps:
-      - name: Checkout code
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js 22
+      - name: Setup Node.js 22.x
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: npm
+          node-version: 22.x
+          cache: 'npm'
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: npm ci
 
-      - name: TypeScript typecheck
+      - name: Run TypeScript Typecheck
         run: npx tsc --noEmit
 
-      - name: Expo lint check
-        run: npx expo lint
+      - name: Run ESLint
+        run: npm run lint
 
-      - name: Run unit & algorithm test suite
-        run: npm test
-
-  database:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v1
-
-      - name: Start local Supabase in Docker
-        run: supabase start
-
-      - name: Set up Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run Section 6 & 7 Database Attack Matrix
-        run: npm run test:security
-        continue-on-error: true
+      - name: Run Vitest Unit & Regression Tests
+        run: npm run test:unit

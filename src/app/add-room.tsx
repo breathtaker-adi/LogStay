@@ -95,12 +95,18 @@ export default function AddRoomScreen() {
 
       await AsyncStorage.setItem('last_created_floor', floorNo.toString());
       setLoading(false);
-      Alert.alert('Success', `Room "${label.trim()}" added to ${floorLabel(floorNo)}.`);
-      if (router.canGoBack()) {
-        router.back();
-      } else {
-        router.replace('/rooms');
-      }
+      Alert.alert(
+        'Room Created',
+        `Room "${label.trim()}" has been successfully added to ${floorLabel(floorNo)}.`,
+        [
+          {
+            text: 'View Rooms',
+            onPress: () => {
+              router.replace('/rooms');
+            }
+          }
+        ]
+      );
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to add room.');
       setLoading(false);
@@ -136,6 +142,7 @@ export default function AddRoomScreen() {
                 placeholderTextColor={theme.textTertiary}
                 value={label}
                 onChangeText={setLabel}
+                maxLength={30}
               />
             </View>
           </View>
@@ -258,7 +265,7 @@ export default function AddRoomScreen() {
           {/* Dorm Bed Count */}
           {kind === 'dorm' && (
             <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>NUMBER OF BEDS IN DORM</Text>
+              <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>NUMBER OF BEDS IN DORM (MAX 50)</Text>
               <View style={[styles.inputWrapper, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
                 <Ionicons name="grid-outline" size={18} color={theme.textTertiary} style={styles.inputIcon} />
                 <TextInput
@@ -266,8 +273,12 @@ export default function AddRoomScreen() {
                   placeholder="e.g. 4, 6, 8, 12"
                   placeholderTextColor={theme.textTertiary}
                   value={bedCount}
-                  onChangeText={setBedCount}
+                  onChangeText={(val) => {
+                    const clean = val.replace(/[^0-9]/g, '');
+                    setBedCount(clean);
+                  }}
                   keyboardType="numeric"
+                  maxLength={2}
                 />
               </View>
             </View>
@@ -275,7 +286,10 @@ export default function AddRoomScreen() {
 
           {/* Description / Remark */}
           <View style={styles.inputGroup}>
-            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>REMARK / DESCRIPTION (OPTIONAL)</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <Text style={[styles.inputLabel, { color: theme.textSecondary, marginBottom: 0 }]}>REMARK / DESCRIPTION (OPTIONAL)</Text>
+              <Text style={{ fontSize: 11, color: theme.textTertiary }}>{description.length}/200</Text>
+            </View>
             <View style={[styles.inputWrapper, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border, minHeight: 76, alignItems: 'flex-start', paddingTop: 8 }]}>
               <Ionicons name="document-text-outline" size={18} color={theme.textTertiary} style={[styles.inputIcon, { marginTop: 2 }]} />
               <TextInput
@@ -286,6 +300,7 @@ export default function AddRoomScreen() {
                 onChangeText={setDescription}
                 multiline
                 numberOfLines={3}
+                maxLength={200}
               />
             </View>
           </View>

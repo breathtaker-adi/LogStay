@@ -78,7 +78,7 @@ export class TeamService {
   }
 
   /**
-   * Generates a 48h pass code for a chosen position
+   * Generates a pass code for a chosen position (4h for Co-Admin, 48h for staff)
    */
   static async generateInviteCode(propertyId: string, actorId: string | null, role: StaffRole): Promise<string> {
     const { data, error } = await supabase.rpc('generate_invite_code', {
@@ -89,6 +89,17 @@ export class TeamService {
     if (error) throw error;
     if (!data) throw new Error('No invite code returned from server');
     return data;
+  }
+
+  /**
+   * Cancels/revokes an active invitation code (Owner/Co-Admin only)
+   */
+  static async cancelInviteCode(propertyId: string, code: string): Promise<void> {
+    const { error } = await supabase.rpc('cancel_invite_code', {
+      p_prop_id: propertyId,
+      p_code: code.trim().toUpperCase(),
+    });
+    if (error) throw error;
   }
 
   /**

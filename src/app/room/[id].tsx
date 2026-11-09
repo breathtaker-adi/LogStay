@@ -28,6 +28,7 @@ import * as Crypto from 'expo-crypto';
 import { ScreenHeader } from '@/lib/screen-header';
 import { floorLabel, resolveFloorNo } from '@/lib/floors';
 import { useTheme } from '@/hooks/use-theme';
+import { StayService } from '@/services/stay.service';
 
 export default function RoomDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -50,6 +51,74 @@ export default function RoomDetailScreen() {
   const [editFloorNo, setEditFloorNo] = useState<number>(0);
   const [ownerPin, setOwnerPin] = useState('');
   const [submittingOwnerAction, setSubmittingOwnerAction] = useState(false);
+
+  // Stay Operations States (Extend & Move)
+  const [showExtendModal, setShowExtendModal] = useState(false);
+  const [extendNights, setExtendNights] = useState<number>(1);
+  const [extendAmount, setExtendAmount] = useState<string>('500');
+  const [extendPayMode, setExtendPayMode] = useState<'cash' | 'upi' | 'pay_later'>('pay_later');
+  const [submittingExtend, setSubmittingExtend] = useState(false);
+
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [vacantUnits, setVacantUnits] = useState<any[]>([]);
+  const [selectedMoveUnit, setSelectedMoveUnit] = useState<string | null>(null);
+  const [submittingMove, setSubmittingMove] = useState(false);
+
+  const handleOpenMoveModal = async () => {
+    try {
+      const { data: unitsData } = await supabase
+        .from('units')
+        .select('id, name, gender_rule, rooms(id, label, floor, floor_no)')
+        .is('archived_at', null);
+
+      const { data: occupiedStays } = await supabase
+        .from('stays')
+        .select('unit_id')
+        .eq('status', 'checked_in');
+
+      const occupiedIds = new Set((occupiedStays || []).map((s: any) => s.unit_id));
+      const free = (unitsData || []).filter((u: any) => u.id !== id && !occupiedIds.has(u.id));
+      setVacantUnits(free);
+      setSelectedMoveUnit(free.length > 0 ? free[0].id : null);
+      setShowMoveModal(true);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Could not load available beds.');
+    }
+  };
+
+  const handleExecuteExtendStay = async () => {
+    if (!currentStay) return;
+    const addNights = Number(extendNights) || 1;
+    const addAmt = parseFloat(extendAmount) || 0;
+
+    setSubmittingExtend(true);
+    try {
+      await StayService.extendStay(currentStay.id, addNights, addAmt, extendPayMode);
+      Alert.alert('Stay Extended', `Guest stay has been extended by ${addNights} night(s).`);
+      setShowExtendModal(false);
+      fetchRoomDetails();
+    } catch (err: any) {
+      Alert.alert('Extend Error', err.message || 'Could not extend stay.');
+    } finally {
+      setSubmittingExtend(false);
+    }
+  };
+
+  const handleExecuteMoveStay = async () => {
+    if (!currentStay || !selectedMoveUnit) return;
+
+    setSubmittingMove(true);
+    try {
+      await StayService.moveStay(currentStay.id, selectedMoveUnit);
+      Alert.alert('Bed Transferred', 'Guest has been moved to new room/bed. Current bed marked dirty.');
+      setShowMoveModal(false);
+      router.replace(`/room/${selectedMoveUnit}`);
+    } catch (err: any) {
+      Alert.alert('Transfer Error', err.message || 'Could not transfer guest.');
+    } finally {
+      setSubmittingMove(false);
+    }
+  };
 
   const fetchRoomDetails = useCallback(async () => {
     setLoading(true);
@@ -446,19 +515,60 @@ export default function RoomDetailScreen() {
                           Checked in: {new Date(currentStay.check_in).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' })}
                         </Text>
                       )}
+                      {activeStaff?.role !== 'housekeeping' && currentStay.expected_checkout ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                          <Ionicons
+                            name={new Date(currentStay.expected_checkout) < new Date() ? "alert-circle" : "time-outline"}
+                            size={13}
+                            color={new Date(currentStay.expected_checkout) < new Date() ? "#dc2626" : theme.textSecondary}
+                          />
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              color: new Date(currentStay.expected_checkout) < new Date() ? "#dc2626" : theme.textSecondary,
+                              fontWeight: new Date(currentStay.expected_checkout) < new Date() ? "700" : "500"
+                            }}
+                          >
+                            {new Date(currentStay.expected_checkout) < new Date() ? "⚠️ OVERDUE · " : "Expected Checkout: "}
+                            {new Date(currentStay.expected_checkout).toLocaleDateString([], { day: 'numeric', month: 'short' })}
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
                   </View>
 
                   {activeStaff?.role !== 'housekeeping' && (
-                    <TouchableOpacity
-                      style={[styles.folioActionBtn, { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle }]}
-                      onPress={() => router.push(`/guest/${currentStay.guest_id}?stayId=${currentStay.id}`)}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="receipt-outline" size={16} color={theme.accent} />
-                      <Text style={[styles.folioActionText, { color: theme.accent }]}>View Guest Folio & Payments</Text>
-                      <Ionicons name="chevron-forward" size={16} color={theme.accent} style={{ marginLeft: 'auto' }} />
-                    </TouchableOpacity>
+                    <>
+                      <TouchableOpacity
+                        style={[styles.folioActionBtn, { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle }]}
+                        onPress={() => router.push(`/guest/${currentStay.guest_id}?stayId=${currentStay.id}`)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="receipt-outline" size={16} color={theme.accent} />
+                        <Text style={[styles.folioActionText, { color: theme.accent }]}>View Guest Folio & Payments</Text>
+                        <Ionicons name="chevron-forward" size={16} color={theme.accent} style={{ marginLeft: 'auto' }} />
+                      </TouchableOpacity>
+
+                      <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                        <TouchableOpacity
+                          style={[styles.folioActionBtn, { flex: 1, backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle, marginTop: 0 }]}
+                          onPress={() => setShowExtendModal(true)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="calendar-outline" size={16} color={theme.accent} />
+                          <Text style={[styles.folioActionText, { color: theme.accent }]}>Extend Stay</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[styles.folioActionBtn, { flex: 1, backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle, marginTop: 0 }]}
+                          onPress={handleOpenMoveModal}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="swap-horizontal-outline" size={16} color={theme.accent} />
+                          <Text style={[styles.folioActionText, { color: theme.accent }]}>Move Bed</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
                   )}
                 </View>
               ) : (
@@ -742,6 +852,184 @@ export default function RoomDetailScreen() {
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* MODAL: Extend Stay */}
+      <Modal visible={showExtendModal} transparent animationType="slide">
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1, backgroundColor: '#00000066', justifyContent: 'flex-end' }}
+        >
+          <View style={{ backgroundColor: theme.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, borderWidth: 1, borderColor: theme.border }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: theme.text }}>Extend Guest Stay</Text>
+              <TouchableOpacity onPress={() => setShowExtendModal(false)}>
+                <Ionicons name="close" size={22} color={theme.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ fontSize: 13, color: theme.textSecondary, marginBottom: 12 }}>
+              Add nights to {guestName || 'guest'}&apos;s current reservation.
+            </Text>
+
+            <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginBottom: 6 }}>Additional Nights</Text>
+            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12 }}>
+              {[1, 2, 3, 5, 7].map(n => (
+                <TouchableOpacity
+                  key={n}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    backgroundColor: extendNights === n ? theme.accent : theme.surfaceSubtle,
+                    alignItems: 'center'
+                  }}
+                  onPress={() => setExtendNights(n)}
+                >
+                  <Text style={{ color: extendNights === n ? '#ffffff' : theme.text, fontWeight: '700', fontSize: 13 }}>
+                    +{n}N
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginBottom: 6 }}>Additional Amount (₹)</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surfaceSubtle, borderRadius: 10, borderWidth: 1, borderColor: theme.border, paddingHorizontal: 12, marginBottom: 12 }}>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: theme.textSecondary, marginRight: 6 }}>₹</Text>
+              <TextInput
+                style={{ flex: 1, paddingVertical: 10, fontSize: 15, color: theme.text }}
+                value={extendAmount}
+                onChangeText={setExtendAmount}
+                keyboardType="numeric"
+              />
+            </View>
+
+            <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginBottom: 6 }}>Payment Mode</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 18 }}>
+              {[
+                { id: 'cash', label: 'Cash' },
+                { id: 'upi', label: 'UPI' },
+                { id: 'pay_later', label: 'Pay Later' }
+              ].map(p => (
+                <TouchableOpacity
+                  key={p.id}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                    backgroundColor: extendPayMode === p.id ? theme.accent : theme.surfaceSubtle,
+                    alignItems: 'center'
+                  }}
+                  onPress={() => setExtendPayMode(p.id as any)}
+                >
+                  <Text style={{ color: extendPayMode === p.id ? '#ffffff' : theme.text, fontWeight: '600', fontSize: 12 }}>
+                    {p.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: theme.border, alignItems: 'center' }}
+                onPress={() => setShowExtendModal(false)}
+              >
+                <Text style={{ color: theme.text }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: theme.accent, alignItems: 'center' }}
+                onPress={handleExecuteExtendStay}
+                disabled={submittingExtend}
+              >
+                {submittingExtend ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={{ color: '#fff', fontWeight: '700' }}>Confirm Extension</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* MODAL: Move Bed / Room */}
+      <Modal visible={showMoveModal} transparent animationType="slide">
+        <View style={{ flex: 1, backgroundColor: '#00000066', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: theme.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '80%', borderWidth: 1, borderColor: theme.border }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: theme.text }}>Transfer Guest Bed/Room</Text>
+              <TouchableOpacity onPress={() => setShowMoveModal(false)}>
+                <Ionicons name="close" size={22} color={theme.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={{ fontSize: 13, color: theme.textSecondary, marginBottom: 12 }}>
+              Select a vacant room or bed to transfer {guestName || 'guest'}:
+            </Text>
+
+            {vacantUnits.length === 0 ? (
+              <View style={{ padding: 24, alignItems: 'center' }}>
+                <Ionicons name="alert-circle-outline" size={32} color={theme.textTertiary} />
+                <Text style={{ fontSize: 14, color: theme.textSecondary, marginTop: 8 }}>
+                  No other vacant beds or rooms available.
+                </Text>
+              </View>
+            ) : (
+              <ScrollView style={{ maxHeight: 260, marginBottom: 16 }}>
+                {vacantUnits.map(u => {
+                  const isSelected = selectedMoveUnit === u.id;
+                  return (
+                    <TouchableOpacity
+                      key={u.id}
+                      style={{
+                        padding: 12,
+                        borderRadius: 10,
+                        backgroundColor: isSelected ? theme.accent + '20' : theme.surfaceSubtle,
+                        borderColor: isSelected ? theme.accent : theme.border,
+                        borderWidth: 1,
+                        marginBottom: 8,
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}
+                      onPress={() => setSelectedMoveUnit(u.id)}
+                    >
+                      <View>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: theme.text }}>
+                          {u.rooms?.label || 'Room'} · {u.name}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: theme.textSecondary }}>
+                          {floorLabel(u.rooms?.floor_no)}
+                        </Text>
+                      </View>
+                      {isSelected && <Ionicons name="checkmark-circle" size={18} color={theme.accent} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: theme.border, alignItems: 'center' }}
+                onPress={() => setShowMoveModal(false)}
+              >
+                <Text style={{ color: theme.text }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: theme.accent, alignItems: 'center' }}
+                onPress={handleExecuteMoveStay}
+                disabled={submittingMove || vacantUnits.length === 0}
+              >
+                {submittingMove ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={{ color: '#fff', fontWeight: '700' }}>Confirm Transfer</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </View>
   );

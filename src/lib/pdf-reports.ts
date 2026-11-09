@@ -43,6 +43,7 @@ export interface ShiftReportData {
   countedCash: number;
   variance: number;
   notes?: string;
+  anomalies?: string[];
 }
 
 export interface DailyRegisterRow {
@@ -67,12 +68,35 @@ export interface DailyRegisterData {
 }
 
 /**
- * 1. Generate & Share Guest Registration Card (GRC)
+ * Escapes unsafe HTML characters to prevent XSS / markup injection into generated PDFs.
  */
-export async function exportGuestRegistrationCardPDF(data: GRCData): Promise<void> {
-  const maskedId = data.idLast4 ? `XXXX-XXXX-${data.idLast4}` : 'Verified on File';
+export function escapeHtml(str?: string | null): string {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
-  const html = `
+/**
+ * Builds HTML template for Guest Registration Card (GRC).
+ */
+export function buildGRCHtml(data: GRCData): string {
+  const maskedId = data.idLast4 ? `XXXX-XXXX-${escapeHtml(data.idLast4)}` : 'Verified on File';
+  const safeGuestName = escapeHtml(data.guestName);
+  const safePropName = escapeHtml(data.propertyName);
+  const safePropAddress = escapeHtml(data.propertyAddress || 'Goa, India');
+  const safePhone = escapeHtml(data.phone || 'N/A');
+  const safeNationality = escapeHtml(data.nationality);
+  const safeIdType = escapeHtml(data.idType);
+  const safeRoomBed = escapeHtml(data.roomBed);
+  const safeCheckIn = escapeHtml(data.checkInDate);
+  const safeCheckOut = escapeHtml(data.checkOutDate || 'Standard 11:00 AM');
+  const safePayMode = escapeHtml(data.payMode);
+
+  return `
     <!DOCTYPE html>
     <html>
       <head>
@@ -97,8 +121,8 @@ export async function exportGuestRegistrationCardPDF(data: GRCData): Promise<voi
       </head>
       <body>
         <div class="header">
-          <div class="hotel-name">${data.propertyName}</div>
-          <div class="hotel-sub">${data.propertyAddress || 'Goa, India'} • Guest Check-In Record</div>
+          <div class="hotel-name">${safePropName}</div>
+          <div class="hotel-sub">${safePropAddress} • Guest Check-In Record</div>
           <div class="title-badge">GUEST REGISTRATION CARD (GRC)</div>
         </div>
 
@@ -106,21 +130,21 @@ export async function exportGuestRegistrationCardPDF(data: GRCData): Promise<voi
         <div class="grid">
           <div class="row">
             <div class="cell-label">Guest Full Name</div>
-            <div class="cell-val" style="font-weight: 700;">${data.guestName}</div>
+            <div class="cell-val" style="font-weight: 700;">${safeGuestName}</div>
             <div class="cell-label">Mobile Number</div>
-            <div class="cell-val">${data.phone || 'N/A'}</div>
+            <div class="cell-val">${safePhone}</div>
           </div>
           <div class="row">
             <div class="cell-label">Nationality</div>
-            <div class="cell-val">${data.nationality}</div>
+            <div class="cell-val">${safeNationality}</div>
             <div class="cell-label">ID Document Type</div>
-            <div class="cell-val">${data.idType}</div>
+            <div class="cell-val">${safeIdType}</div>
           </div>
           <div class="row">
             <div class="cell-label">Masked ID Number</div>
             <div class="cell-val" style="font-family: monospace;">${maskedId}</div>
             <div class="cell-label">Room / Bed Assigned</div>
-            <div class="cell-val" style="font-weight: 700; color: #2563eb;">${data.roomBed}</div>
+            <div class="cell-val" style="font-weight: 700; color: #2563eb;">${safeRoomBed}</div>
           </div>
         </div>
 
@@ -128,15 +152,15 @@ export async function exportGuestRegistrationCardPDF(data: GRCData): Promise<voi
         <div class="grid">
           <div class="row">
             <div class="cell-label">Check-In Date/Time</div>
-            <div class="cell-val">${data.checkInDate}</div>
+            <div class="cell-val">${safeCheckIn}</div>
             <div class="cell-label">Expected Checkout</div>
-            <div class="cell-val">${data.checkOutDate || 'Standard 11:00 AM'}</div>
+            <div class="cell-val">${safeCheckOut}</div>
           </div>
           <div class="row">
             <div class="cell-label">Tariff Amount</div>
             <div class="cell-val" style="font-weight: 700;">₹${Number(data.amount).toLocaleString('en-IN')}</div>
             <div class="cell-label">Payment Method</div>
-            <div class="cell-val" style="text-transform: uppercase;">${data.payMode}</div>
+            <div class="cell-val" style="text-transform: uppercase;">${safePayMode}</div>
           </div>
         </div>
 
@@ -145,15 +169,15 @@ export async function exportGuestRegistrationCardPDF(data: GRCData): Promise<voi
         <div class="grid">
           <div class="row">
             <div class="cell-label">Passport Number</div>
-            <div class="cell-val">${data.passportNo}</div>
+            <div class="cell-val">${escapeHtml(data.passportNo)}</div>
             <div class="cell-label">Visa Number</div>
-            <div class="cell-val">${data.visaNo || 'N/A'}</div>
+            <div class="cell-val">${escapeHtml(data.visaNo || 'N/A')}</div>
           </div>
           <div class="row">
             <div class="cell-label">Arrived From</div>
-            <div class="cell-val">${data.arrivedFrom || 'N/A'}</div>
+            <div class="cell-val">${escapeHtml(data.arrivedFrom || 'N/A')}</div>
             <div class="cell-label">Next Destination</div>
-            <div class="cell-val">${data.nextDest || 'N/A'}</div>
+            <div class="cell-val">${escapeHtml(data.nextDest || 'N/A')}</div>
           </div>
         </div>
         ` : ''}
@@ -173,20 +197,28 @@ export async function exportGuestRegistrationCardPDF(data: GRCData): Promise<voi
       </body>
     </html>
   `;
-
-  const { uri } = await Print.printToFileAsync({ html });
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
-  }
 }
 
 /**
- * 2. Generate & Share Shift Cash & Turnover Report
+ * Builds HTML template for Shift Cash Handover Report.
  */
-export async function exportShiftReportPDF(data: ShiftReportData): Promise<void> {
+export function buildShiftReportHtml(data: ShiftReportData): string {
   const isBalanced = Math.abs(data.variance) <= 50;
+  const safePropName = escapeHtml(data.propertyName);
+  const safeStaffName = escapeHtml(data.staffName);
+  const safeShiftId = escapeHtml(data.shiftId.slice(0, 8));
+  const safeNotes = data.notes ? escapeHtml(data.notes) : '';
 
-  const html = `
+  const anomalySection = data.anomalies && data.anomalies.length > 0 ? `
+    <div style="margin-top: 14px; padding: 10px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 4px;">
+      <b style="color: #dc2626;">Operational Anomaly Flags:</b>
+      <ul style="margin: 4px 0 0 16px; padding: 0; color: #b91c1c;">
+        ${data.anomalies.map(a => `<li>${escapeHtml(a)}</li>`).join('')}
+      </ul>
+    </div>
+  ` : '';
+
+  return `
     <!DOCTYPE html>
     <html>
       <head>
@@ -211,9 +243,9 @@ export async function exportShiftReportPDF(data: ShiftReportData): Promise<void>
       </head>
       <body>
         <div class="header">
-          <div class="hotel-name">${data.propertyName}</div>
-          <div class="title">FRONT DESK SHIFT CASH & TURNOVER REPORT</div>
-          <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Shift ID: ${data.shiftId.slice(0, 8)} • Duty Staff: ${data.staffName}</div>
+          <div class="hotel-name">${safePropName}</div>
+          <div class="title">FRONT DESK SHIFT CASH &amp; TURNOVER REPORT</div>
+          <div style="font-size: 11px; color: #64748b; margin-top: 4px;">Shift ID: ${safeShiftId} • Duty Staff: ${safeStaffName}</div>
         </div>
 
         <div>
@@ -256,18 +288,19 @@ export async function exportShiftReportPDF(data: ShiftReportData): Promise<void>
             <tr class="total-row">
               <td>Net Cash Variance</td>
               <td class="num ${isBalanced ? 'badge-ok' : 'badge-bad'}">
-                ${data.variance >= 0 ? '+' : ''}₹${data.variance.toFixed(2)}
+                ${data.variance < 0 ? '-₹' + Math.abs(data.variance).toFixed(2) : (data.variance > 0 ? '+₹' + data.variance.toFixed(2) : '₹0.00')}
                 (${isBalanced ? 'BALANCED' : data.variance < 0 ? 'SHORTAGE' : 'SURPLUS'})
               </td>
             </tr>
           </tbody>
         </table>
 
-        ${data.notes ? `<div style="margin-top: 14px; font-size: 11.5px; color: #475569;"><b>Notes:</b> ${data.notes}</div>` : ''}
+        ${safeNotes ? `<div style="margin-top: 14px; font-size: 11.5px; color: #475569;"><b>Notes:</b> ${safeNotes}</div>` : ''}
+        ${anomalySection}
 
         <div class="sig-row">
           <div class="sig-box">
-            <div class="sig-line">Cashier / Staff Handing Over (${data.staffName})</div>
+            <div class="sig-line">Cashier / Staff Handing Over (${safeStaffName})</div>
           </div>
           <div class="sig-box" style="text-align: right;">
             <div class="sig-line" style="margin-left: auto;">Relieving Staff / Property Owner</div>
@@ -276,32 +309,30 @@ export async function exportShiftReportPDF(data: ShiftReportData): Promise<void>
       </body>
     </html>
   `;
-
-  const { uri } = await Print.printToFileAsync({ html });
-  if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
-  }
 }
 
 /**
- * 3. Generate & Share Daily Police Inspection Register PDF
+ * Builds HTML template for Daily Statutory Guest Register.
  */
-export async function exportDailyRegisterPDF(data: DailyRegisterData): Promise<void> {
+export function buildDailyRegisterHtml(data: DailyRegisterData): string {
+  const safePropName = escapeHtml(data.propertyName);
+  const safeReportDate = escapeHtml(data.reportDate);
+
   const rowsHtml = data.rows.map(r => `
     <tr>
       <td style="text-align: center;">${r.sNo}</td>
-      <td style="font-weight: 700;">${r.roomBed}</td>
-      <td style="font-weight: 600;">${r.guestName}</td>
-      <td>${r.nationality}</td>
-      <td>${r.phone || '—'}</td>
-      <td>${r.idType}</td>
-      <td style="font-family: monospace;">${r.idLast4 ? `...${r.idLast4}` : 'Verified'}</td>
-      <td>${r.checkInTime}</td>
-      <td style="font-weight: 600; text-transform: uppercase;">${r.status}</td>
+      <td style="font-weight: 700;">${escapeHtml(r.roomBed)}</td>
+      <td style="font-weight: 600;">${escapeHtml(r.guestName)}</td>
+      <td>${escapeHtml(r.nationality)}</td>
+      <td>${escapeHtml(r.phone || '—')}</td>
+      <td>${escapeHtml(r.idType)}</td>
+      <td style="font-family: monospace;">${r.idLast4 ? `...${escapeHtml(r.idLast4)}` : 'Verified'}</td>
+      <td>${escapeHtml(r.checkInTime)}</td>
+      <td style="font-weight: 600; text-transform: uppercase;">${escapeHtml(r.status)}</td>
     </tr>
   `).join('');
 
-  const html = `
+  return `
     <!DOCTYPE html>
     <html>
       <head>
@@ -323,9 +354,9 @@ export async function exportDailyRegisterPDF(data: DailyRegisterData): Promise<v
       </head>
       <body>
         <div class="header">
-          <div class="hotel-name">${data.propertyName}</div>
+          <div class="hotel-name">${safePropName}</div>
           <div class="reg-title">DAILY GUEST REGISTER (STATUTORY INSPECTION RECORD)</div>
-          <div style="font-size: 10px; color: #64748b;">Record Date: ${data.reportDate} • Maintained under State Police Hotel Inspection Regulations</div>
+          <div style="font-size: 10px; color: #64748b;">Record Date: ${safeReportDate} • Maintained under State Police Hotel Inspection Regulations</div>
         </div>
 
         <div class="summary-bar">
@@ -360,7 +391,35 @@ export async function exportDailyRegisterPDF(data: DailyRegisterData): Promise<v
       </body>
     </html>
   `;
+}
 
+/**
+ * 1. Generate & Share Guest Registration Card (GRC)
+ */
+export async function exportGuestRegistrationCardPDF(data: GRCData): Promise<void> {
+  const html = buildGRCHtml(data);
+  const { uri } = await Print.printToFileAsync({ html });
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
+  }
+}
+
+/**
+ * 2. Generate & Share Shift Cash & Turnover Report
+ */
+export async function exportShiftReportPDF(data: ShiftReportData): Promise<void> {
+  const html = buildShiftReportHtml(data);
+  const { uri } = await Print.printToFileAsync({ html });
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
+  }
+}
+
+/**
+ * 3. Generate & Share Daily Police Inspection Register PDF
+ */
+export async function exportDailyRegisterPDF(data: DailyRegisterData): Promise<void> {
+  const html = buildDailyRegisterHtml(data);
   const { uri } = await Print.printToFileAsync({ html });
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });

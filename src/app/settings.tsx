@@ -28,7 +28,7 @@ import { useStaff } from "@/lib/staff-context";
 import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { csvCell } from "@/lib/csv";
-import { uploadBannerPhoto } from "@/lib/photo";
+import { uploadBannerPhoto, uploadUpiQrPhoto } from "@/lib/photo";
 import { ScreenHeader } from "@/lib/screen-header";
 import { useTheme } from "@/hooks/use-theme";
 import { Fonts } from "@/constants/theme";
@@ -52,6 +52,12 @@ export default function SettingsScreen() {
   const [editPropNameModalVisible, setEditPropNameModalVisible] = useState(false);
   const [editPropNameInput, setEditPropNameInput] = useState('');
   const [editPropNameSaving, setEditPropNameSaving] = useState(false);
+
+  // UPI QR state (Owner only)
+  const [upiModalVisible, setUpiModalVisible] = useState(false);
+  const [upiIdInput, setUpiIdInput] = useState('');
+  const [upiQrUri, setUpiQrUri] = useState<string | null>(null);
+  const [upiUploading, setUpiUploading] = useState(false);
 
   // Photo state
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -132,6 +138,68 @@ export default function SettingsScreen() {
       Alert.alert('Error', err.message || 'Could not update property name.');
     } finally {
       setEditPropNameSaving(false);
+    }
+  };
+
+  // ── UPI Settings (Owner Only) ──────────────────────────────────────────
+  const handlePickUpiQr = async () => {
+    if (!isOwner) return;
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      return Alert.alert('Permission Required', 'Allow photo library access to pick your UPI QR barcode image.');
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.9,
+    });
+    if (result.canceled || !result.assets[0]?.uri) return;
+    setUpiQrUri(result.assets[0].uri);
+  };
+
+  const handleSaveUpiSettings = async () => {
+    if (!isOwner) {
+      return Alert.alert('Restricted', 'Only the property owner can set the UPI payment barcode.');
+    }
+    if (!upiIdInput.trim() && !upiQrUri) {
+      return Alert.alert('Missing Info', 'Please enter a UPI ID or select a UPI QR Code image.');
+    }
+    setUpiUploading(true);
+    try {
+      let finalQrUrl = upiQrUri;
+      if (upiQrUri && !upiQrUri.startsWith('http')) {
+        finalQrUrl = await uploadUpiQrPhoto(propertyId, upiQrUri);
+      }
+
+      const { error: rpcError } = await supabase.rpc('owner_update_upi_settings', {
+        p_prop_id: propertyId,
+        p_upi_id: upiIdInput.trim() || null,
+        p_upi_qr_url: finalQrUrl || null,
+      });
+
+      if (rpcError) {
+        await supabase
+          .from('properties')
+          .update({
+            upi_id: upiIdInput.trim() || null,
+            upi_qr_url: finalQrUrl || null,
+          })
+          .eq('id', propertyId);
+      }
+
+      setPropertyDetails((prev: any) => ({
+        ...prev,
+        upi_id: upiIdInput.trim() || null,
+        upi_qr_url: finalQrUrl || null,
+      }));
+
+      Alert.alert('UPI Configured', 'Your UPI ID and QR barcode have been saved. Front Desk will now see it directly during UPI check-ins.');
+      setUpiModalVisible(false);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Could not save UPI settings.');
+    } finally {
+      setUpiUploading(false);
     }
   };
 
@@ -524,7 +592,7 @@ export default function SettingsScreen() {
 
             {/* Row 2: Team & Access */}
             <TouchableOpacity
-              style={styles.navRow}
+              style={[styles.navRow, { borderBottomColor: theme.borderSubtle }]}
               onPress={() => router.push('/team')}
               activeOpacity={0.7}
             >
@@ -545,6 +613,41 @@ export default function SettingsScreen() {
                     <Text style={[styles.pendingCounterText, { color: '#b45309' }]}>
                       {pendingApprovalsCount} PENDING
                     </Text>
+                  </View>
+                )}
+                <Ionicons name="chevron-forward" size={17} color={theme.textTertiary} />
+              </View>
+            </TouchableOpacity>
+
+            {/* Row 3: UPI Barcode & Payment QR (Owner Only) */}
+            <TouchableOpacity
+              style={styles.navRow}
+              onPress={() => {
+                if (!isOwner) {
+                  Alert.alert('Owner Access Only', 'Only the property owner can configure or change the receiving UPI barcode.');
+                  return;
+                }
+                setUpiIdInput(propertyDetails?.upi_id || '');
+                setUpiQrUri(propertyDetails?.upi_qr_url || null);
+                setUpiModalVisible(true);
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.navRowLeft}>
+                <View style={[styles.navIconBox, { backgroundColor: '#f59e0b' }]}>
+                  <Ionicons name="qr-code" size={18} color="#ffffff" />
+                </View>
+                <View style={styles.navTextBox}>
+                  <Text style={[styles.navTitle, { color: theme.text }]}>UPI Barcode & QR</Text>
+                  <Text style={[styles.navSubtitle, { color: theme.textSecondary }]}>
+                    {propertyDetails?.upi_id ? `${propertyDetails.upi_id} · Active` : (isOwner ? 'Set receiving UPI QR code for check-in' : 'Configured by Owner')}
+                  </Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                {propertyDetails?.upi_qr_url && (
+                  <View style={[styles.activeStatusPill, { backgroundColor: '#dcfce7' }]}>
+                    <Text style={[styles.activeStatusText, { color: '#15803d' }]}>QR ACTIVE</Text>
                   </View>
                 )}
                 <Ionicons name="chevron-forward" size={17} color={theme.textTertiary} />
@@ -692,6 +795,99 @@ export default function SettingsScreen() {
                   <ActivityIndicator size="small" color="#ffffff" />
                 ) : (
                   <Text style={styles.modalConfirmText}>Save Name</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* UPI Barcode & Payment QR Modal (Owner Only) */}
+      <Modal
+        visible={upiModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setUpiModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+          style={styles.modalBackdrop}
+        >
+          <View style={[styles.modalCard, { backgroundColor: theme.surface }]}>
+            <View style={styles.modalHeaderRow}>
+              <Ionicons name="qr-code" size={22} color="#f59e0b" />
+              <Text style={[styles.modalTitle, { color: theme.text }]}>UPI Barcode & Payment QR</Text>
+            </View>
+            <Text style={[styles.modalHelpText, { color: theme.textSecondary }]}>
+              Set your receiving UPI ID and QR code. Front Desk staff will see this barcode instantly when guests pay via UPI at check-in.
+            </Text>
+
+            <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>UPI ID / VPA</Text>
+            <TextInput
+              style={[styles.modalInput, { color: theme.text, borderColor: theme.border }]}
+              placeholder="e.g. hotelstay@icici or 9876543210@upi"
+              placeholderTextColor={theme.textTertiary}
+              value={upiIdInput}
+              onChangeText={setUpiIdInput}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
+            <Text style={[styles.fieldLabel, { color: theme.textSecondary }]}>UPI QR Code Image</Text>
+            {upiQrUri ? (
+              <View style={[styles.qrPreviewBox, { borderColor: theme.border, backgroundColor: theme.surfaceSubtle }]}>
+                <Image source={{ uri: upiQrUri }} style={styles.qrImage} resizeMode="contain" />
+                <View style={styles.qrActionRow}>
+                  <TouchableOpacity
+                    style={[styles.qrChangeBtn, { backgroundColor: theme.accent }]}
+                    onPress={handlePickUpiQr}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="image-outline" size={14} color="#ffffff" />
+                    <Text style={styles.qrChangeBtnText}>Change QR</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.qrRemoveBtn, { borderColor: '#ef4444' }]}
+                    onPress={() => setUpiQrUri(null)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="trash-outline" size={14} color="#ef4444" />
+                    <Text style={[styles.qrRemoveBtnText, { color: '#ef4444' }]}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[styles.qrUploadBox, { borderColor: theme.border, backgroundColor: theme.surfaceSubtle }]}
+                onPress={handlePickUpiQr}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="cloud-upload-outline" size={28} color={theme.accent} />
+                <Text style={[styles.qrUploadTitle, { color: theme.text }]}>Upload UPI QR Code Image</Text>
+                <Text style={[styles.qrUploadSubtitle, { color: theme.textTertiary }]}>PNG or JPG from your phone gallery</Text>
+              </TouchableOpacity>
+            )}
+
+            <View style={[styles.modalBtnRow, { marginTop: 16 }]}>
+              <TouchableOpacity
+                style={[styles.modalCancelBtn, { borderColor: theme.border }]}
+                onPress={() => setUpiModalVisible(false)}
+                activeOpacity={0.7}
+                disabled={upiUploading}
+              >
+                <Text style={[styles.modalCancelText, { color: theme.textSecondary }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalConfirmBtn, { backgroundColor: '#10b981' }]}
+                onPress={handleSaveUpiSettings}
+                disabled={upiUploading}
+                activeOpacity={0.8}
+              >
+                {upiUploading ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.modalConfirmText}>Save UPI Barcode</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -947,4 +1143,87 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalConfirmText: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
+
+  // ── UPI Modal & QR Styles ──────────────────────────────────────────
+  activeStatusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  activeStatusText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  qrUploadBox: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderRadius: 14,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  qrUploadTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  qrUploadSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  qrPreviewBox: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  qrImage: {
+    width: 140,
+    height: 140,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  qrActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+  },
+  qrChangeBtn: {
+    flex: 1,
+    height: 36,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  qrChangeBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  qrRemoveBtn: {
+    flex: 1,
+    height: 36,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  qrRemoveBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
 });

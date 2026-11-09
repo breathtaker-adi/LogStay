@@ -25,13 +25,13 @@ if (existsSync('.env')) {
   } catch {}
 }
 
-const URL_ = process.env.EXPO_PUBLIC_SUPABASE_URL || env.EXPO_PUBLIC_SUPABASE_URL || 'https://cmevtjqnztsisldaoghr.supabase.co';
-const KEY  = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNtZXZ0anFuenRzaXNsZGFvZ2hyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExMDQ2MjMsImV4cCI6MjEwNjY4MDYyM30.6zwBUNXPSFK0g8K-byP9HJa4ZpaQB_YFJLnvuLqRoxM';
+const URL_ = process.env.EXPO_PUBLIC_SUPABASE_URL || env.EXPO_PUBLIC_SUPABASE_URL;
+const KEY  = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const A_EMAIL = process.env.TEST_A_EMAIL || env.TEST_A_EMAIL || 'test@logstay.com';
 const A_PASS  = process.env.TEST_A_PASSWORD || env.TEST_A_PASSWORD || 'Test@123';
 
-if (!URL_ || !KEY || !A_EMAIL || !A_PASS) {
-  console.error('Missing env vars (see header).');
+if (!URL_ || !KEY) {
+  console.error('Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY environment variables.');
   process.exit(2);
 }
 

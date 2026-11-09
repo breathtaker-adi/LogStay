@@ -5,12 +5,11 @@
 export const ENV = {
   // Supabase Cloud Configuration
   SUPABASE_URL:
-    process.env.EXPO_PUBLIC_SUPABASE_URL ||
-    'https://cmevtjqnztsisldaoghr.supabase.co',
+    process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://placeholder-project.supabase.co',
 
   SUPABASE_ANON_KEY:
     process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNtZXZ0anFuenRzaXNsZGFvZ2hyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExMDQ2MjMsImV4cCI6MjEwNjY4MDYyM30.6zwBUNXPSFK0g8K-byP9HJa4ZpaQB_YFJLnvuLqRoxM',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiJ9.mock_anon_key_signature',
 
   // App Metadata & Routing
   APP_NAME: 'LogStay',
@@ -21,9 +20,8 @@ export const ENV = {
   // Operational Defaults
   INVITE_CODE_VALIDITY_HOURS: 48,
   AUTO_SYNC_INTERVAL_MS: 30000,
-  SESSION_STORAGE_KEY: 'sb-cmevtjqnztsisldaoghr-auth-token',
+  SESSION_STORAGE_KEY: 'sb-auth-token',
   BG_IMAGE_STORAGE_KEY: 'logstay_custom_bg_banner',
 } as const;
 
 export type AppEnvironment = typeof ENV;
-

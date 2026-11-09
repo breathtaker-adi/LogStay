@@ -165,7 +165,7 @@ export const COUNTRIES = [
   { name: 'Slovenia', flag: '🇸🇮', aliases: ['slovenian', 'slovene', 'slovenia', 'svn'], formC: true },
   { name: 'Solomon Islands', flag: '🇸🇧', aliases: ['solomon islander', 'solomon islands', 'slb'], formC: true },
   { name: 'Somalia', flag: '🇸🇴', aliases: ['somali', 'somalia', 'som'], formC: true },
-  { name: 'Somaliland', flag: '🇸🇴', aliases: ['somalilander', 'somaliland'], formC: true },
+  { name: 'Somaliland', flag: '🇸🇴', aliases: ['somalilander', 'somaliland', 'smd'], formC: true },
   { name: 'South Africa', flag: '🇿🇦', aliases: ['south african', 'south africa', 'zaf'], formC: true },
   { name: 'South Korea', flag: '🇰🇷', aliases: ['south korean', 'korea', 'south korea', 'kor'], formC: true },
   { name: 'South Sudan', flag: '🇸🇸', aliases: ['south sudanese', 'south sudan', 'ssd'], formC: true },
@@ -203,3 +203,11 @@ export const COUNTRIES = [
   { name: 'Zambia', flag: '🇿🇲', aliases: ['zambian', 'zambia', 'zmb'], formC: true },
   { name: 'Zimbabwe', flag: '🇿🇼', aliases: ['zimbabwean', 'zimbabwe', 'zwe'], formC: true }
 ];
+
+export function searchCountries(query: string) {
+  if (!query) return COUNTRIES;
+  const q = query.trim().toLowerCase();
+  return COUNTRIES.filter(
+    (c) => c.name.toLowerCase().includes(q) || c.aliases.some((a) => a.toLowerCase().includes(q))
+  );
+}

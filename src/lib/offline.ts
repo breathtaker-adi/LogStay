@@ -3,9 +3,7 @@ import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { pbkdf2 } from '@noble/hashes/pbkdf2.js';
-import { sha256 } from '@noble/hashes/sha2.js';
-import { bytesToHex } from '@noble/hashes/utils.js';
+import { hashPinWithSalt, PBKDF2_ROUNDS } from './crypto-utils';
 
 const db = SQLite.openDatabaseSync('logstay.db');
 
@@ -162,12 +160,7 @@ export async function getPendingCount(): Promise<number> {
   return result?.count || 0;
 }
 
-const PBKDF2_ROUNDS = 2048;
-
-export function hashPinWithSalt(pin: string, salt: string, rounds: number = PBKDF2_ROUNDS): string {
-  const derived = pbkdf2(sha256, pin, salt, { c: rounds, dkLen: 32 });
-  return `pbkdf2$${rounds}$${bytesToHex(derived)}`;
-}
+export { hashPinWithSalt };
 
 export const saveLocalPinHash = async (staffId: string, pin: string) => {
   const database = await getDb();
@@ -280,7 +273,9 @@ export async function processOutbox() {
             p_visa_type: '',
             p_arrived_from: payload.arrivedFrom,
             p_next_dest: payload.nextDest,
-            p_staff_id: payload.staff_id
+            p_staff_id: payload.staff_id,
+            p_nights: payload.nights || 1,
+            p_expected_checkout: payload.expected_checkout || null
           });
           
           error = rpcError;
