@@ -1,3 +1,4 @@
 LogStay Mobile: High-reliability, offline-first mobile PMS for boutique hotels, hostels, and guest houses. Real-time multi-floor bed matrix, sub-second passport MRZ reading, dual-control approvals, two-person cash handovers, and 90-day DPDP Act compliance. Works 100% offline with zero cloud bottlenecks. 
 
 Explore on GitHub: https://github.com/breathtaker-adi/LogStay-Mobile
+

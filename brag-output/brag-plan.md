@@ -111,3 +111,4 @@ LogStay Mobile: The offline-first front desk PMS for boutique stays, hostels, an
 
 **Music mood for this video:** Warm, modern corporate lo-fi beat.
 **Audio summary:** A continuous professional soundtrack carrying rhythmic motion across all 7 operational capability scenes.
+

@@ -55,3 +55,4 @@ Create a polished 60-second product launch and technical capability video for **
   - `assets/sfx/ui/switch1.ogg`
   - `assets/sfx/ui/click1.ogg`
   - `assets/sfx/interface/bong_001.ogg`
+
