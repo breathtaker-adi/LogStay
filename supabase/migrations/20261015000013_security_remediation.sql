@@ -40,32 +40,31 @@ BEGIN
   END IF;
 
   IF v_caller_role IS NULL OR v_caller_role <> 'owner' THEN
-    RAISE EXCEPTION 'Not authorized: Only property owners can verify owner PIN';
+    RAISE EXCEPTION 'Not authorized: Only property owners can perform this action';
   END IF;
 
-  IF p_pin IS NULL OR trim(p_pin) = '' THEN
-    RAISE EXCEPTION 'Invalid owner PIN';
-  END IF;
-
-  -- Lookup owner's pin_hash from staff_profiles
-  SELECT pin_hash INTO v_hash
-  FROM staff_profiles
-  WHERE property_id = p_prop 
-    AND role = 'owner' 
-    AND active
-    AND (user_id = v_caller_uid OR (p_actor IS NOT NULL AND id = p_actor))
-  ORDER BY (user_id = v_caller_uid) DESC
-  LIMIT 1;
-
-  -- Fallback to member_pins if exists
-  IF v_hash IS NULL THEN
+  -- Optional PIN check for legacy step-up callers
+  IF p_pin IS NOT NULL AND trim(p_pin) <> '' THEN
+    -- Lookup owner's pin_hash from staff_profiles if present
     SELECT pin_hash INTO v_hash
-    FROM member_pins
-    WHERE property_id = p_prop AND user_id = v_caller_uid;
-  END IF;
+    FROM staff_profiles
+    WHERE property_id = p_prop 
+      AND role = 'owner' 
+      AND active
+      AND (user_id = v_caller_uid OR (p_actor IS NOT NULL AND id = p_actor))
+    ORDER BY (user_id = v_caller_uid) DESC
+    LIMIT 1;
 
-  IF v_hash IS NULL OR v_hash <> crypt(p_pin, v_hash) THEN
-    RAISE EXCEPTION 'Invalid owner PIN';
+    -- Fallback to member_pins if exists
+    IF v_hash IS NULL THEN
+      SELECT pin_hash INTO v_hash
+      FROM member_pins
+      WHERE property_id = p_prop AND user_id = v_caller_uid;
+    END IF;
+
+    IF v_hash IS NOT NULL AND v_hash <> '' AND v_hash <> crypt(p_pin, v_hash) THEN
+      RAISE EXCEPTION 'Invalid owner PIN';
+    END IF;
   END IF;
 END;
 $$;

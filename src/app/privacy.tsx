@@ -151,7 +151,7 @@ export default function PrivacyScreen() {
             </View>
             <View style={styles.bulletRow}>
               <View style={styles.bulletDot} />
-              <Text style={styles.bulletText}>Authentication sessions and staff PIN hashes are secured in the device hardware keystore.</Text>
+              <Text style={styles.bulletText}>Authentication sessions and security tokens are secured in the device hardware keystore.</Text>
             </View>
             <View style={styles.bulletRow}>
               <View style={styles.bulletDot} />

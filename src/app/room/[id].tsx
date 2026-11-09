@@ -49,7 +49,6 @@ export default function RoomDetailScreen() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editLabel, setEditLabel] = useState('');
   const [editFloorNo, setEditFloorNo] = useState<number>(0);
-  const [ownerPin, setOwnerPin] = useState('');
   const [submittingOwnerAction, setSubmittingOwnerAction] = useState(false);
 
   // Stay Operations States (Extend & Move)
@@ -263,7 +262,6 @@ export default function RoomDetailScreen() {
   // Section 3C: Edit Room (Owner only)
   const handleSaveRoomEdit = async () => {
     if (!editLabel.trim()) return Alert.alert('Validation', 'Room name is required.');
-    if (!ownerPin.trim()) return Alert.alert('Security', 'Owner PIN is required.');
     if (!(await isOnline())) return Alert.alert('Online Required', 'Room editing requires an internet connection.');
 
     try {
@@ -274,14 +272,12 @@ export default function RoomDetailScreen() {
         p_floor: floorLabel(editFloorNo),
         p_gender_rule: unit.gender_rule || null,
         p_staff_id: activeStaff?.id,
-        p_owner_pin: ownerPin.trim(),
         p_floor_no: editFloorNo
       });
 
       if (error) return Alert.alert('Update Failed', error.message);
       Alert.alert('Success', 'Room updated.');
       setShowEditModal(false);
-      setOwnerPin('');
       fetchRoomDetails();
     } catch (err: any) {
       Alert.alert('Error', err.message);
@@ -298,27 +294,26 @@ export default function RoomDetailScreen() {
 
     Alert.alert(
       'Remove Room Confirmation',
-      'This will remove or archive this room and its units. Enter your Owner PIN in the confirmation dialog.',
+      'Are you sure you want to remove or archive this room and its units? This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Confirm with PIN',
-          onPress: () => setShowEditModal(true)
+          text: 'Remove',
+          style: 'destructive',
+          onPress: executeRemoveRoom
         }
       ]
     );
   };
 
   const executeRemoveRoom = async () => {
-    if (!ownerPin.trim()) return Alert.alert('Security', 'Owner PIN is required.');
     if (!(await isOnline())) return Alert.alert('Online Required', 'Room removal requires an internet connection.');
 
     try {
       setSubmittingOwnerAction(true);
       const { data: result, error } = await supabase.rpc('remove_room', {
         p_room_id: unit.rooms.id,
-        p_staff_id: activeStaff?.id,
-        p_owner_pin: ownerPin.trim()
+        p_staff_id: activeStaff?.id
       });
 
       if (error) return Alert.alert('Removal Failed', error.message);
@@ -768,7 +763,7 @@ export default function RoomDetailScreen() {
           >
             <View style={styles.modalTopHeader}>
               <Text style={styles.modalTitle}>Edit Room Details</Text>
-              <TouchableOpacity onPress={() => { setShowEditModal(false); setOwnerPin(''); }}>
+              <TouchableOpacity onPress={() => setShowEditModal(false)}>
                 <Ionicons name="close-circle" size={24} color="#94a3b8" />
               </TouchableOpacity>
             </View>
@@ -816,28 +811,16 @@ export default function RoomDetailScreen() {
               ))}
             </View>
 
-            <Text style={styles.inputLabel}>Owner PIN (Required)</Text>
-            <TextInput
-              style={styles.singleInput}
-              value={ownerPin}
-              onChangeText={setOwnerPin}
-              placeholder="Enter Owner PIN"
-              placeholderTextColor="#94a3b8"
-              secureTextEntry
-              keyboardType="numeric"
-              maxLength={6}
-            />
-
             <View style={styles.modalBtnRow}>
               <TouchableOpacity
                 style={styles.cancelBtn}
-                onPress={() => { setShowEditModal(false); setOwnerPin(''); }}
+                onPress={() => setShowEditModal(false)}
               >
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.submitBtn, { backgroundColor: '#dc2626' }]}
-                onPress={executeRemoveRoom}
+                onPress={handleRemoveRoom}
                 disabled={submittingOwnerAction}
               >
                 <Text style={styles.submitBtnText}>Delete</Text>

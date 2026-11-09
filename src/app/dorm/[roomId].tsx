@@ -54,7 +54,6 @@ export default function DormDetailScreen() {
   const [editLabel, setEditLabel] = useState('');
   const [editFloorNo, setEditFloorNo] = useState<number>(0);
   const [editGenderRule, setEditGenderRule] = useState<'any' | 'male' | 'female'>('any');
-  const [ownerPin, setOwnerPin] = useState('');
   const [submittingEdit, setSubmittingEdit] = useState(false);
 
   // Add Bed State
@@ -152,9 +151,6 @@ export default function DormDetailScreen() {
     if (!(await isOnline())) {
       return Alert.alert('Online Required', 'Room editing requires an internet connection.');
     }
-    if (!ownerPin.trim()) {
-      return Alert.alert('Security', 'Please enter your owner PIN to confirm.');
-    }
 
     try {
       setSubmittingEdit(true);
@@ -164,7 +160,6 @@ export default function DormDetailScreen() {
         p_floor: floorLabel(editFloorNo),
         p_gender_rule: editGenderRule,
         p_staff_id: activeStaff?.id,
-        p_owner_pin: ownerPin.trim(),
         p_floor_no: editFloorNo
       });
 
@@ -175,7 +170,6 @@ export default function DormDetailScreen() {
 
       Alert.alert('Success', 'Dorm room updated successfully.');
       setShowEditModal(false);
-      setOwnerPin('');
       fetchDormData();
     } catch (err: any) {
       Alert.alert('Error', err.message);
@@ -192,9 +186,6 @@ export default function DormDetailScreen() {
     if (!(await isOnline())) {
       return Alert.alert('Online Required', 'Adding beds requires an internet connection.');
     }
-    if (!ownerPin.trim()) {
-      return Alert.alert('Security', 'Please enter your owner PIN to confirm.');
-    }
 
     try {
       setSubmittingEdit(true);
@@ -203,8 +194,7 @@ export default function DormDetailScreen() {
         p_room_id: roomId,
         p_unit_ids: [newUnitId],
         p_unit_labels: [newBedLabel.trim()],
-        p_staff_id: activeStaff?.id,
-        p_owner_pin: ownerPin.trim()
+        p_staff_id: activeStaff?.id
       });
 
       if (error) {
@@ -215,7 +205,6 @@ export default function DormDetailScreen() {
       Alert.alert('Success', `Bed "${newBedLabel.trim()}" added.`);
       setShowAddBedModal(false);
       setNewBedLabel('');
-      setOwnerPin('');
       fetchDormData();
     } catch (err: any) {
       Alert.alert('Error', err.message);
@@ -369,15 +358,13 @@ export default function DormDetailScreen() {
         {
           text: 'Remove',
           style: 'destructive',
-          onPress: () => {
-            setShowEditModal(true);
-          }
+          onPress: executeRemove
         }
       ]
     );
   };
 
-  const executeRemove = async (pin: string) => {
+  const executeRemove = async () => {
     if (!(await isOnline())) {
       return Alert.alert('Online Required', 'Room removal requires an internet connection.');
     }
@@ -385,8 +372,7 @@ export default function DormDetailScreen() {
     try {
       const { data: result, error } = await supabase.rpc('remove_room', {
         p_room_id: roomId,
-        p_staff_id: activeStaff?.id,
-        p_owner_pin: pin.trim()
+        p_staff_id: activeStaff?.id
       });
 
       if (error) {
@@ -764,7 +750,7 @@ export default function DormDetailScreen() {
           >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Edit Dorm Room</Text>
-              <TouchableOpacity onPress={() => { setShowEditModal(false); setOwnerPin(''); }}>
+              <TouchableOpacity onPress={() => setShowEditModal(false)}>
                 <Ionicons name="close-circle" size={24} color="#94a3b8" />
               </TouchableOpacity>
             </View>
@@ -827,28 +813,16 @@ export default function DormDetailScreen() {
               ))}
             </View>
 
-            <Text style={styles.inputLabel}>Owner PIN (Required)</Text>
-            <TextInput
-              style={styles.input}
-              value={ownerPin}
-              onChangeText={setOwnerPin}
-              placeholder="Enter 4-digit Owner PIN"
-              placeholderTextColor="#94a3b8"
-              keyboardType="numeric"
-              secureTextEntry
-              maxLength={6}
-            />
-
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
-                onPress={() => { setShowEditModal(false); setOwnerPin(''); }}
+                onPress={() => setShowEditModal(false)}
               >
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalSaveBtn, { backgroundColor: '#dc2626' }]}
-                onPress={() => executeRemove(ownerPin)}
+                onPress={handleRemoveRoom}
                 disabled={submittingEdit}
               >
                 <Text style={styles.modalSaveText}>Delete</Text>
@@ -883,7 +857,7 @@ export default function DormDetailScreen() {
           >
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add Bed to Dorm</Text>
-              <TouchableOpacity onPress={() => { setShowAddBedModal(false); setOwnerPin(''); }}>
+              <TouchableOpacity onPress={() => setShowAddBedModal(false)}>
                 <Ionicons name="close-circle" size={24} color="#94a3b8" />
               </TouchableOpacity>
             </View>
@@ -897,22 +871,10 @@ export default function DormDetailScreen() {
               placeholderTextColor="#94a3b8"
             />
 
-            <Text style={styles.inputLabel}>Owner PIN (Required)</Text>
-            <TextInput
-              style={styles.input}
-              value={ownerPin}
-              onChangeText={setOwnerPin}
-              placeholder="Enter Owner PIN"
-              placeholderTextColor="#94a3b8"
-              keyboardType="numeric"
-              secureTextEntry
-              maxLength={6}
-            />
-
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
-                onPress={() => { setShowAddBedModal(false); setOwnerPin(''); }}
+                onPress={() => setShowAddBedModal(false)}
               >
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>

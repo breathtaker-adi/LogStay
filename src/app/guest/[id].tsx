@@ -41,7 +41,6 @@ export default function GuestDetailScreen() {
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refundPaymentId, setRefundPaymentId] = useState<string | null>(null);
   const [refundReason, setRefundReason] = useState('');
-  const [ownerPin, setOwnerPin] = useState('');
   const [refunding, setRefunding] = useState(false);
 
   // Charge form state
@@ -186,7 +185,6 @@ export default function GuestDetailScreen() {
   const handleRefund = (paymentId: string) => {
     setRefundPaymentId(paymentId);
     setRefundReason('');
-    setOwnerPin('');
     setShowRefundModal(true);
   };
 
@@ -194,22 +192,17 @@ export default function GuestDetailScreen() {
     if (!refundPaymentId || !refundReason.trim()) {
       return Alert.alert('Error', 'Reason is required');
     }
-    if (!ownerPin.trim()) {
-      return Alert.alert('Security', 'Owner PIN is required to authorize refunds.');
-    }
     setRefunding(true);
     const { error } = await supabase.rpc('refund_payment', {
       p_payment_id: refundPaymentId,
       p_staff_id: activeStaff?.id,
-      p_reason: refundReason.trim(),
-      p_owner_pin: ownerPin.trim()
+      p_reason: refundReason.trim()
     });
     setRefunding(false);
     if (error) return Alert.alert('Error', error.message);
     setShowRefundModal(false);
     setRefundPaymentId(null);
     setRefundReason('');
-    setOwnerPin('');
     Alert.alert('Success', 'Payment refunded.');
     fetchDetails();
   };
@@ -608,20 +601,10 @@ export default function GuestDetailScreen() {
               value={refundReason}
               onChangeText={setRefundReason}
             />
-            <TextInput
-              style={[styles.input, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border, color: theme.text }]}
-              placeholder="Owner PIN (Required to authorize)"
-              placeholderTextColor={theme.textTertiary}
-              value={ownerPin}
-              onChangeText={setOwnerPin}
-              secureTextEntry
-              keyboardType="numeric"
-              maxLength={6}
-            />
             <View style={styles.modalBtnRow}>
               <Pressable 
                 style={[styles.cancelBtn, { backgroundColor: theme.surfaceSubtle }]} 
-                onPress={() => { setShowRefundModal(false); setRefundPaymentId(null); setRefundReason(''); setOwnerPin(''); }}
+                onPress={() => { setShowRefundModal(false); setRefundPaymentId(null); setRefundReason(''); }}
               >
                 <Text style={[styles.cancelBtnText, { color: theme.textSecondary }]}>Cancel</Text>
               </Pressable>

@@ -162,7 +162,7 @@ export default function DailyDigestScreen() {
             type: 'lockout',
             title: `Staff Locked Out: ${s.name}`,
             subtitle: `Role: ${s.role}`,
-            detail: `PIN locked until ${new Date(s.locked_until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
+            detail: `Account locked until ${new Date(s.locked_until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
             severity: 'high',
           });
         }
@@ -323,7 +323,7 @@ export default function DailyDigestScreen() {
         generatedAlerts.push({
           id: 'pin-failures-today',
           type: 'pin_failed',
-          title: `Co-Sign PIN Failures: ${failedPins.length} attempt(s)`,
+          title: `Co-Sign Verification Failures: ${failedPins.length} attempt(s)`,
           subtitle: 'Potential unauthorized handover attempt',
           detail: `Last failure at ${new Date(failedPins[failedPins.length - 1].created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`,
           severity: 'medium',
