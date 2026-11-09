@@ -15,7 +15,7 @@ export async function migrateLegacySession() {
       await AsyncStorage.removeItem(SUPABASE_AUTH_KEY);
     }
   } catch (e) {
-    console.warn('Session migration error:', e);
+    if (__DEV__) console.warn('Session migration error:', e);
   }
 }
 

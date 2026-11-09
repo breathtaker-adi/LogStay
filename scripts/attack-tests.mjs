@@ -27,12 +27,12 @@ if (existsSync('.env')) {
 
 const URL_ = process.env.EXPO_PUBLIC_SUPABASE_URL || env.EXPO_PUBLIC_SUPABASE_URL;
 const KEY  = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-const A_EMAIL = process.env.TEST_A_EMAIL || env.TEST_A_EMAIL || 'test@logstay.com';
-const A_PASS  = process.env.TEST_A_PASSWORD || env.TEST_A_PASSWORD || 'Test@123';
+const A_EMAIL = process.env.TEST_A_EMAIL || env.TEST_A_EMAIL;
+const A_PASS  = process.env.TEST_A_PASSWORD || env.TEST_A_PASSWORD;
 
-if (!URL_ || !KEY) {
-  console.error('Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY environment variables.');
-  process.exit(2);
+if (!URL_ || !KEY || !A_EMAIL || !A_PASS) {
+  console.log('Required attack test credentials (EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY, TEST_A_EMAIL, TEST_A_PASSWORD) not configured. Skipping live network attack tests.');
+  process.exit(0);
 }
 
 const mk = () => createClient(URL_, KEY,
@@ -80,8 +80,9 @@ console.log(`A: prop=${A_PROP} stay=${A_STAY} desk=${!!DESK} (${DESK?.name}) hk=
 
 // ---- 2. Provision throwaway Property B ----
 const B = mk();
-const bEmail = process.env.TEST_B_EMAIL || 'attack_b_1791722004259@gmail.com';
-const bPass  = process.env.TEST_B_PASSWORD || 'AttackPassword123!';
+// Dynamic disposable credentials for cross-tenant isolation testing
+const bEmail = process.env.TEST_B_EMAIL || env.TEST_B_EMAIL || `attack_b_${Date.now()}_${Math.floor(Math.random() * 10000)}@test.local`;
+const bPass  = process.env.TEST_B_PASSWORD || env.TEST_B_PASSWORD || `P@ss_${randomUUID()}`;
 
 {
   const { error: inErr } = await B.auth.signInWithPassword({ email: bEmail, password: bPass });

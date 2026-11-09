@@ -15,18 +15,24 @@ DECLARE
   v_room_f1 uuid := gen_random_uuid();
   v_room_f2 uuid := gen_random_uuid();
   v_room_b1 uuid := gen_random_uuid();
+
+  -- Dynamically generated random 6-digit seed PINs (Finding #20 hardening)
+  v_owner_pin text := (floor(random() * 900000 + 100000))::text;
+  v_desk_pin text := (floor(random() * 900000 + 100000))::text;
+  v_hk_pin text := (floor(random() * 900000 + 100000))::text;
 BEGIN
   -- 1. Property
   INSERT INTO properties (id, name, address, phone)
   VALUES (v_prop_id, 'Sunset Palms Boutique Stay & Hostel', 'House #42, Anjuna Beach Road, Goa 403509', '+91 98221 23456')
   ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 
-  -- 2. Staff Profiles (Default PIN: 1234 -> crypt('1234', gen_salt('bf', 10)))
+  -- 2. Staff Profiles (Random dynamic PINs hashed with bcrypt)
+  RAISE NOTICE 'Generated Seed PINs -> Owner: %, Desk: %, Housekeeping: %', v_owner_pin, v_desk_pin, v_hk_pin;
   INSERT INTO staff_profiles (id, property_id, name, phone, role, pin_hash, active)
   VALUES 
-    (v_owner_staff, v_prop_id, 'Aditya (Owner)', '+91 98221 23456', 'owner', crypt('1234', gen_salt('bf', 10)), true),
-    (v_desk_staff, v_prop_id, 'Ramesh (Front Desk)', '+91 98221 11111', 'desk', crypt('1234', gen_salt('bf', 10)), true),
-    (v_hk_staff, v_prop_id, 'Sunita (Housekeeper)', '+91 98221 22222', 'housekeeping', crypt('1234', gen_salt('bf', 10)), true)
+    (v_owner_staff, v_prop_id, 'Aditya (Owner)', '+91 98221 23456', 'owner', crypt(v_owner_pin, gen_salt('bf', 10)), true),
+    (v_desk_staff, v_prop_id, 'Ramesh (Front Desk)', '+91 98221 11111', 'desk', crypt(v_desk_pin, gen_salt('bf', 10)), true),
+    (v_hk_staff, v_prop_id, 'Sunita (Housekeeper)', '+91 98221 22222', 'housekeeping', crypt(v_hk_pin, gen_salt('bf', 10)), true)
   ON CONFLICT (id) DO NOTHING;
 
   -- 3. Multi-Floor Rooms

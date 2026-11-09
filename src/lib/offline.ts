@@ -16,11 +16,11 @@ try {
   }
   db.execSync(`PRAGMA key = "x'${dbKey}'";`);
   const v = db.getFirstSync<{ cipher_version?: string }>('PRAGMA cipher_version;');
-  if (v?.cipher_version) {
+  if (__DEV__ && v?.cipher_version) {
     console.log(`[SQLCipher] Local database encrypted (cipher_version: ${v.cipher_version})`);
   }
 } catch (e) {
-  console.warn('[SQLCipher] Key setup warning:', e);
+  if (__DEV__) console.warn('[SQLCipher] Key setup warning:', e);
 }
 
 export async function getCachedPropertyId(): Promise<string | null> {
@@ -138,7 +138,7 @@ export async function saveToOutbox(typeOrObj: string | { type: string; payload: 
     "INSERT INTO outbox (id, entity, type, payload, created_at, status, attempts) VALUES (?, ?, ?, ?, ?, 'pending', 0)",
     [id, type, type, payloadString, now]
   );
-  console.log('Saved to outbox:', id, type);
+  if (__DEV__) console.log('Saved to outbox:', id, type);
 }
 
 // Optimistic UI Cache Helpers
@@ -222,8 +222,13 @@ export const verifyLocalPin = async (staffId: string, pin: string): Promise<bool
     return true;
   } else {
     const newTries = (staff.local_failed_tries || 0) + 1;
-    // 5 failed attempts locks for 30 seconds (down from 5 minutes)
-    const lockUntil = newTries >= 5 ? Date.now() + (30 * 1000) : 0;
+    // Finding #6 hardening: Exponential backoff starting at 30s after 5 fails, doubling every 5 fails, capped at 30 min
+    const MAX_FAILS = 5;
+    const BASE_LOCK_MS = 30 * 1000;
+    const lockMs = newTries >= MAX_FAILS
+      ? Math.min(BASE_LOCK_MS * (2 ** Math.floor((newTries - MAX_FAILS) / MAX_FAILS)), 30 * 60 * 1000)
+      : 0;
+    const lockUntil = lockMs > 0 ? Date.now() + lockMs : 0;
     await database.runAsync('UPDATE cache_staff SET local_failed_tries = ?, local_locked_until = ? WHERE id = ?', [newTries, lockUntil, staffId]);
     return false;
   }
@@ -236,7 +241,13 @@ export async function processOutbox() {
   const rows = db.getAllSync<any>("SELECT * FROM outbox WHERE status = 'pending' OR status IS NULL ORDER BY created_at ASC");
   
   for (const item of rows) {
-    const payload = JSON.parse(item.payload);
+    let payload: any;
+    try {
+      payload = typeof item.payload === 'string' ? JSON.parse(item.payload) : item.payload;
+    } catch {
+      db.runSync('UPDATE outbox SET status = ?, attempts = ?, last_error = ? WHERE id = ?', ['failed', (item.attempts || 0) + 1, 'Malformed JSON payload', item.id]);
+      continue;
+    }
     let error: any = null;
     const actionType = item.entity || item.type;
 
@@ -400,10 +411,10 @@ export async function processOutbox() {
       } else {
         // Success, remove from outbox
         db.runSync('DELETE FROM outbox WHERE id = ?', [item.id]);
-        console.log(`Synced & deleted from outbox [${actionType}]:`, item.id);
+        if (__DEV__) console.log(`Synced & deleted from outbox [${actionType}]:`, item.id);
       }
     } catch (e) {
-      console.error('Outbox processing exception:', e);
+      if (__DEV__) console.error('Outbox processing exception:', e);
       break;
     }
   }

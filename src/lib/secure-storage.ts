@@ -41,7 +41,7 @@ export const LargeSecureStore = {
       }
       return fullValue;
     } catch (e) {
-      console.warn('SecureStore getItem error:', e);
+      if (__DEV__) console.warn('SecureStore getItem error:', e);
       return null;
     }
   },
@@ -67,7 +67,7 @@ export const LargeSecureStore = {
         await SecureStore.setItemAsync(`${key}_chunk_${i}`, chunks[i]);
       }
     } catch (e) {
-      console.warn('SecureStore setItem error:', e);
+      if (__DEV__) console.warn('SecureStore setItem error:', e);
     }
   },
 
@@ -98,7 +98,7 @@ export const LargeSecureStore = {
         await AsyncStorage.removeItem(key);
       } catch {}
     } catch (e) {
-      console.warn('SecureStore removeItem error:', e);
+      if (__DEV__) console.warn('SecureStore removeItem error:', e);
     }
   },
 };

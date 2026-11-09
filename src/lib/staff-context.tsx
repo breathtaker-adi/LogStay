@@ -2,7 +2,7 @@
 // Centralized State Management for Staff Session, Roles, and Role-Based Permissions
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LargeSecureStore } from './secure-storage';
 import { AppState } from 'react-native';
 import { can as checkPermission, Action, Role } from './permissions';
 import { StaffRole, ActiveStaffSession } from '@/types/staff';
@@ -35,23 +35,23 @@ export const StaffProvider = ({ children }: { children: React.ReactNode }) => {
 
   const logoutStaff = useCallback(async () => {
     try {
-      await AsyncStorage.removeItem('activeStaff');
+      await LargeSecureStore.removeItem('activeStaff');
       setActiveStaffState(null);
     } catch (e) {
-      console.error('[StaffContext.logoutStaff] error:', e);
+      if (__DEV__) console.error('[StaffContext.logoutStaff] error:', e);
     }
   }, []);
 
-  // Load active staff from AsyncStorage on mount
+  // Load active staff securely from LargeSecureStore on mount
   useEffect(() => {
     const loadStaff = async () => {
       try {
-        const stored = await AsyncStorage.getItem('activeStaff');
+        const stored = await LargeSecureStore.getItem('activeStaff');
         if (stored) {
           setActiveStaffState(JSON.parse(stored));
         }
       } catch (e) {
-        console.error('[StaffContext.loadStaff] error:', e);
+        if (__DEV__) console.error('[StaffContext.loadStaff] error:', e);
       } finally {
         setLoadingStaff(false);
       }
@@ -70,13 +70,13 @@ export const StaffProvider = ({ children }: { children: React.ReactNode }) => {
   const setActiveStaff = useCallback(async (staff: ActiveStaffSession | null) => {
     try {
       if (staff) {
-        await AsyncStorage.setItem('activeStaff', JSON.stringify(staff));
+        await LargeSecureStore.setItem('activeStaff', JSON.stringify(staff));
       } else {
-        await AsyncStorage.removeItem('activeStaff');
+        await LargeSecureStore.removeItem('activeStaff');
       }
       setActiveStaffState(staff);
     } catch (e) {
-      console.error('[StaffContext.setActiveStaff] error:', e);
+      if (__DEV__) console.error('[StaffContext.setActiveStaff] error:', e);
       setActiveStaffState(staff);
     }
   }, []);

@@ -3,6 +3,7 @@ import {
   PHOTO_RETENTION_DAYS,
   calculatePhotoExpiry,
   validateCronSecret,
+  timingSafeEqual,
   executePhotoPurge,
   PurgeDbClient,
   PurgeStorageClient,
@@ -85,7 +86,7 @@ describe('src/lib/purge-photos.ts & Edge Function (Statutory Photo Purge)', () =
     });
   });
 
-  describe('Cron Secret Header Authentication', () => {
+  describe('Cron Secret Header Authentication & Constant-Time Security', () => {
     it('accepts matching secret header', () => {
       expect(validateCronSecret('super-secret-cron-key-123', 'super-secret-cron-key-123')).toBe(true);
     });
@@ -96,6 +97,13 @@ describe('src/lib/purge-photos.ts & Edge Function (Statutory Photo Purge)', () =
       expect(validateCronSecret('', 'secret')).toBe(false);
       expect(validateCronSecret('wrong-secret', 'secret')).toBe(false);
       expect(validateCronSecret('secret', null)).toBe(false);
+    });
+
+    it('timingSafeEqual provides constant-time comparison against timing attacks', () => {
+      expect(timingSafeEqual('exact-match-token-123', 'exact-match-token-123')).toBe(true);
+      expect(timingSafeEqual('exact-match-token-123', 'exact-match-token-124')).toBe(false);
+      expect(timingSafeEqual('short', 'much-longer-string')).toBe(false);
+      expect(timingSafeEqual('a', 'b')).toBe(false);
     });
   });
 

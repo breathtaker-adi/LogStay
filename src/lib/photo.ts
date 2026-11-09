@@ -2,9 +2,36 @@
 import { File } from "expo-file-system";
 import { supabase } from "./supabase";
 
+export const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB max per statutory security rules
+export const SIGNED_URL_TTL = 3600; // 1 hour max signed URL lifetime (remediated from 1-2 years)
+
+/**
+ * Validates that image data does not exceed 5MB and matches standard JPEG magic bytes (FF D8 FF).
+ */
+export function validateImageBytes(bytes: Uint8Array): void {
+  if (bytes.byteLength > MAX_PHOTO_BYTES) {
+    throw new Error(`File size exceeds 5MB limit (${bytes.byteLength} bytes)`);
+  }
+  if (bytes.byteLength < 3 || bytes[0] !== 0xFF || bytes[1] !== 0xD8 || bytes[2] !== 0xFF) {
+    throw new Error("Invalid image format: Must be a valid JPEG image (magic bytes FF D8 FF)");
+  }
+}
+
+async function resolveBytes(localUri: string): Promise<Uint8Array> {
+  try {
+    const file = new File(localUri);
+    return await file.bytes();
+  } catch {
+    const response = await fetch(localUri);
+    const blob = await response.blob();
+    return new Uint8Array(await blob.arrayBuffer());
+  }
+}
+
 /**
  * Uploads an ID photo directly to the Supabase 'id_photos' bucket.
  * Explicitly sets 'contentType: image/jpeg' to adhere to bucket lockdown rules (0011.sql).
+ * Enforces magic-byte verification and 5MB size limit.
  * Safe against already-deleted files on outbox retries.
  */
 export async function uploadIdPhoto(
@@ -16,8 +43,6 @@ export async function uploadIdPhoto(
 
   try {
     const file = new File(localUri);
-    // If local file is already gone (e.g. uploaded on a previous attempt before RPC failure),
-    // return deterministic path so the subsequent RPC call can succeed.
     if (!file.exists) {
       return path;
     }
@@ -25,17 +50,10 @@ export async function uploadIdPhoto(
     // Non-file scheme URI (e.g. content:// or web blob), proceed to upload
   }
 
-  let uploadData: Uint8Array | Blob;
-  try {
-    const file = new File(localUri);
-    uploadData = await file.bytes();
-  } catch {
-    // Robust fallback for content:// or non-file scheme URIs
-    const response = await fetch(localUri);
-    uploadData = await response.blob();
-  }
+  const uploadBytes = await resolveBytes(localUri);
+  validateImageBytes(uploadBytes);
 
-  const { error } = await supabase.storage.from("id_photos").upload(path, uploadData, {
+  const { error } = await supabase.storage.from("id_photos").upload(path, uploadBytes, {
     contentType: "image/jpeg",
     upsert: true,
   });
@@ -58,32 +76,26 @@ export async function uploadBannerPhoto(
   const path = `${propertyId}/${filename}`;
 
   try {
-    let uploadData: Uint8Array | Blob;
-    try {
-      const file = new File(localUri);
-      uploadData = await file.bytes();
-    } catch {
-      const response = await fetch(localUri);
-      uploadData = await response.blob();
-    }
+    const uploadBytes = await resolveBytes(localUri);
+    validateImageBytes(uploadBytes);
 
-    const { error } = await supabase.storage.from("id_photos").upload(path, uploadData, {
+    const { error } = await supabase.storage.from("id_photos").upload(path, uploadBytes, {
       contentType: "image/jpeg",
       upsert: true,
     });
 
     if (error) {
-      console.warn("Storage upload fallback:", error.message);
+      if (__DEV__) console.warn("Storage upload fallback:", error.message);
       return localUri;
     }
 
     const { data: signedData } = await supabase.storage
       .from("id_photos")
-      .createSignedUrl(path, 60 * 60 * 24 * 365);
+      .createSignedUrl(path, SIGNED_URL_TTL);
 
     return signedData?.signedUrl || localUri;
   } catch (e) {
-    console.warn("Banner photo upload failed, using local URI:", e);
+    if (__DEV__) console.warn("Banner photo upload failed, using local URI:", e);
     return localUri;
   }
 }
@@ -99,32 +111,26 @@ export async function uploadUpiQrPhoto(
   const path = `${propertyId}/${filename}`;
 
   try {
-    let uploadData: Uint8Array | Blob;
-    try {
-      const file = new File(localUri);
-      uploadData = await file.bytes();
-    } catch {
-      const response = await fetch(localUri);
-      uploadData = await response.blob();
-    }
+    const uploadBytes = await resolveBytes(localUri);
+    validateImageBytes(uploadBytes);
 
-    const { error } = await supabase.storage.from("id_photos").upload(path, uploadData, {
+    const { error } = await supabase.storage.from("id_photos").upload(path, uploadBytes, {
       contentType: "image/jpeg",
       upsert: true,
     });
 
     if (error) {
-      console.warn("UPI QR storage upload fallback:", error.message);
+      if (__DEV__) console.warn("UPI QR storage upload fallback:", error.message);
       return localUri;
     }
 
     const { data: signedData } = await supabase.storage
       .from("id_photos")
-      .createSignedUrl(path, 60 * 60 * 24 * 365 * 2);
+      .createSignedUrl(path, SIGNED_URL_TTL);
 
     return signedData?.signedUrl || localUri;
   } catch (e) {
-    console.warn("UPI QR photo upload failed, using local URI:", e);
+    if (__DEV__) console.warn("UPI QR photo upload failed, using local URI:", e);
     return localUri;
   }
 }

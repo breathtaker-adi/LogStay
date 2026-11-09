@@ -64,6 +64,7 @@ graphify-out/
 # Video production & Hyperframes artifacts
 .hyperframes/
 **/.hyperframes/
+brag-output/
 *.mp4
 *.webm
 *.mov

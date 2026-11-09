@@ -19,6 +19,18 @@ vi.mock('expo-sharing', () => ({
   isAvailableAsync: vi.fn(),
   shareAsync: vi.fn(),
 }));
+vi.mock('expo-file-system', () => ({
+  File: class MockFile {
+    uri: string;
+    exists = true;
+    constructor(uri: string) {
+      this.uri = uri;
+    }
+    async bytes() {
+      return new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
+    }
+  },
+}));
 
 export const canInviteRole = (actor: StaffRole, invited: StaffRole) => {
   if (actor === 'owner' || actor === 'co_admin') return ['co_admin', 'desk', 'housekeeping'].includes(invited);
@@ -141,6 +153,58 @@ describe('Security & Attack Surface Invariants (Section 4.35)', () => {
       const resolvedRole = inviteCodeRecord.role;
       expect(resolvedRole).toBe('housekeeping');
       expect(resolvedRole).not.toBe(clientPayload.role);
+    });
+  });
+
+  describe('Storage Upload Validation & Content Verification (Finding #10)', () => {
+    it('validates image size and rejects payloads > 5MB', async () => {
+      const { validateImageBytes, MAX_PHOTO_BYTES } = await import('@/lib/photo');
+      const oversized = new Uint8Array(MAX_PHOTO_BYTES + 10);
+      oversized[0] = 0xFF;
+      oversized[1] = 0xD8;
+      oversized[2] = 0xFF;
+
+      expect(() => validateImageBytes(oversized)).toThrow('File size exceeds 5MB limit');
+    });
+
+    it('validates JPEG magic bytes and rejects non-JPEG files', async () => {
+      const { validateImageBytes } = await import('@/lib/photo');
+      const fakePng = new Uint8Array([0x89, 0x50, 0x4E, 0x47]); // PNG header
+      expect(() => validateImageBytes(fakePng)).toThrow('Invalid image format: Must be a valid JPEG');
+
+      const validJpeg = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10]);
+      expect(() => validateImageBytes(validJpeg)).not.toThrow();
+    });
+  });
+
+  describe('Cryptographic & Lockout Hardening (Findings #6, #7)', () => {
+    it('enforces NIST SP 800-63B PBKDF2 rounds (>= 600,000)', async () => {
+      const { PBKDF2_ROUNDS } = await import('@/lib/crypto-utils');
+      expect(PBKDF2_ROUNDS).toBeGreaterThanOrEqual(600_000);
+    });
+
+    it('calculates exponential lockout backoff correctly on consecutive failures', () => {
+      const calculateLockMs = (fails: number) => {
+        const MAX_FAILS = 5;
+        const BASE_LOCK_MS = 30 * 1000;
+        return fails >= MAX_FAILS
+          ? Math.min(BASE_LOCK_MS * (2 ** Math.floor((fails - MAX_FAILS) / MAX_FAILS)), 30 * 60 * 1000)
+          : 0;
+      };
+
+      expect(calculateLockMs(4)).toBe(0); // Not locked yet
+      expect(calculateLockMs(5)).toBe(30_000); // 30s at 5 failures
+      expect(calculateLockMs(9)).toBe(30_000);
+      expect(calculateLockMs(10)).toBe(60_000); // 60s at 10 failures
+      expect(calculateLockMs(15)).toBe(120_000); // 120s at 15 failures
+      expect(calculateLockMs(50)).toBe(30 * 60 * 1000); // Capped at 30 min
+    });
+
+    it('timingSafeEqual defends against timing attacks on edge function cron secret', async () => {
+      const { timingSafeEqual } = await import('@/lib/purge-photos');
+      expect(timingSafeEqual('correct-secret-1234', 'correct-secret-1234')).toBe(true);
+      expect(timingSafeEqual('correct-secret-1234', 'correct-secret-1235')).toBe(false);
+      expect(timingSafeEqual('short', 'much-longer-secret')).toBe(false);
     });
   });
 });

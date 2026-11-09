@@ -2,13 +2,19 @@
 // Centralized Environment & App Configuration
 // Separates environment secrets, cloud URLs, and operational defaults from code.
 
+const rawUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const rawKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+// Finding #17: In production builds, fail-fast if environment variables are missing
+if (process.env.NODE_ENV === 'production' && (!rawUrl || !rawKey)) {
+  throw new Error('FATAL: Missing EXPO_PUBLIC_SUPABASE_URL or EXPO_PUBLIC_SUPABASE_ANON_KEY in production build.');
+}
+
 export const ENV = {
   // Supabase Cloud Configuration
-  SUPABASE_URL:
-    process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://placeholder-project.supabase.co',
-
+  SUPABASE_URL: rawUrl || 'https://placeholder-project.supabase.co',
   SUPABASE_ANON_KEY:
-    process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
+    rawKey ||
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiJ9.mock_anon_key_signature',
 
   // App Metadata & Routing

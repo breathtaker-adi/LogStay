@@ -29,14 +29,31 @@ export function calculatePhotoExpiry(checkInDate: Date | string, retentionDays: 
 }
 
 /**
- * Validates edge function cron secret authorization header.
+ * Constant-time string equality check to defend against timing attacks on secrets (CWE-208).
+ */
+export function timingSafeEqual(a: string, b: string): boolean {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const aLen = a.length;
+  const bLen = b.length;
+  let diff = aLen ^ bLen;
+  const len = Math.max(aLen, bLen);
+  for (let i = 0; i < len; i++) {
+    const codeA = i < aLen ? a.charCodeAt(i) : 0;
+    const codeB = i < bLen ? b.charCodeAt(i) : 0;
+    diff |= codeA ^ codeB;
+  }
+  return diff === 0;
+}
+
+/**
+ * Validates edge function cron secret authorization header using constant-time comparison.
  */
 export function validateCronSecret(
   incomingSecret?: string | null,
   configuredSecret?: string | null
 ): boolean {
   if (!incomingSecret || !configuredSecret) return false;
-  return incomingSecret === configuredSecret;
+  return timingSafeEqual(incomingSecret, configuredSecret);
 }
 
 /**

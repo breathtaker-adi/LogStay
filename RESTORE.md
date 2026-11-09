@@ -15,7 +15,7 @@ Follow these steps if restoring or migrating the LogStay database from backups:
 
 4. **Foreign Key Handling on Data Import (`auth.users`)**:
    - `logstay-data.sql` references `auth.users(id)` in `properties`, `members`, `shifts`, and `audit_log`.
-   - Either recreate the auth user with the matching UUID (`0728233e-223c-40b4-ae9c-39403a58490a`) via the Supabase Admin API / Auth dashboard before importing, or wrap the data restore in session replication overrides:
+   - Either recreate the auth user with the matching UUID (`<your-owner-user-id>`) via the Supabase Admin API / Auth dashboard before importing, or wrap the data restore in session replication overrides:
      ```sql
      SET session_replication_role = 'replica';
      -- Execute logstay-data.sql inserts here
