@@ -6,6 +6,7 @@
 
 BEGIN;
 
+DROP FUNCTION IF EXISTS public.create_property(text, text, text, text, text);
 CREATE OR REPLACE FUNCTION public.create_property(
   p_name text, 
   p_type text, 

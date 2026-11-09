@@ -499,8 +499,19 @@ GRANT EXECUTE ON FUNCTION public.deactivate_staff(uuid, uuid, uuid, text) TO ser
 
 -- ============================================================
 -- 10. Lock down delete_expired_id_photos (Finding #3)
--- Revoke execute from authenticated and public; only service_role (cron) can execute
+-- Create if missing, and revoke execute from authenticated and public; only service_role (cron) can execute
 -- ============================================================
+CREATE OR REPLACE FUNCTION public.delete_expired_id_photos() RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions AS $$
+DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN SELECT id, id_photo_path FROM guests WHERE id_photo_expires_at < now() AND id_deleted_at IS NULL LOOP
+    UPDATE guests SET id_deleted_at = now(), id_photo_path = null WHERE id = r.id;
+  END LOOP;
+END;
+$$;
+
 REVOKE ALL ON FUNCTION public.delete_expired_id_photos() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.delete_expired_id_photos() FROM anon;
 REVOKE ALL ON FUNCTION public.delete_expired_id_photos() FROM authenticated;
@@ -635,3 +646,4 @@ REVOKE TRUNCATE ON TABLE public.shifts FROM anon, authenticated;
 REVOKE TRUNCATE ON TABLE public.cash_entries FROM anon, authenticated;
 REVOKE TRUNCATE ON TABLE public.charges FROM anon, authenticated;
 REVOKE TRUNCATE ON TABLE public.payments FROM anon, authenticated;
+

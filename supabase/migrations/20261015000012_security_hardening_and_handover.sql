@@ -227,6 +227,8 @@ GRANT EXECUTE ON FUNCTION public.cancel_invite_code(uuid, text) TO authenticated
 -- Drop wide-open public/anon policies
 DROP POLICY IF EXISTS "Authenticated members can view remarks" ON public.staff_remarks;
 DROP POLICY IF EXISTS "Authenticated users can insert remarks" ON public.staff_remarks;
+DROP POLICY IF EXISTS "Strict staff remarks view policy" ON public.staff_remarks;
+DROP POLICY IF EXISTS "Strict staff remarks insert policy" ON public.staff_remarks;
 REVOKE ALL ON public.staff_remarks FROM anon;
 
 -- Reading remarks:
