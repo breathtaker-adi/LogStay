@@ -4,44 +4,56 @@
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
--- OPTION 1: TRUNCATE OPERATIONAL TEST DATA ONLY (RECOMMENDED)
+-- OPTION 1: TRUNCATE OPERATIONAL TEST DATA ONLY (RECOMMENDED & SAFE)
 -- Keeps: Properties, Rooms, Beds, Staff Profiles, and Owner Accounts
--- Clears: All test guests, stays, cash entries, shifts, housekeeping logs, issues, requests
+-- Clears: All test guests, stays, cash entries, shifts, housekeeping logs, issues
+-- Note: Uses dynamic table detection so it never fails if a table does not exist
 -- ----------------------------------------------------------------------------
 
-BEGIN;
+DO $$
+DECLARE
+  t text;
+  v_tables text[] := ARRAY[
+    'foreign_details',
+    'charges',
+    'payments',
+    'cash_entries',
+    'housekeeping_log',
+    'issues',
+    'audit_log',
+    'staff_attendance',
+    'stays',
+    'guests',
+    'shifts',
+    'join_attempts',
+    'cosign_attempts',
+    'approval_requests'
+  ];
+BEGIN
+  -- Truncate each table only if it actually exists in the public schema
+  FOREACH t IN ARRAY v_tables LOOP
+    IF EXISTS (
+      SELECT 1 FROM information_schema.tables 
+      WHERE table_schema = 'public' AND table_name = t
+    ) THEN
+      EXECUTE format('TRUNCATE TABLE public.%I CASCADE;', t);
+    END IF;
+  END LOOP;
 
--- 1. Truncate all transactional & operational activity
-TRUNCATE TABLE
-  public.foreign_details,
-  public.charges,
-  public.payments,
-  public.cash_entries,
-  public.housekeeping_log,
-  public.issues,
-  public.audit_log,
-  public.staff_attendance,
-  public.stays,
-  public.guests,
-  public.shifts,
-  public.join_attempts,
-  public.cosign_attempts,
-  public.desk_staff_requests,
-  public.concierge_change_requests
-CASCADE;
-
--- 2. Reset all unit / bed housekeeping statuses to 'clean'
-UPDATE public.units 
-SET housekeeping_status = 'clean';
-
-COMMIT;
+  -- Reset housekeeping status on existing units/beds
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables 
+    WHERE table_schema = 'public' AND table_name = 'units'
+  ) THEN
+    UPDATE public.units SET housekeeping_status = 'clean';
+  END IF;
+END $$;
 
 
 -- ----------------------------------------------------------------------------
--- OPTION 2: FULL FACTORY RESET (COMPLETE WIPE)
--- WARNING: Wipes EVERYTHING including your Property, Rooms, Beds, Staff & Members
+-- OPTION 1 (ALTERNATIVE): STANDARD STATIC SQL
+-- If you prefer plain static SQL without a DO block:
 -- ----------------------------------------------------------------------------
-
 /*
 BEGIN;
 
@@ -57,22 +69,56 @@ TRUNCATE TABLE
   public.stays,
   public.guests,
   public.shifts,
-  public.join_attempts,
-  public.cosign_attempts,
-  public.desk_staff_requests,
-  public.concierge_change_requests,
-  public.staff_remarks,
-  public.member_pins,
-  public.property_invites,
-  public.staff_profiles,
-  public.units,
-  public.rooms,
-  public.members,
-  public.properties
+  public.cosign_attempts
 CASCADE;
 
--- Optional: If you also want to remove test ID photos from storage:
--- DELETE FROM storage.objects WHERE bucket_id = 'id_photos';
+UPDATE public.units 
+SET housekeeping_status = 'clean';
 
 COMMIT;
+*/
+
+
+-- ----------------------------------------------------------------------------
+-- OPTION 2: FULL FACTORY RESET (COMPLETE WIPE)
+-- WARNING: Wipes EVERYTHING including Property, Rooms, Beds, Staff & Members
+-- ----------------------------------------------------------------------------
+/*
+DO $$
+DECLARE
+  t text;
+  v_tables text[] := ARRAY[
+    'foreign_details',
+    'charges',
+    'payments',
+    'cash_entries',
+    'housekeeping_log',
+    'issues',
+    'audit_log',
+    'staff_attendance',
+    'stays',
+    'guests',
+    'shifts',
+    'join_attempts',
+    'cosign_attempts',
+    'approval_requests',
+    'staff_remarks',
+    'member_pins',
+    'property_invites',
+    'staff_profiles',
+    'units',
+    'rooms',
+    'members',
+    'properties'
+  ];
+BEGIN
+  FOREACH t IN ARRAY v_tables LOOP
+    IF EXISTS (
+      SELECT 1 FROM information_schema.tables 
+      WHERE table_schema = 'public' AND table_name = t
+    ) THEN
+      EXECUTE format('TRUNCATE TABLE public.%I CASCADE;', t);
+    END IF;
+  END LOOP;
+END $$;
 */
