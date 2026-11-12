@@ -15,7 +15,6 @@ import {
   TextInput,
   TouchableOpacity,
   Image,
-  ImageBackground,
   KeyboardAvoidingView,
   Platform
 } from "react-native";
@@ -426,13 +425,13 @@ export default function SettingsScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ── REVAMPED APPLE-DESIGN PHOTO COVER CARD ──────────────────── */}
-          <View style={[styles.heroCardContainer, { borderColor: theme.border }]}>
-            <ImageBackground
-              source={bannerSource}
-              style={styles.heroImageBg}
-              imageStyle={styles.heroImage}
-            >
+          <View style={[styles.heroCardContainer, { borderColor: theme.border, backgroundColor: theme.surfaceSubtle }]}>
+            <View style={styles.heroImageBg}>
+              <Image
+                source={bannerSource}
+                style={[StyleSheet.absoluteFill, styles.heroImage]}
+                resizeMode="cover"
+              />
               {/* Subtle gradient vignette */}
               <View style={styles.heroVignette}>
                 {/* Pending Approval Badge for Front Desk */}
@@ -489,15 +488,15 @@ export default function SettingsScreen() {
                   )}
                 </View>
               </View>
-            </ImageBackground>
+            </View>
           </View>
 
           {/* Owner Pending Photo Review Card */}
           {isOwner && propertyDetails?.pending_photo_url && (
-            <View style={[styles.approvalCard, { backgroundColor: theme.dirtySubtle, borderColor: '#FDE68A' }]}>
+            <View style={[styles.approvalCard, { backgroundColor: '#fef3c7', borderColor: '#fde68a' }]}>
               <View style={styles.approvalHeaderRow}>
-                <Ionicons name="alert-circle" size={18} color={theme.dirty} />
-                <Text style={[styles.approvalTitle, { color: theme.dirty }]}>
+                <Ionicons name="alert-circle" size={18} color="#d97706" />
+                <Text style={[styles.approvalTitle, { color: '#92400e' }]}>
                   Front Desk Photo Submitted for Review
                 </Text>
               </View>

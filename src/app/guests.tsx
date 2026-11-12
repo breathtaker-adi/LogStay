@@ -227,17 +227,32 @@ export default function GuestsScreen() {
           </Pressable>
         </View>
 
-        {/* Daily Police Register PDF Export Button */}
-        <TouchableOpacity
-          style={[styles.exportRegisterBtn, { backgroundColor: theme.backgroundElement, borderColor: theme.separator }]}
-          onPress={handleExportRegisterPDF}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Export Daily Register PDF"
-        >
-          <Ionicons name="document-text-outline" size={15} color={theme.accent} />
-          <Text style={[styles.exportRegisterText, { color: theme.accent }]}>Export Daily Register (PDF)</Text>
-        </TouchableOpacity>
+        {/* Daily Police Register PDF Export & Guest Broadcast Bar */}
+        <View style={{ flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 10 }}>
+          <TouchableOpacity
+            style={[styles.exportRegisterBtn, { flex: 1, marginHorizontal: 0, marginBottom: 0, backgroundColor: theme.backgroundElement, borderColor: theme.separator }]}
+            onPress={handleExportRegisterPDF}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Export Daily Register PDF"
+          >
+            <Ionicons name="document-text-outline" size={15} color={theme.accentText} />
+            <Text style={[styles.exportRegisterText, { color: theme.accentText }]} numberOfLines={1}>Daily Register (PDF)</Text>
+          </TouchableOpacity>
+
+          {can('broadcast_guests') && (
+            <TouchableOpacity
+              style={[styles.exportRegisterBtn, { marginHorizontal: 0, marginBottom: 0, paddingHorizontal: 14, backgroundColor: theme.accentSubtle, borderColor: theme.roomOccupiedBorder }]}
+              onPress={() => router.push('/broadcast' as any)}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Broadcast message to checked-in guests"
+            >
+              <Ionicons name="megaphone-outline" size={15} color={theme.accentText} />
+              <Text style={[styles.exportRegisterText, { color: theme.accentText }]} numberOfLines={1}>Broadcast</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Modern Search Input */}
         <View style={[styles.searchBox, { backgroundColor: theme.backgroundElement, borderColor: theme.separator }]}>

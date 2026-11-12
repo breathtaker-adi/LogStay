@@ -232,7 +232,7 @@ export default function UpiReconciliationScreen() {
                   </View>
 
                   {/* Verification Toggle Row */}
-                  <View style={styles.verificationRow}>
+                  <View style={[styles.verificationRow, { borderTopColor: theme.borderSubtle }]}>
                     <View
                       style={[
                         styles.statusPill,
@@ -245,12 +245,12 @@ export default function UpiReconciliationScreen() {
                       <Ionicons
                         name={isVerified ? 'checkmark-circle' : 'time'}
                         size={14}
-                        color={isVerified ? '#15803d' : '#b45309'}
+                        color={isVerified ? '#16a34a' : '#d97706'}
                       />
                       <Text
                         style={[
                           styles.statusPillText,
-                          { color: isVerified ? '#15803d' : '#b45309' },
+                          { color: isVerified ? '#16a34a' : '#d97706' },
                         ]}
                       >
                         {isVerified ? 'Matched in Bank' : 'Unverified (Desk Scan)'}
@@ -315,9 +315,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '800',
     marginVertical: 4,
+    fontVariant: ['tabular-nums'],
   },
   metricSub: {
     fontSize: 11,
+    fontVariant: ['tabular-nums'],
   },
   tabBar: {
     flexDirection: 'row',
@@ -393,6 +395,7 @@ const styles = StyleSheet.create({
   amountText: {
     fontSize: 17,
     fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
   metaRow: {
     flexDirection: 'row',
@@ -401,6 +404,7 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 11,
+    fontVariant: ['tabular-nums'],
   },
   verificationRow: {
     flexDirection: 'row',

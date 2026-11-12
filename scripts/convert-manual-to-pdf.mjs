@@ -243,3 +243,4 @@ console.log('✅ PDF generated in Docs:', pdfDestDocs, 'Size:', fs.statSync(pdfD
 // Copy to brain artifact directory as well
 fs.copyFileSync(pdfDestDocs, pdfDestBrain);
 console.log('✅ PDF mirrored to brain directory:', pdfDestBrain);
+

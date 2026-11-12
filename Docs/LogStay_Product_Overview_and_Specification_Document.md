@@ -369,3 +369,4 @@ The hospitality PMS market is dominated by legacy architectures designed between
 | **Security Verification** | 21/21 Findings Remediated (PBKDF2, Zero PIN Spoofing, RLS Hardened) |
 | **Storage Engine** | Supabase PostgreSQL 15 + Client Embedded SQLite |
 | **License** | Proprietary Commercial Architecture — LogStay Technologies |
+

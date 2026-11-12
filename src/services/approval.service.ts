@@ -3,7 +3,7 @@
 
 import { supabase } from '@/lib/supabase';
 
-export type ApprovalKind = 'refund' | 'discount' | 'write_off' | 'price_override';
+export type ApprovalKind = 'refund' | 'discount' | 'write_off' | 'price_override' | 'guest_broadcast';
 export type ApprovalStatus = 'pending' | 'approved' | 'declined';
 
 export interface ApprovalRequest {

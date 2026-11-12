@@ -7,7 +7,7 @@ import {
   View,
   Text,
   StyleSheet,
-  ImageBackground,
+  Image,
   Animated,
   Platform,
   Dimensions,
@@ -97,11 +97,12 @@ export function AppleSplashScreen() {
     <Animated.View style={[styles.root, { opacity: fadeAnim }]}>
       <StatusBar style="light" />
 
-      <ImageBackground
-        source={SPLASH_IMAGE}
-        style={styles.backgroundImage}
-        resizeMode="cover"
-      >
+      <View style={styles.backgroundImage}>
+        <Image
+          source={SPLASH_IMAGE}
+          style={styles.artworkImage}
+          resizeMode="contain"
+        />
         {/* Bottom Progress Bar Container (Apple HIG positioning) */}
         <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom, 24) + 16 }]}>
           {/* Subtle Status Caption */}
@@ -120,7 +121,7 @@ export function AppleSplashScreen() {
           {/* Version Badge */}
           <Text style={styles.versionText}>LogStay Mobile 1.0 • AES-256 Cloud Link</Text>
         </View>
-      </ImageBackground>
+      </View>
     </Animated.View>
   );
 }
@@ -128,14 +129,24 @@ export function AppleSplashScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#021B78',
+    backgroundColor: '#011787',
   },
   backgroundImage: {
     flex: 1,
     width: '100%',
     height: '100%',
+    backgroundColor: '#011787',
     justifyContent: 'flex-end',
     alignItems: 'center',
+  },
+  artworkImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
   },
   bottomContainer: {
     alignItems: 'center',

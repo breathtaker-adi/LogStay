@@ -28,6 +28,7 @@ import * as Crypto from 'expo-crypto';
 import { ScreenHeader } from '@/lib/screen-header';
 import { floorLabel, resolveFloorNo } from '@/lib/floors';
 import { useTheme } from '@/hooks/use-theme';
+import { Fonts } from '@/constants/theme';
 
 export default function DormDetailScreen() {
   const { roomId } = useLocalSearchParams<{ roomId: string }>();
@@ -437,7 +438,7 @@ export default function DormDetailScreen() {
         <View style={[styles.heroCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <View style={styles.heroTopRow}>
             <View style={[styles.heroIconBox, { backgroundColor: theme.accentSubtle }]}>
-              <MaterialCommunityIcons name="bunk-bed-outline" size={26} color={theme.accent} />
+              <MaterialCommunityIcons name="bunk-bed-outline" size={26} color={theme.accentText} />
             </View>
             <View style={styles.heroTitleBox}>
               <Text style={[styles.heroTitle, { color: theme.text }]}>{room?.label || 'Dorm'}</Text>
@@ -445,29 +446,53 @@ export default function DormDetailScreen() {
                 <View style={[styles.heroFloorBadge, { backgroundColor: theme.surfaceSubtle }]}>
                   <Text style={[styles.heroFloorText, { color: theme.textSecondary }]}>Floor {room?.floor || 'G'}</Text>
                 </View>
-                <View style={[styles.heroGenderBadge, editGenderRule === 'female' ? styles.badgeFemale : editGenderRule === 'male' ? styles.badgeMale : styles.badgeAny]}>
-                  <Text style={styles.heroGenderText}>
-                    {editGenderRule === 'female' ? '♀ Female Only' : editGenderRule === 'male' ? '♂ Male Only' : '⚧ Any Gender'}
+                <View
+                  style={[
+                    styles.heroGenderBadge,
+                    {
+                      backgroundColor:
+                        editGenderRule === 'female'
+                          ? theme.occupiedSubtle
+                          : editGenderRule === 'male'
+                          ? theme.accentSubtle
+                          : theme.surfaceSubtle
+                    }
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.heroGenderText,
+                      {
+                        color:
+                          editGenderRule === 'female'
+                            ? theme.occupied
+                            : editGenderRule === 'male'
+                            ? theme.accentText
+                            : theme.textSecondary
+                      }
+                    ]}
+                  >
+                    {editGenderRule === 'female' ? 'Female Only' : editGenderRule === 'male' ? 'Male Only' : 'Any Gender'}
                   </Text>
                 </View>
               </View>
             </View>
             {can('settings') && (
               <TouchableOpacity
-                style={[styles.heroEditBtn, { backgroundColor: theme.accentSubtle, borderColor: theme.accent }]}
+                style={[styles.heroEditBtn, { backgroundColor: theme.accentSubtle, borderColor: theme.border }]}
                 onPress={() => setShowEditModal(true)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="create-outline" size={16} color={theme.accent} />
-                <Text style={[styles.heroEditText, { color: theme.accent }]}>Edit</Text>
+                <Ionicons name="create-outline" size={16} color={theme.accentText} />
+                <Text style={[styles.heroEditText, { color: theme.accentText }]}>Edit</Text>
               </TouchableOpacity>
             )}
           </View>
 
           {/* Quick Stats Pills */}
-          <View style={styles.metricsRow}>
+          <View style={[styles.metricsRow, { borderTopColor: theme.borderSubtle }]}>
             <View style={[styles.metricPill, { backgroundColor: theme.accentSubtle }]}>
-              <Text style={[styles.metricNumber, { color: theme.accent }]}>{totalBeds}</Text>
+              <Text style={[styles.metricNumber, { color: theme.accentText }]}>{totalBeds}</Text>
               <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>Total Beds</Text>
             </View>
             <View style={[styles.metricPill, { backgroundColor: theme.occupiedSubtle }]}>
@@ -487,7 +512,7 @@ export default function DormDetailScreen() {
           </View>
         </View>
 
-        {/* Quick Operations Bar (Apple HIG Segmented Action Row) */}
+        {/* Quick Operations Bar */}
         <View style={styles.quickOpsRow}>
           <TouchableOpacity
             style={[styles.quickOpBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
@@ -497,7 +522,7 @@ export default function DormDetailScreen() {
             }}
             activeOpacity={0.7}
           >
-            <Ionicons name="warning-outline" size={16} color="#f59e0b" />
+            <Ionicons name="warning-outline" size={16} color="#d97706" />
             <Text style={[styles.quickOpText, { color: theme.text }]}>Report Issue</Text>
           </TouchableOpacity>
 
@@ -507,7 +532,7 @@ export default function DormDetailScreen() {
               onPress={handleSetDormMaintenance}
               activeOpacity={0.7}
             >
-              <Ionicons name="construct-outline" size={16} color="#6366f1" />
+              <Ionicons name="construct-outline" size={16} color={theme.maintenance} />
               <Text style={[styles.quickOpText, { color: theme.text }]}>Dorm Maintenance</Text>
             </TouchableOpacity>
           )}
@@ -557,7 +582,7 @@ export default function DormDetailScreen() {
               >
                 <View style={styles.bedTopRow}>
                   <View style={[styles.bedIconBadge, { backgroundColor: theme.accentSubtle }]}>
-                    <Ionicons name="bed-outline" size={18} color={theme.accent} />
+                    <Ionicons name="bed-outline" size={18} color={theme.accentText} />
                   </View>
                   <View style={styles.bedInfoBox}>
                     <Text style={[styles.bedLabel, { color: theme.text }]}>{unit.label}</Text>
@@ -578,9 +603,9 @@ export default function DormDetailScreen() {
 
                 {/* Occupant / Vacant Banner */}
                 {stay ? (
-                  <View style={[styles.occupantBanner, { backgroundColor: theme.surfaceSubtle }]}>
+                  <View style={[styles.occupantBanner, { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle }]}>
                     <View style={[styles.occupantAvatar, { backgroundColor: theme.accentSubtle }]}>
-                      <Text style={[styles.occupantAvatarText, { color: theme.accent }]}>
+                      <Text style={[styles.occupantAvatarText, { color: theme.accentText }]}>
                         {(guestName || 'G').charAt(0).toUpperCase()}
                       </Text>
                     </View>
@@ -624,7 +649,7 @@ export default function DormDetailScreen() {
                       style={[
                         styles.bedQuickMaintBtn,
                         state === 'maintenance'
-                          ? { backgroundColor: '#dcfce7', borderColor: '#86efac' }
+                          ? { backgroundColor: theme.freeSubtle, borderColor: theme.roomCleanBorder }
                           : { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }
                       ]}
                       onPress={(e) => {
@@ -636,12 +661,12 @@ export default function DormDetailScreen() {
                       <Ionicons
                         name={state === 'maintenance' ? "checkmark-circle-outline" : "construct-outline"}
                         size={13}
-                        color={state === 'maintenance' ? "#15803d" : "#6366f1"}
+                        color={state === 'maintenance' ? theme.free : theme.maintenance}
                       />
                       <Text
                         style={[
                           styles.bedQuickMaintText,
-                          { color: state === 'maintenance' ? "#15803d" : "#6366f1" }
+                          { color: state === 'maintenance' ? theme.free : theme.maintenance }
                         ]}
                       >
                         {state === 'maintenance' ? 'Mark Available (Clean)' : 'Set Maintenance'}
@@ -658,7 +683,7 @@ export default function DormDetailScreen() {
         <View style={[styles.issuesCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <View style={[styles.issuesHeaderRow, { borderBottomColor: theme.borderSubtle }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Ionicons name="construct-outline" size={18} color="#f59e0b" />
+              <Ionicons name="construct-outline" size={18} color="#d97706" />
               <Text style={[styles.issuesTitle, { color: theme.text }]}>Open Issues ({issues.length})</Text>
             </View>
             <TouchableOpacity
@@ -669,8 +694,8 @@ export default function DormDetailScreen() {
               }}
               activeOpacity={0.7}
             >
-              <Ionicons name="add" size={14} color={theme.accent} />
-              <Text style={[styles.reportIssueLinkText, { color: theme.accent }]}>Report</Text>
+              <Ionicons name="add" size={14} color={theme.accentText} />
+              <Text style={[styles.reportIssueLinkText, { color: theme.accentText }]}>Report</Text>
             </TouchableOpacity>
           </View>
 
@@ -689,7 +714,7 @@ export default function DormDetailScreen() {
                   <View key={iss.id} style={[styles.issueItem, { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle }]}>
                     <View style={styles.issueItemTop}>
                       <View style={[styles.issueCategoryChip, { backgroundColor: '#fef3c7' }]}>
-                        <Text style={[styles.issueCategoryText, { color: '#92400e' }]}>{iss.category.toUpperCase()}</Text>
+                        <Text style={[styles.issueCategoryText, { color: '#d97706' }]}>{iss.category.toUpperCase()}</Text>
                       </View>
                       <Text style={[styles.issueBedBadge, { color: theme.textSecondary }]}>
                         {targetBed?.label || 'Dorm Bed'}
@@ -700,7 +725,7 @@ export default function DormDetailScreen() {
                     </View>
                     <Text style={[styles.issueNoteText, { color: theme.text }]}>{iss.note || 'No description provided'}</Text>
                     <TouchableOpacity
-                      style={[styles.resolveBtn, { backgroundColor: '#10b981' }]}
+                      style={[styles.resolveBtn, { backgroundColor: '#16a34a' }]}
                       onPress={() => handleResolveIssue(iss.id)}
                       activeOpacity={0.8}
                     >
@@ -716,16 +741,16 @@ export default function DormDetailScreen() {
 
         {/* ── OWNER ACTIONS CARD ──────────────────────────────────── */}
         {can('settings') && (
-          <View style={styles.dangerZone}>
+          <View style={[styles.dangerZone, { backgroundColor: theme.destructiveSubtle, borderColor: theme.destructive }]}>
             <View style={styles.dangerHeader}>
-              <MaterialCommunityIcons name="shield-alert-outline" size={18} color="#be123c" />
-              <Text style={styles.dangerTitle}>OWNER ROOM ACTIONS</Text>
+              <MaterialCommunityIcons name="shield-alert-outline" size={18} color={theme.destructive} />
+              <Text style={[styles.dangerTitle, { color: theme.destructive }]}>OWNER ROOM ACTIONS</Text>
             </View>
-            <Text style={styles.dangerNote}>
+            <Text style={[styles.dangerNote, { color: theme.textSecondary }]}>
               Remove or archive this dorm. Only permitted when all beds in this room are completely vacant.
             </Text>
             <TouchableOpacity
-              style={styles.deleteBtn}
+              style={[styles.deleteBtn, { backgroundColor: theme.destructive }]}
               onPress={handleRemoveRoom}
               activeOpacity={0.8}
             >
@@ -744,69 +769,77 @@ export default function DormDetailScreen() {
           style={styles.modalOverlay}
         >
           <ScrollView
-            contentContainerStyle={styles.modalCard}
+            contentContainerStyle={[styles.modalCard, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Edit Dorm Room</Text>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Edit Dorm Room</Text>
               <TouchableOpacity onPress={() => setShowEditModal(false)}>
-                <Ionicons name="close-circle" size={24} color="#94a3b8" />
+                <Ionicons name="close-circle" size={24} color={theme.textTertiary} />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.inputLabel}>Room Label</Text>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Room Label</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border, color: theme.text }]}
               value={editLabel}
               onChangeText={setEditLabel}
               placeholder="e.g. Dorm 201"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={theme.textTertiary}
             />
 
-            <Text style={styles.inputLabel}>Floor Location</Text>
-            <View style={styles.stepperContainer}>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Floor Location</Text>
+            <View style={[styles.stepperContainer, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
               <TouchableOpacity 
-                style={[styles.stepperBtn, editFloorNo <= -2 && styles.stepperBtnDisabled]} 
+                style={[styles.stepperBtn, { backgroundColor: theme.surface }, editFloorNo <= -2 && { opacity: 0.45 }]} 
                 onPress={() => setEditFloorNo(prev => Math.max(-2, prev - 1))}
                 disabled={editFloorNo <= -2}
               >
-                <Ionicons name="remove" size={18} color={editFloorNo <= -2 ? "#cbd5e1" : "#1e293b"} />
+                <Ionicons name="remove" size={18} color={editFloorNo <= -2 ? theme.textTertiary : theme.text} />
               </TouchableOpacity>
               <View style={styles.stepperValueBox}>
-                <Text style={styles.stepperFloorTitle}>{floorLabel(editFloorNo)}</Text>
+                <Text style={[styles.stepperFloorTitle, { color: theme.text }]}>{floorLabel(editFloorNo)}</Text>
               </View>
               <TouchableOpacity 
-                style={[styles.stepperBtn, editFloorNo >= 60 && styles.stepperBtnDisabled]} 
+                style={[styles.stepperBtn, { backgroundColor: theme.surface }, editFloorNo >= 60 && { opacity: 0.45 }]} 
                 onPress={() => setEditFloorNo(prev => Math.min(60, prev + 1))}
                 disabled={editFloorNo >= 60}
               >
-                <Ionicons name="add" size={18} color={editFloorNo >= 60 ? "#cbd5e1" : "#1e293b"} />
+                <Ionicons name="add" size={18} color={editFloorNo >= 60 ? theme.textTertiary : theme.text} />
               </TouchableOpacity>
             </View>
             <View style={styles.quickFloorChips}>
               {[-1, 0, 1, 2, 3].map(f => (
                 <TouchableOpacity
                   key={f}
-                  style={[styles.quickChip, editFloorNo === f && styles.quickChipActive]}
+                  style={[
+                    styles.quickChip,
+                    { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
+                    editFloorNo === f && { backgroundColor: theme.accent, borderColor: theme.accent }
+                  ]}
                   onPress={() => setEditFloorNo(f)}
                 >
-                  <Text style={[styles.quickChipText, editFloorNo === f && styles.quickChipTextActive]}>
+                  <Text style={[styles.quickChipText, { color: editFloorNo === f ? '#ffffff' : theme.textSecondary }]}>
                     {f === -1 ? 'Basement' : f === 0 ? 'Ground' : `F${f}`}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            <Text style={styles.inputLabel}>Gender Rule</Text>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Gender Rule</Text>
             <View style={styles.genderOptions}>
               {(['any', 'male', 'female'] as const).map(g => (
                 <TouchableOpacity
                   key={g}
-                  style={[styles.genderBtn, editGenderRule === g && styles.genderBtnActive]}
+                  style={[
+                    styles.genderBtn,
+                    { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
+                    editGenderRule === g && { backgroundColor: theme.accent, borderColor: theme.accent }
+                  ]}
                   onPress={() => setEditGenderRule(g)}
                 >
-                  <Text style={[styles.genderBtnText, editGenderRule === g && styles.genderBtnTextActive]}>
+                  <Text style={[styles.genderBtnText, { color: editGenderRule === g ? '#ffffff' : theme.textSecondary }]}>
                     {g === 'any' ? 'Any Gender' : g === 'male' ? 'Male Only' : 'Female Only'}
                   </Text>
                 </TouchableOpacity>
@@ -818,17 +851,17 @@ export default function DormDetailScreen() {
                 style={styles.modalCancelBtn}
                 onPress={() => setShowEditModal(false)}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={[styles.modalCancelText, { color: theme.textSecondary }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalSaveBtn, { backgroundColor: '#dc2626' }]}
+                style={[styles.modalSaveBtn, { backgroundColor: theme.destructive }]}
                 onPress={handleRemoveRoom}
                 disabled={submittingEdit}
               >
                 <Text style={styles.modalSaveText}>Delete</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.modalSaveBtn}
+                style={[styles.modalSaveBtn, { backgroundColor: theme.accent }]}
                 onPress={handleSaveEdit}
                 disabled={submittingEdit}
               >
@@ -851,24 +884,24 @@ export default function DormDetailScreen() {
           style={styles.modalOverlay}
         >
           <ScrollView
-            contentContainerStyle={styles.modalCard}
+            contentContainerStyle={[styles.modalCard, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Bed to Dorm</Text>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Add Bed to Dorm</Text>
               <TouchableOpacity onPress={() => setShowAddBedModal(false)}>
-                <Ionicons name="close-circle" size={24} color="#94a3b8" />
+                <Ionicons name="close-circle" size={24} color={theme.textTertiary} />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.inputLabel}>Bed Label</Text>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Bed Label</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border, color: theme.text }]}
               value={newBedLabel}
               onChangeText={setNewBedLabel}
               placeholder={`e.g. Bed ${units.length + 1}`}
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={theme.textTertiary}
             />
 
             <View style={styles.modalActions}>
@@ -876,10 +909,10 @@ export default function DormDetailScreen() {
                 style={styles.modalCancelBtn}
                 onPress={() => setShowAddBedModal(false)}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={[styles.modalCancelText, { color: theme.textSecondary }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.modalSaveBtn}
+                style={[styles.modalSaveBtn, { backgroundColor: theme.accent }]}
                 onPress={handleAddBed}
                 disabled={submittingEdit}
               >
@@ -902,38 +935,42 @@ export default function DormDetailScreen() {
           style={styles.modalOverlay}
         >
           <ScrollView
-            contentContainerStyle={styles.modalCard}
+            contentContainerStyle={[styles.modalCard, { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border }]}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name="warning-outline" size={22} color="#f59e0b" />
-                <Text style={styles.modalTitle}>Report Dorm Issue</Text>
+                <Ionicons name="warning-outline" size={22} color="#d97706" />
+                <Text style={[styles.modalTitle, { color: theme.text }]}>Report Dorm Issue</Text>
               </View>
               <TouchableOpacity onPress={() => setShowIssueModal(false)}>
-                <Ionicons name="close-circle" size={24} color="#94a3b8" />
+                <Ionicons name="close-circle" size={24} color={theme.textTertiary} />
               </TouchableOpacity>
             </View>
 
             {/* Target Bed Selector */}
-            <Text style={styles.inputLabel}>Select Bed / Location</Text>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Select Bed / Location</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.unitPickerRow}>
               {units.map((u) => {
                 const isSelected = (issueTargetUnitId || units[0]?.id) === u.id;
                 return (
                   <TouchableOpacity
                     key={u.id}
-                    style={[styles.unitPickerChip, isSelected && styles.unitPickerChipActive]}
+                    style={[
+                      styles.unitPickerChip,
+                      { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
+                      isSelected && { backgroundColor: theme.accent, borderColor: theme.accent }
+                    ]}
                     onPress={() => setIssueTargetUnitId(u.id)}
                     activeOpacity={0.7}
                   >
                     <Ionicons
                       name="bed-outline"
                       size={13}
-                      color={isSelected ? '#ffffff' : '#64748b'}
+                      color={isSelected ? '#ffffff' : theme.textSecondary}
                     />
-                    <Text style={[styles.unitPickerChipText, isSelected && styles.unitPickerChipTextActive]}>
+                    <Text style={[styles.unitPickerChipText, { color: isSelected ? '#ffffff' : theme.textSecondary }]}>
                       {u.label}
                     </Text>
                   </TouchableOpacity>
@@ -942,7 +979,7 @@ export default function DormDetailScreen() {
             </ScrollView>
 
             {/* Category Selector */}
-            <Text style={[styles.inputLabel, { marginTop: 8 }]}>Issue Category</Text>
+            <Text style={[styles.inputLabel, { marginTop: 8, color: theme.textSecondary }]}>Issue Category</Text>
             <View style={styles.categoryChipsRow}>
               {[
                 { id: 'cleanliness', label: 'Cleanliness', icon: 'sparkles-outline' },
@@ -956,16 +993,20 @@ export default function DormDetailScreen() {
                 return (
                   <TouchableOpacity
                     key={c.id}
-                    style={[styles.categoryChip, isSelected && styles.categoryChipActive]}
+                    style={[
+                      styles.categoryChip,
+                      { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
+                      isSelected && { backgroundColor: '#d97706', borderColor: '#d97706' }
+                    ]}
                     onPress={() => setIssueCategory(c.id as any)}
                     activeOpacity={0.7}
                   >
                     <Ionicons
                       name={c.icon as any}
                       size={14}
-                      color={isSelected ? '#ffffff' : '#475569'}
+                      color={isSelected ? '#ffffff' : theme.textSecondary}
                     />
-                    <Text style={[styles.categoryChipText, isSelected && styles.categoryChipTextActive]}>
+                    <Text style={[styles.categoryChipText, { color: isSelected ? '#ffffff' : theme.textSecondary }]}>
                       {c.label}
                     </Text>
                   </TouchableOpacity>
@@ -974,13 +1015,13 @@ export default function DormDetailScreen() {
             </View>
 
             {/* Note / Description */}
-            <Text style={[styles.inputLabel, { marginTop: 8 }]}>Details / Notes</Text>
+            <Text style={[styles.inputLabel, { marginTop: 8, color: theme.textSecondary }]}>Details / Notes</Text>
             <TextInput
-              style={styles.textAreaInput}
+              style={[styles.textAreaInput, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border, color: theme.text }]}
               value={issueNote}
               onChangeText={setIssueNote}
               placeholder="Describe the issue (e.g. AC leaking water on Bed 3)..."
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={theme.textTertiary}
               multiline
               numberOfLines={3}
               textAlignVertical="top"
@@ -991,10 +1032,10 @@ export default function DormDetailScreen() {
                 style={styles.modalCancelBtn}
                 onPress={() => { setShowIssueModal(false); setIssueNote(''); }}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={[styles.modalCancelText, { color: theme.textSecondary }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalSaveBtn, { backgroundColor: '#f59e0b' }]}
+                style={[styles.modalSaveBtn, { backgroundColor: '#d97706' }]}
                 onPress={handleReportIssue}
                 disabled={submittingIssue}
               >
@@ -1073,8 +1114,9 @@ const styles = StyleSheet.create({
     flex: 1
   },
   heroTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontFamily: Fonts.serif,
+    fontSize: 20,
+    fontWeight: '600',
     color: '#0f172a'
   },
   heroBadgeRow: {
@@ -1105,12 +1147,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#dbeafe'
   },
   badgeAny: {
-    backgroundColor: '#f3e8ff'
+    backgroundColor: '#f1f5f9'
   },
   heroGenderText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#1e293b'
+    color: '#0f172a'
   },
   heroEditBtn: {
     flexDirection: 'row',
@@ -1140,13 +1182,15 @@ const styles = StyleSheet.create({
     borderRadius: 12
   },
   metricNumber: {
-    fontSize: 16,
-    fontWeight: '700'
+    fontFamily: Fonts.serif,
+    fontSize: 18,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums']
   },
   metricLabel: {
     fontSize: 10,
     fontWeight: '600',
-    color: '#64748b',
+    color: '#475569',
     marginTop: 1
   },
   sectionHeaderRow: {
@@ -1157,15 +1201,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4
   },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 10.5,
     fontWeight: '700',
-    color: '#64748b',
-    letterSpacing: 0.6
+    color: '#475569',
+    letterSpacing: 1.1
   },
   sectionSubtitle: {
     fontSize: 12,
-    color: '#94a3b8',
-    fontWeight: '500'
+    color: '#64748b',
+    fontWeight: '500',
+    fontVariant: ['tabular-nums']
   },
   bedCard: {
     backgroundColor: '#ffffff',
@@ -1198,13 +1243,14 @@ const styles = StyleSheet.create({
     flex: 1
   },
   bedLabel: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontFamily: Fonts.serif,
+    fontSize: 16,
+    fontWeight: '600',
     color: '#0f172a'
   },
   bedSubrule: {
     fontSize: 10,
-    color: '#64748b',
+    color: '#475569',
     fontWeight: '600'
   },
   statusBadge: {
@@ -1237,7 +1283,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#dbeafe',
+    backgroundColor: '#eff6ff',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 10
@@ -1245,19 +1291,20 @@ const styles = StyleSheet.create({
   occupantAvatarText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#1e40af'
+    color: '#2563eb'
   },
   occupantInfo: {
     flex: 1
   },
   occupantName: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#0f172a'
   },
   occupantPhone: {
     fontSize: 11,
-    color: '#64748b',
+    color: '#475569',
+    fontVariant: ['tabular-nums'],
     marginTop: 1
   },
   chevronBox: {
@@ -1294,14 +1341,15 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   emptyTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontFamily: Fonts.serif,
+    fontSize: 16,
+    fontWeight: '600',
     color: '#0f172a',
     marginBottom: 4
   },
   emptyText: {
     fontSize: 13,
-    color: '#64748b',
+    color: '#475569',
     textAlign: 'center',
     marginBottom: 16
   },
@@ -1319,10 +1367,10 @@ const styles = StyleSheet.create({
   dangerZone: {
     marginTop: 24,
     padding: 16,
-    backgroundColor: '#fff1f2',
+    backgroundColor: '#fef2f2',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#fecdd3'
+    borderColor: '#fecaca'
   },
   dangerHeader: {
     flexDirection: 'row',
@@ -1331,14 +1379,14 @@ const styles = StyleSheet.create({
     marginBottom: 6
   },
   dangerTitle: {
-    fontSize: 12,
+    fontSize: 10.5,
     fontWeight: '700',
-    color: '#be123c',
-    letterSpacing: 0.5
+    color: '#dc2626',
+    letterSpacing: 1.0
   },
   dangerNote: {
     fontSize: 12,
-    color: '#9f1239',
+    color: '#475569',
     marginBottom: 14,
     lineHeight: 16
   },
@@ -1347,7 +1395,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#e11d48',
+    backgroundColor: '#dc2626',
     paddingVertical: 11,
     borderRadius: 10
   },
@@ -1358,20 +1406,20 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15,23,42,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20
   },
   modalCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 22,
+    borderRadius: 20,
     padding: 20,
     width: '100%',
     maxWidth: 400,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.12,
     shadowRadius: 10,
     elevation: 5
   },
@@ -1382,13 +1430,14 @@ const styles = StyleSheet.create({
     marginBottom: 16
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontFamily: Fonts.serif,
+    fontSize: 19,
+    fontWeight: '600',
     color: '#0f172a'
   },
   inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
     color: '#475569',
     marginBottom: 6
   },
@@ -1424,7 +1473,7 @@ const styles = StyleSheet.create({
   genderBtnText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#64748b'
+    color: '#475569'
   },
   genderBtnTextActive: {
     color: '#ffffff',
@@ -1441,7 +1490,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10
   },
   modalCancelText: {
-    color: '#64748b',
+    color: '#475569',
     fontWeight: '600',
     fontSize: 14
   },
@@ -1459,7 +1508,7 @@ const styles = StyleSheet.create({
   stepperContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#f8fafc',
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#e2e8f0',
@@ -1470,20 +1519,21 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 8,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center'
   },
   stepperBtnDisabled: {
-    backgroundColor: '#f8fafc'
+    backgroundColor: '#f1f5f9'
   },
   stepperValueBox: {
     flex: 1,
     alignItems: 'center'
   },
   stepperFloorTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontFamily: Fonts.serif,
+    fontSize: 16,
+    fontWeight: '600',
     color: '#0f172a'
   },
   quickFloorChips: {
@@ -1496,7 +1546,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 6,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#f1f5f9',
     borderWidth: 1,
     borderColor: '#e2e8f0'
   },
@@ -1572,8 +1622,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   issuesTitle: {
-    fontSize: 14,
-    fontWeight: '700',
+    fontFamily: Fonts.serif,
+    fontSize: 15.5,
+    fontWeight: '600',
   },
   reportIssueLink: {
     flexDirection: 'row',
@@ -1624,6 +1675,7 @@ const styles = StyleSheet.create({
   },
   issueTimeText: {
     fontSize: 11,
+    fontVariant: ['tabular-nums'],
   },
   issueNoteText: {
     fontSize: 13,
@@ -1640,7 +1692,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   resolveBtnText: {
-    color: '#ffffff',
+    color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -1658,7 +1710,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 8,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
@@ -1693,8 +1745,8 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
   },
   categoryChipActive: {
-    backgroundColor: '#f59e0b',
-    borderColor: '#f59e0b',
+    backgroundColor: '#d97706',
+    borderColor: '#d97706',
   },
   categoryChipText: {
     fontSize: 12,

@@ -58,8 +58,8 @@ export default function NotificationsScreen() {
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'issue'>('all');
 
   const kindMeta: Record<NotifKind, { icon: any; color: string; bg: string; label: string }> = {
-    issue: { icon: 'alert-circle', color: theme.occupied, bg: theme.occupiedSubtle, label: 'Room Issue' },
-    maintenance: { icon: 'construct', color: theme.dirty, bg: theme.dirtySubtle, label: 'Maintenance' },
+    issue: { icon: 'alert-circle', color: '#dc2626', bg: '#fee2e2', label: 'Room Issue' },
+    maintenance: { icon: 'construct', color: theme.maintenance, bg: theme.maintenanceSubtle, label: 'Maintenance' },
     system: { icon: 'shield-checkmark', color: theme.accent, bg: theme.accentSubtle, label: 'System Alert' },
   };
 
@@ -163,13 +163,13 @@ export default function NotificationsScreen() {
                 <View
                   style={[
                     styles.severityBadge,
-                    { backgroundColor: item.severity === 'high' ? theme.occupiedSubtle : theme.surfaceSubtle }
+                    { backgroundColor: item.severity === 'high' ? '#fee2e2' : theme.surfaceSubtle }
                   ]}
                 >
                   <Text
                     style={[
                       styles.severityText,
-                      { color: item.severity === 'high' ? theme.occupied : theme.textSecondary }
+                      { color: item.severity === 'high' ? '#dc2626' : theme.textSecondary }
                     ]}
                   >
                     {item.meta}
@@ -326,7 +326,7 @@ export default function NotificationsScreen() {
             <Ionicons
               name="alert-circle"
               size={13}
-              color={selectedFilter === 'issue' ? theme.occupied : theme.textSecondary}
+              color={selectedFilter === 'issue' ? '#dc2626' : theme.textSecondary}
             />
             <Text style={[
               styles.segmentedText,

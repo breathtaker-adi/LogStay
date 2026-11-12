@@ -5,4 +5,5 @@ export * from './apple-splash';
 export * from './apple-exit-modal';
 export * from './app-logo';
 export * from './stay-calendar-modal';
+export * from './room-grid-map';
 

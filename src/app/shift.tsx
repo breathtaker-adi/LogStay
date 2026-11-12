@@ -10,6 +10,7 @@ import { can } from "../lib/permissions";
 import { ScreenHeader } from "@/lib/screen-header";
 import { exportShiftReportPDF } from "@/lib/pdf-reports";
 import { useTheme } from "@/hooks/use-theme";
+import { Fonts } from "@/constants/theme";
 import { ShiftService } from "@/services/shift.service";
 
 export default function ShiftScreen() {
@@ -362,16 +363,16 @@ export default function ShiftScreen() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
       >
         <ScrollView
-          style={{ backgroundColor: theme.bg }}
+          style={{ backgroundColor: theme.background }}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           automaticallyAdjustKeyboardInsets={true}
         >
         {pendingHandover && !activeShift && (
-          <View style={[styles.card, { backgroundColor: theme.surface, borderColor: '#f59e0b', borderWidth: 2 }]}>
+          <View style={[styles.card, { backgroundColor: theme.surface, borderColor: '#fde68a', borderWidth: 1.5 }]}>
             <View style={styles.cardIconHeader}>
-              <View style={[styles.iconCircle, { backgroundColor: '#fef3c7', borderColor: '#f59e0b' }]}>
+              <View style={[styles.iconCircle, { backgroundColor: '#fef3c7', borderColor: '#fde68a' }]}>
                 <Ionicons name="people" size={24} color="#d97706" />
               </View>
               <View style={styles.cardHeaderText}>
@@ -396,7 +397,7 @@ export default function ShiftScreen() {
             </View>
 
             <TouchableOpacity
-              style={[styles.primaryActionBtn, { backgroundColor: '#16a34a', marginTop: 12 }]}
+              style={[styles.primaryActionBtn, { backgroundColor: '#16a34a', shadowColor: '#16a34a', marginTop: 12 }]}
               onPress={acceptHandover}
               activeOpacity={0.8}
             >
@@ -411,7 +412,7 @@ export default function ShiftScreen() {
           <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <View style={styles.cardIconHeader}>
               <View style={[styles.iconCircle, { backgroundColor: theme.accentSubtle, borderColor: theme.accent }]}>
-                <Ionicons name="time" size={26} color={theme.accent} />
+                <Ionicons name="time" size={26} color={theme.accentText} />
               </View>
               <View style={styles.cardHeaderText}>
                 <Text style={[styles.cardTitle, { color: theme.text }]}>Open Desk Shift</Text>
@@ -432,7 +433,7 @@ export default function ShiftScreen() {
               />
             </View>
 
-            <TouchableOpacity style={[styles.primaryActionBtn, { backgroundColor: theme.accent }]} onPress={startShift} activeOpacity={0.8}>
+            <TouchableOpacity style={[styles.primaryActionBtn, { backgroundColor: theme.accent, shadowColor: theme.accent }]} onPress={startShift} activeOpacity={0.8}>
               <Ionicons name="play" size={16} color="#ffffff" />
               <Text style={styles.primaryActionText}>Start Shift</Text>
             </TouchableOpacity>
@@ -463,22 +464,22 @@ export default function ShiftScreen() {
                   <Text style={[styles.statPillLabel, { color: theme.textSecondary }]}>Opening Cash</Text>
                   <Text style={[styles.statPillValue, { color: theme.text }]}>₹{Number(activeShift.opening_cash).toLocaleString('en-IN')}</Text>
                 </View>
-                <View style={[styles.statPillBox, { backgroundColor: theme.freeSubtle }]}>
-                  <Text style={[styles.statPillLabel, { color: theme.free }]}>Cash Inflows</Text>
-                  <Text style={[styles.statPillValue, { color: theme.free }]}>+ ₹{Number(collections).toLocaleString('en-IN')}</Text>
+                <View style={[styles.statPillBox, { backgroundColor: '#f0fdf4' }]}>
+                  <Text style={[styles.statPillLabel, { color: '#16a34a' }]}>Cash Inflows</Text>
+                  <Text style={[styles.statPillValue, { color: '#16a34a' }]}>+ ₹{Number(collections).toLocaleString('en-IN')}</Text>
                 </View>
-                <View style={[styles.statPillBox, { backgroundColor: theme.dirtySubtle }]}>
-                  <Text style={[styles.statPillLabel, { color: theme.dirty }]}>Petty Outflow</Text>
-                  <Text style={[styles.statPillValue, { color: theme.dirty }]}>- ₹{Number(totalPetty).toLocaleString('en-IN')}</Text>
+                <View style={[styles.statPillBox, { backgroundColor: '#fffbeb' }]}>
+                  <Text style={[styles.statPillLabel, { color: '#d97706' }]}>Petty Outflow</Text>
+                  <Text style={[styles.statPillValue, { color: '#d97706' }]}>- ₹{Number(totalPetty).toLocaleString('en-IN')}</Text>
                 </View>
               </View>
 
               <View style={[styles.expectedCashBanner, { backgroundColor: theme.accentSubtle, borderColor: theme.accent }]}>
                 <View>
-                  <Text style={[styles.expectedLabel, { color: theme.accent }]}>Expected in Drawer</Text>
+                  <Text style={[styles.expectedLabel, { color: theme.accentText }]}>Expected in Drawer</Text>
                   <Text style={[styles.expectedSub, { color: theme.textSecondary }]}>Opening + Collections - Outflows</Text>
                 </View>
-                <Text style={[styles.expectedAmount, { color: theme.accent }]}>₹{Number(expectedCash).toLocaleString('en-IN')}</Text>
+                <Text style={[styles.expectedAmount, { color: theme.accentText }]}>₹{Number(expectedCash).toLocaleString('en-IN')}</Text>
               </View>
 
               <TouchableOpacity
@@ -494,7 +495,7 @@ export default function ShiftScreen() {
             {/* Petty Cash Outflows Card */}
             <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <View style={styles.sectionTitleRow}>
-                <Ionicons name="receipt-outline" size={18} color={theme.dirty} />
+                <Ionicons name="receipt-outline" size={18} color="#d97706" />
                 <Text style={[styles.sectionTitle, { color: theme.text }]}>Add Petty Cash / Khata Outflow</Text>
               </View>
 
@@ -521,7 +522,7 @@ export default function ShiftScreen() {
                 </View>
               </View>
 
-              <TouchableOpacity style={styles.amberBtn} onPress={addPettyCash} activeOpacity={0.8}>
+              <TouchableOpacity style={[styles.amberBtn, { backgroundColor: '#d97706', shadowColor: '#d97706' }]} onPress={addPettyCash} activeOpacity={0.8}>
                 <Ionicons name="remove-circle-outline" size={16} color="#ffffff" />
                 <Text style={styles.amberBtnText}>Record Cash Outflow</Text>
               </TouchableOpacity>
@@ -552,7 +553,7 @@ export default function ShiftScreen() {
                           <Ionicons 
                             name={isInflow ? "arrow-up-circle" : "arrow-down-circle"} 
                             size={18} 
-                            color={isInflow ? theme.free : isRefund ? theme.occupied : theme.dirty} 
+                            color={isInflow ? '#16a34a' : isRefund ? '#dc2626' : '#d97706'} 
                           />
                           <View style={{ flex: 1 }}>
                             <Text style={[styles.entryNote, { color: theme.text }]}>
@@ -566,7 +567,7 @@ export default function ShiftScreen() {
                         </View>
                         <Text style={[
                           styles.entryAmount, 
-                          { color: isInflow ? theme.free : isRefund ? theme.occupied : theme.dirty }
+                          { color: isInflow ? '#16a34a' : isRefund ? '#dc2626' : '#d97706' }
                         ]}>
                           {isInflow ? `+ ₹${Number(item.amount).toLocaleString('en-IN')}` : `- ₹${Number(item.amount).toLocaleString('en-IN')}`}
                         </Text>
@@ -580,7 +581,7 @@ export default function ShiftScreen() {
             {/* Handover & Close Shift Card */}
             <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <View style={styles.sectionTitleRow}>
-                <Ionicons name="swap-horizontal" size={18} color={theme.accent} />
+                <Ionicons name="swap-horizontal" size={18} color={theme.accentText} />
                 <Text style={[styles.sectionTitle, { color: theme.text }]}>Shift Handover (Two-Person Blind Count)</Text>
               </View>
 
@@ -598,7 +599,7 @@ export default function ShiftScreen() {
               </View>
 
               <TouchableOpacity
-                style={[styles.primaryActionBtn, { backgroundColor: theme.accent, marginTop: 14 }]}
+                style={[styles.primaryActionBtn, { backgroundColor: theme.accent, shadowColor: theme.accent, marginTop: 14 }]}
                 onPress={submitHandover}
                 activeOpacity={0.8}
               >
@@ -641,17 +642,17 @@ export default function ShiftScreen() {
                 const hasDiff = diff !== 0;
 
                 return (
-                  <View key={item.id} style={[styles.historyCard, { backgroundColor: theme.surface, borderColor: hasDiff ? theme.occupiedSubtle : theme.border }]}>
+                  <View key={item.id} style={[styles.historyCard, { backgroundColor: theme.surface, borderColor: hasDiff ? '#fecaca' : theme.border }]}>
                     <View style={[styles.historyCardHeader, { borderBottomColor: theme.borderSubtle }]}>
                       <View style={styles.historyDateRow}>
-                        <Ionicons name="checkmark-circle" size={16} color={hasDiff ? theme.occupied : theme.free} />
+                        <Ionicons name="checkmark-circle" size={16} color={hasDiff ? '#dc2626' : '#16a34a'} />
                         <Text style={[styles.historyDate, { color: theme.textSecondary }]}>
                           Closed {new Date(item.closed_at).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </Text>
                       </View>
                       {item.co_signed && (
                         <View style={[styles.coSignBadge, { backgroundColor: theme.accentSubtle }]}>
-                          <Text style={[styles.coSignBadgeText, { color: theme.accent }]}>Co-Signed</Text>
+                          <Text style={[styles.coSignBadgeText, { color: theme.accentText }]}>Co-Signed</Text>
                         </View>
                       )}
                     </View>
@@ -667,7 +668,7 @@ export default function ShiftScreen() {
                       </View>
                       <View style={styles.historyStatItem}>
                         <Text style={[styles.historyStatLabel, { color: theme.textSecondary }]}>Difference</Text>
-                        <Text style={[styles.historyStatVal, { color: hasDiff ? theme.occupied : theme.free }]}>
+                        <Text style={[styles.historyStatVal, { color: hasDiff ? '#dc2626' : '#16a34a' }]}>
                           {diff > 0 ? `+₹${diff}` : diff < 0 ? `-₹${Math.abs(diff)}` : '₹0'}
                         </Text>
                       </View>
@@ -678,8 +679,8 @@ export default function ShiftScreen() {
                       onPress={() => handleExportShiftPDF(item)}
                       activeOpacity={0.7}
                     >
-                      <Ionicons name="document-outline" size={14} color={theme.accent} />
-                      <Text style={[styles.miniPdfText, { color: theme.accent }]}>Export Shift PDF</Text>
+                      <Ionicons name="document-outline" size={14} color={theme.accentText} />
+                      <Text style={[styles.miniPdfText, { color: theme.accentText }]}>Export Shift PDF</Text>
                     </TouchableOpacity>
                   </View>
                 );
@@ -720,7 +721,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 14,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: "#e2e8f0",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
@@ -741,15 +742,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#eff6ff",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: "#bfdbfe"
   },
   cardHeaderText: {
     flex: 1
   },
   cardTitle: {
-    fontSize: 17,
-    fontWeight: "700",
+    fontFamily: Fonts.serif,
+    fontSize: 18,
+    fontWeight: "600",
     color: "#0f172a"
   },
   cardSubtitle: {
@@ -758,8 +760,8 @@ const styles = StyleSheet.create({
     marginTop: 2
   },
   inputLabel: {
-    fontSize: 13,
-    fontWeight: "600",
+    fontSize: 12,
+    fontWeight: "700",
     color: "#475569",
     marginBottom: 6,
     marginTop: 4
@@ -768,7 +770,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#f8fafc",
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: "#e2e8f0",
     borderRadius: 10,
     paddingHorizontal: 12,
@@ -798,7 +800,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
     shadowColor: "#2563eb",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.18,
     shadowRadius: 3,
     elevation: 2
   },
@@ -830,11 +832,12 @@ const styles = StyleSheet.create({
   drawerStatusText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#166534"
+    color: "#16a34a"
   },
   drawerDate: {
     fontSize: 12,
-    color: "#64748b"
+    color: "#64748b",
+    fontVariant: ["tabular-nums"]
   },
   statsRow: {
     flexDirection: "row",
@@ -843,28 +846,29 @@ const styles = StyleSheet.create({
   },
   statPillBox: {
     flex: 1,
-    backgroundColor: "#eff6ff",
+    backgroundColor: "#f8fafc",
     borderRadius: 10,
     padding: 10
   },
   statPillLabel: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#2563eb"
+    color: "#64748b"
   },
   statPillValue: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#1d4ed8",
+    fontVariant: ["tabular-nums"],
+    color: "#0f172a",
     marginTop: 3
   },
   expectedCashBanner: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#f0fdf4",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#bbf7d0",
+    backgroundColor: "#eff6ff",
+    borderWidth: 1,
+    borderColor: "#bfdbfe",
     borderRadius: 12,
     padding: 12,
     marginTop: 2
@@ -872,7 +876,7 @@ const styles = StyleSheet.create({
   expectedLabel: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#166534"
+    color: "#2563eb"
   },
   expectedSub: {
     fontSize: 11,
@@ -880,9 +884,11 @@ const styles = StyleSheet.create({
     marginTop: 2
   },
   expectedAmount: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#15803d"
+    fontFamily: Fonts.serif,
+    fontSize: 22,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+    color: "#2563eb"
   },
   sectionTitleRow: {
     flexDirection: "row",
@@ -891,8 +897,9 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   sectionTitle: {
-    fontSize: 14,
-    fontWeight: "700",
+    fontFamily: Fonts.serif,
+    fontSize: 16,
+    fontWeight: "600",
     color: "#0f172a"
   },
   pettyInputsRow: {
@@ -926,11 +933,11 @@ const styles = StyleSheet.create({
     marginBottom: 8
   },
   entriesTitle: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: "700",
     color: "#64748b",
     textTransform: "uppercase",
-    letterSpacing: 0.5
+    letterSpacing: 1.0
   },
   entryItem: {
     flexDirection: "row",
@@ -954,11 +961,13 @@ const styles = StyleSheet.create({
   entrySub: {
     fontSize: 11,
     color: "#64748b",
-    marginTop: 2
+    marginTop: 2,
+    fontVariant: ["tabular-nums"]
   },
   entryAmount: {
     fontSize: 14,
-    fontWeight: "800"
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"]
   },
   emptyEntriesBox: {
     padding: 14,
@@ -1000,17 +1009,18 @@ const styles = StyleSheet.create({
     paddingLeft: 2
   },
   historyTitle: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: "700",
-    color: "#1e293b",
-    letterSpacing: 0.3
+    color: "#475569",
+    letterSpacing: 1.0,
+    textTransform: "uppercase"
   },
   historyCard: {
     backgroundColor: "#ffffff",
     borderRadius: 14,
     padding: 14,
     marginBottom: 8,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: "#e2e8f0",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
@@ -1035,6 +1045,7 @@ const styles = StyleSheet.create({
   historyDate: {
     fontSize: 12,
     fontWeight: "600",
+    fontVariant: ["tabular-nums"],
     color: "#475569"
   },
   coSignBadge: {
@@ -1063,6 +1074,7 @@ const styles = StyleSheet.create({
   historyStatVal: {
     fontSize: 14,
     fontWeight: "700",
+    fontVariant: ["tabular-nums"],
     color: "#0f172a"
   },
   emptyHistoryBox: {
@@ -1070,7 +1082,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 20,
     alignItems: "center",
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: "#e2e8f0"
   },
   shiftPdfBtn: {
@@ -1079,7 +1091,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     backgroundColor: '#ffffff',
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: '#cbd5e1',
     height: 44,
     borderRadius: 10,

@@ -4,6 +4,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Fonts } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 interface ScreenHeaderProps {
@@ -21,7 +22,7 @@ export function ScreenHeader({ title, subtitle, right, onBack, showBack = true }
   return (
     <View style={[
       styles.container,
-      { paddingTop: Math.max(insets.top, 12) + 6, backgroundColor: theme.backgroundElement, borderBottomColor: theme.separator }
+      { paddingTop: Math.max(insets.top, 12) + 6, backgroundColor: theme.background, borderBottomColor: theme.separator }
     ]}>
       {showBack ? (
         <TouchableOpacity
@@ -32,7 +33,7 @@ export function ScreenHeader({ title, subtitle, right, onBack, showBack = true }
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="chevron-back" size={22} color={theme.accent} />
+          <Ionicons name="chevron-back" size={22} color={theme.accentText} />
         </TouchableOpacity>
       ) : (
         <View style={styles.placeholder} />
@@ -40,7 +41,7 @@ export function ScreenHeader({ title, subtitle, right, onBack, showBack = true }
 
       <View style={styles.center}>
         <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>{title}</Text>
-        {subtitle ? <Text style={[styles.subtitle, { color: theme.textSecondary }]} numberOfLines={1}>{subtitle}</Text> : null}
+        {subtitle ? <Text style={[styles.subtitle, { color: theme.roomEyebrow }]} numberOfLines={1}>{subtitle}</Text> : null}
       </View>
 
       <View style={styles.right}>
@@ -75,14 +76,18 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   title: {
-    fontSize: 17,
+    fontFamily: Fonts.serif,
+    fontStyle: 'italic',
+    fontSize: 20,
     fontWeight: '600',
     letterSpacing: -0.2,
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 10.5,
     marginTop: 2,
-    fontWeight: '400',
+    fontWeight: '600',
+    letterSpacing: 0.9,
+    textTransform: 'uppercase',
   },
   right: {
     minWidth: 38,

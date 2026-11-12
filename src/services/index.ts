@@ -10,3 +10,4 @@ export * from './shift.service';
 export * from './housekeeping.service';
 export * from './audit.service';
 export * from './room.service';
+export * from './ocr.service';

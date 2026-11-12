@@ -9,6 +9,7 @@ import * as Crypto from 'expo-crypto';
 import { ScreenHeader } from '@/lib/screen-header';
 import { exportGuestRegistrationCardPDF } from '@/lib/pdf-reports';
 import { useTheme } from '@/hooks/use-theme';
+import { Fonts } from '@/constants/theme';
 import { openWhatsApp } from '@/lib/whatsapp';
 
 export default function GuestDetailScreen() {
@@ -274,7 +275,7 @@ export default function GuestDetailScreen() {
         <View style={[styles.heroCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <View style={styles.heroTopRow}>
             <View style={[styles.avatar, { backgroundColor: theme.accentSubtle, borderColor: theme.accent }]}>
-              <Text style={[styles.avatarText, { color: theme.accent }]}>
+              <Text style={[styles.avatarText, { color: theme.accentText }]}>
                 {guest.name ? guest.name.charAt(0).toUpperCase() : 'G'}
               </Text>
             </View>
@@ -286,9 +287,9 @@ export default function GuestDetailScreen() {
                   <Text style={[styles.pillText, { color: theme.textSecondary }]}>{guest.phone || 'No phone'}</Text>
                 </View>
                 {guest.nationality ? (
-                  <View style={[styles.pillBadge, { backgroundColor: '#fef3c7' }]}>
-                    <Ionicons name="globe-outline" size={12} color="#92400e" />
-                    <Text style={[styles.pillText, { color: '#92400e' }]}>{guest.nationality}</Text>
+                  <View style={[styles.pillBadge, { backgroundColor: '#eff6ff' }]}>
+                    <Ionicons name="globe-outline" size={12} color="#2563eb" />
+                    <Text style={[styles.pillText, { color: '#2563eb' }]}>{guest.nationality}</Text>
                   </View>
                 ) : null}
               </View>
@@ -297,7 +298,7 @@ export default function GuestDetailScreen() {
 
           <View style={[styles.idRow, { borderTopColor: theme.borderSubtle }]}>
             <View style={styles.idBadge}>
-              <Ionicons name="card-outline" size={14} color={theme.accent} />
+              <Ionicons name="card-outline" size={14} color={theme.accentText} />
               <Text style={[styles.idText, { color: theme.textSecondary }]}>
                 {guest.id_type || 'ID'} ••••{guest.id_last4 || '----'}
               </Text>
@@ -306,13 +307,13 @@ export default function GuestDetailScreen() {
             {guest.id_photo_path && !guest.id_deleted_at ? (
               can('view_id_photo') && (
                 <TouchableOpacity 
-                  style={[styles.viewPhotoBtn, { backgroundColor: theme.accentSubtle, borderColor: theme.accent }]} 
+                  style={[styles.viewPhotoBtn, { backgroundColor: theme.accentSubtle, borderColor: theme.border }]} 
                   onPress={handleViewPhoto}
                   disabled={loadingPhoto}
                   activeOpacity={0.7}
                 >
-                  <Ionicons name="image-outline" size={14} color={theme.accent} />
-                  <Text style={[styles.viewPhotoText, { color: theme.accent }]}>
+                  <Ionicons name="image-outline" size={14} color={theme.accentText} />
+                  <Text style={[styles.viewPhotoText, { color: theme.accentText }]}>
                     {loadingPhoto ? 'Loading...' : 'View ID Photo'}
                   </Text>
                 </TouchableOpacity>
@@ -355,18 +356,18 @@ export default function GuestDetailScreen() {
           <View style={[
             styles.balanceBanner, 
             balance > 0 
-              ? { backgroundColor: theme.occupiedSubtle, borderColor: theme.occupied } 
-              : { backgroundColor: theme.freeSubtle, borderColor: theme.free }
+              ? { backgroundColor: '#fef2f2', borderColor: '#fecaca' } 
+              : { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }
           ]}>
             <View>
-              <Text style={[styles.balanceBannerTitle, { color: balance > 0 ? theme.occupied : theme.free }]}>
+              <Text style={[styles.balanceBannerTitle, { color: balance > 0 ? '#dc2626' : '#16a34a' }]}>
                 {balance > 0 ? 'Balance Pending' : 'Folio Settled'}
               </Text>
               <Text style={[styles.balanceBannerSub, { color: theme.textSecondary }]}>
                 {balance > 0 ? 'Collect balance before checkout' : 'All charges paid in full'}
               </Text>
             </View>
-            <Text style={[styles.balanceBannerAmount, { color: balance > 0 ? theme.occupied : theme.free }]}>
+            <Text style={[styles.balanceBannerAmount, { color: balance > 0 ? '#dc2626' : '#16a34a' }]}>
               ₹{Number(balance).toLocaleString('en-IN')}
             </Text>
           </View>
@@ -378,7 +379,7 @@ export default function GuestDetailScreen() {
             <Ionicons name="cart-outline" size={18} color="#ffffff" />
             <Text style={styles.btnText}>+ Add Purchase</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.payBtn, { backgroundColor: theme.free }]} onPress={() => setShowPayModal(true)} activeOpacity={0.8}>
+          <TouchableOpacity style={[styles.payBtn, { backgroundColor: '#16a34a' }]} onPress={() => setShowPayModal(true)} activeOpacity={0.8}>
             <Ionicons name="cash-outline" size={18} color="#ffffff" />
             <Text style={styles.btnText}>Collect Payment</Text>
           </TouchableOpacity>
@@ -609,7 +610,7 @@ export default function GuestDetailScreen() {
                 <Text style={[styles.cancelBtnText, { color: theme.textSecondary }]}>Cancel</Text>
               </Pressable>
               <Pressable 
-                style={[styles.submitBtn, { backgroundColor: theme.occupied }]} 
+                style={[styles.submitBtn, { backgroundColor: '#dc2626' }]} 
                 onPress={confirmRefund}
                 disabled={refunding}
               >
@@ -646,7 +647,8 @@ const styles = StyleSheet.create({
   center: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center'
+    alignItems: 'center',
+    backgroundColor: '#f8fafc'
   },
   container: {
     flex: 1,
@@ -686,6 +688,7 @@ const styles = StyleSheet.create({
     borderColor: '#bfdbfe'
   },
   avatarText: {
+    fontFamily: Fonts.serif,
     fontSize: 20,
     fontWeight: '800',
     color: '#2563eb'
@@ -694,7 +697,8 @@ const styles = StyleSheet.create({
     flex: 1
   },
   guestName: {
-    fontSize: 18,
+    fontFamily: Fonts.serif,
+    fontSize: 19,
     fontWeight: '800',
     color: '#0f172a',
     letterSpacing: -0.3
@@ -737,7 +741,8 @@ const styles = StyleSheet.create({
   idText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#334155'
+    color: '#475569',
+    fontVariant: ['tabular-nums']
   },
   viewPhotoBtn: {
     flexDirection: 'row',
@@ -748,7 +753,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#dbeafe'
+    borderColor: '#bfdbfe'
   },
   viewPhotoText: {
     color: '#2563eb',
@@ -757,12 +762,12 @@ const styles = StyleSheet.create({
   },
   photoStatusText: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: '#64748b',
     fontStyle: 'italic'
   },
   retentionNotice: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: '#64748b',
     marginTop: 8
   },
   folioCard: {
@@ -788,7 +793,8 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f1f5f9'
   },
   folioHeaderTitle: {
-    fontSize: 15,
+    fontFamily: Fonts.serif,
+    fontSize: 16,
     fontWeight: '700',
     color: '#0f172a'
   },
@@ -800,13 +806,14 @@ const styles = StyleSheet.create({
   },
   folioLabel: {
     fontSize: 13,
-    color: '#64748b',
+    color: '#475569',
     fontWeight: '500'
   },
   folioValue: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0f172a'
+    color: '#0f172a',
+    fontVariant: ['tabular-nums']
   },
   balanceBanner: {
     flexDirection: 'row',
@@ -823,12 +830,14 @@ const styles = StyleSheet.create({
   },
   balanceBannerSub: {
     fontSize: 11,
-    color: '#64748b',
+    color: '#475569',
     marginTop: 2
   },
   balanceBannerAmount: {
-    fontSize: 20,
-    fontWeight: '800'
+    fontFamily: Fonts.serif,
+    fontSize: 21,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums']
   },
   btnRow: {
     flexDirection: 'row',
@@ -842,9 +851,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#d97706',
+    backgroundColor: '#2563eb',
     borderRadius: 12,
-    shadowColor: '#d97706',
+    shadowColor: '#2563eb',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 3,
@@ -877,7 +886,7 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: '#ffffff',
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#cbd5e1',
+    borderColor: '#e2e8f0',
     height: 46,
     borderRadius: 12,
     marginBottom: 16
@@ -898,10 +907,11 @@ const styles = StyleSheet.create({
     paddingLeft: 2
   },
   sectionTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#334155',
-    letterSpacing: 0.3
+    color: '#475569',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase'
   },
   emptyCard: {
     backgroundColor: '#ffffff',
@@ -912,7 +922,7 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0'
   },
   empty: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontSize: 13,
     fontStyle: 'italic'
   },
@@ -941,16 +951,18 @@ const styles = StyleSheet.create({
   chargeName: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1e293b'
+    color: '#0f172a'
   },
   chargeDate: {
     fontSize: 12,
-    color: '#94a3b8'
+    color: '#64748b',
+    fontVariant: ['tabular-nums']
   },
   chargePrice: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#0f172a'
+    color: '#0f172a',
+    fontVariant: ['tabular-nums']
   },
   payModePill: {
     backgroundColor: '#eff6ff',
@@ -986,7 +998,7 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(15,23,42,0.5)'
+    backgroundColor: 'rgba(0,0,0,0.55)'
   },
   modalContent: {
     backgroundColor: '#ffffff',
@@ -996,7 +1008,8 @@ const styles = StyleSheet.create({
     paddingBottom: 34
   },
   modalTitle: {
-    fontSize: 17,
+    fontFamily: Fonts.serif,
+    fontSize: 18,
     fontWeight: '800',
     color: '#0f172a',
     marginBottom: 14
@@ -1044,7 +1057,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9'
   },
   cancelBtnText: {
-    color: '#64748b',
+    color: '#475569',
     fontWeight: '700',
     fontSize: 14
   },
@@ -1068,7 +1081,7 @@ const styles = StyleSheet.create({
   },
   balanceText: {
     fontSize: 13,
-    color: '#64748b',
+    color: '#475569',
     marginBottom: 12
   },
   payModeRow: {
@@ -1096,7 +1109,7 @@ const styles = StyleSheet.create({
     elevation: 2
   },
   payModeText: {
-    color: '#64748b',
+    color: '#475569',
     fontWeight: '600',
     fontSize: 13
   },

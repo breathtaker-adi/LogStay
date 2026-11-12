@@ -145,16 +145,12 @@ export default function AddStaffScreen() {
 
       if (!member?.property_id) throw new Error('No property found');
 
-      const { error: insertError } = await supabase
-        .from('staff_profiles')
-        .insert({
-          property_id: member.property_id,
-          name: name.trim(),
-          phone: cleanedPhone || null,
-          role: role,
-          active: true,
-          pin_hash: '',
-        });
+      const { error: insertError } = await supabase.rpc('pre_register_staff', {
+        p_prop: member.property_id,
+        p_name: name.trim(),
+        p_phone: cleanedPhone || null,
+        p_role: role,
+      });
 
       if (insertError) throw insertError;
 

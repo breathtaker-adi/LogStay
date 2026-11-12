@@ -442,8 +442,11 @@ export function cacheUnits(units: any[]) {
 export function cacheStays(stays: any[]) {
   db.runSync('DELETE FROM cache_stays');
   stays.forEach(s => {
-    db.runSync('INSERT INTO cache_stays (id, property_id, unit_id, status) VALUES (?, ?, ?, ?)', 
-    [s.id || s.unit_id || '', s.property_id || '', s.unit_id, s.status || 'checked_in']);
+    const guestName = s.guest_name || s.guests?.name || null;
+    db.runSync(
+      'INSERT INTO cache_stays (id, property_id, unit_id, guest_name, status) VALUES (?, ?, ?, ?, ?)',
+      [s.id || s.unit_id || '', s.property_id || '', s.unit_id, guestName, s.status || 'checked_in']
+    );
   });
 }
 

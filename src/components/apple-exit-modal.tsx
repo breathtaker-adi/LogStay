@@ -45,8 +45,8 @@ export function AppleExitModal({
           <TouchableWithoutFeedback>
             <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               {/* Apple Icon Badge */}
-              <View style={styles.iconCircle}>
-                <Ionicons name="power" size={24} color="#EF4444" />
+              <View style={[styles.iconCircle, { backgroundColor: theme.destructiveSubtle }]}>
+                <Ionicons name="power" size={24} color={theme.destructive} />
               </View>
 
               {/* Title & Body */}
@@ -66,7 +66,7 @@ export function AppleExitModal({
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  style={styles.exitButton}
+                  style={[styles.exitButton, { backgroundColor: theme.destructive }]}
                   onPress={onConfirm}
                   activeOpacity={0.8}
                   accessibilityRole="button"

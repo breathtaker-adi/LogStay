@@ -22,6 +22,7 @@ import { ScreenHeader } from '@/lib/screen-header';
 import { floorLabel } from '@/lib/floors';
 import { useStaff } from '@/lib/staff-context';
 import { useTheme } from '@/hooks/use-theme';
+import { Fonts } from '@/constants/theme';
 
 export default function AddRoomScreen() {
   const theme = useTheme();
@@ -343,35 +344,35 @@ const styles = StyleSheet.create({
   },
   formCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 24,
+    borderRadius: 20,
     padding: 22,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.04,
-    shadowRadius: 10,
+    shadowRadius: 8,
     elevation: 2
   },
   inputGroup: {
     marginBottom: 20
   },
   inputLabel: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
-    color: '#64748b',
-    letterSpacing: 0.6,
+    color: '#475569',
+    letterSpacing: 1.1,
     marginBottom: 8
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8fafc',
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 14,
+    borderRadius: 12,
     paddingHorizontal: 14,
-    height: 52
+    height: 50
   },
   inputIcon: {
     marginRight: 10
@@ -388,16 +389,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8fafc',
-    borderRadius: 16,
-    borderWidth: 1.5,
+    borderRadius: 14,
+    borderWidth: 1,
     borderColor: '#e2e8f0',
     padding: 8,
     marginBottom: 10
   },
   stepperBtn: {
-    width: 46,
-    height: 46,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 11,
     backgroundColor: '#ffffff',
     justifyContent: 'center',
     alignItems: 'center',
@@ -405,7 +406,7 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.04,
     shadowRadius: 2,
     elevation: 1
   },
@@ -418,15 +419,17 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   stepperFloorTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontFamily: Fonts.serif,
+    fontSize: 17,
+    fontWeight: '600',
     color: '#0f172a'
   },
   stepperFloorSub: {
     fontSize: 11,
     color: '#64748b',
     marginTop: 2,
-    fontWeight: '500'
+    fontWeight: '500',
+    fontVariant: ['tabular-nums']
   },
   quickFloorChips: {
     flexDirection: 'row',
@@ -449,7 +452,7 @@ const styles = StyleSheet.create({
   quickChipText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#64748b'
+    color: '#475569'
   },
   quickChipTextActive: {
     color: '#2563eb',
@@ -464,8 +467,8 @@ const styles = StyleSheet.create({
   typeOption: {
     flex: 1,
     backgroundColor: '#f8fafc',
-    borderRadius: 16,
-    borderWidth: 1.5,
+    borderRadius: 14,
+    borderWidth: 1,
     borderColor: '#e2e8f0',
     padding: 14,
     alignItems: 'center',
@@ -481,7 +484,7 @@ const styles = StyleSheet.create({
     color: '#475569'
   },
   typeOptionTextActive: {
-    color: '#1d4ed8'
+    color: '#2563eb'
   },
   typeOptionSub: {
     fontSize: 10,
@@ -490,15 +493,15 @@ const styles = StyleSheet.create({
 
   // Submit Button
   submitBtn: {
-    backgroundColor: '#0f172a',
-    borderRadius: 16,
+    backgroundColor: '#2563eb',
+    borderRadius: 14,
     height: 52,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
-    shadowColor: '#0f172a',
+    shadowColor: '#2563eb',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.16,
     shadowRadius: 8,
     elevation: 3
   },
@@ -511,8 +514,8 @@ const styles = StyleSheet.create({
     gap: 8
   },
   submitBtnText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#ffffff'
+    color: '#FFFFFF'
   }
 });

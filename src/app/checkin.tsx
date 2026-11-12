@@ -2,8 +2,8 @@ import * as Crypto from 'expo-crypto';
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as Clipboard from 'expo-clipboard';
-import { router } from "expo-router";
-import { useEffect, useState, useMemo } from "react";
+import { router, useNavigation } from "expo-router";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { 
   ActivityIndicator, 
   Alert, 
@@ -28,6 +28,9 @@ import { uploadIdPhoto } from '../lib/photo';
 import { ScreenHeader } from '@/lib/screen-header';
 import { floorLabel, resolveFloorNo } from '@/lib/floors';
 import { parseTD3, ParsedMRZ } from '@/lib/mrz';
+import { IdOcrResult, matchCountryOption } from '@/lib/id-ocr';
+import { scanImageForIdDetails } from '@/services/ocr.service';
+import { hapticSelection, hapticSuccess, hapticWarning } from '@/lib/haptics';
 import { useTheme } from '@/hooks/use-theme';
 import { buildWelcomeKitMessage, openWhatsApp } from '@/lib/whatsapp';
 import { StayCalendarModal } from '@/components/stay-calendar-modal';
@@ -77,6 +80,92 @@ export default function CheckInScreen() {
   const [mrzL2, setMrzL2] = useState("");
   const [mrzParsed, setMrzParsed] = useState<ParsedMRZ | null>(null);
   const [mrzVerified, setMrzVerified] = useState(false);
+
+  // Midway Exit Confirmation Guard
+  const navigation = useNavigation();
+  const allowLeaveRef = useRef(false);
+
+  const leaveCheckInHome = () => {
+    allowLeaveRef.current = true;
+    router.replace("/home");
+  };
+
+  const hasUnsavedCheckInData = useMemo(
+    () =>
+      Boolean(
+        name.trim() ||
+          phone.trim() ||
+          nationality.trim() ||
+          idType.trim() ||
+          idLast4.trim() ||
+          passportNo.trim() ||
+          visaNo.trim() ||
+          arrivedFrom.trim() ||
+          nextDest.trim() ||
+          amount.trim() ||
+          mrzL1.trim() ||
+          mrzL2.trim() ||
+          photoUri
+      ),
+    [
+      name,
+      phone,
+      nationality,
+      idType,
+      idLast4,
+      passportNo,
+      visaNo,
+      arrivedFrom,
+      nextDest,
+      amount,
+      mrzL1,
+      mrzL2,
+      photoUri,
+    ]
+  );
+
+  useEffect(() => {
+    const navWithBeforeRemove = navigation as unknown as {
+      addListener: (
+        event: 'beforeRemove',
+        listener: (e: {
+          preventDefault: () => void;
+          data: { action: Parameters<typeof navigation.dispatch>[0] };
+        }) => void
+      ) => () => void;
+    };
+    const unsubscribe = navWithBeforeRemove.addListener('beforeRemove', (e) => {
+      if (allowLeaveRef.current || !hasUnsavedCheckInData) {
+        return;
+      }
+      e.preventDefault();
+      Alert.alert(
+        'Leave Check-In?',
+        'Are you sure you want to leave Guest Check-In midway? Entered guest details will be lost.',
+        [
+          { text: 'Stay on Check-In', style: 'cancel' },
+          {
+            text: 'Leave & Discard',
+            style: 'destructive',
+            onPress: () => {
+              allowLeaveRef.current = true;
+              navigation.dispatch(e.data.action);
+            },
+          },
+        ]
+      );
+    });
+    return unsubscribe;
+  }, [navigation, hasUnsavedCheckInData]);
+
+  // Optical ID / Passport OCR Scanner State
+  const [ocrScanning, setOcrScanning] = useState(false);
+  const [ocrBanner, setOcrBanner] = useState<{
+    title: string;
+    subtitle: string;
+    verified: boolean;
+    pendingResult?: IdOcrResult;
+  } | null>(null);
 
   const [failedAttempts, setFailedAttempts] = useState(0);
 
@@ -326,6 +415,188 @@ export default function CheckInScreen() {
     }
   }
 
+  const applyOcrResultToForm = (res: IdOcrResult, overwriteExisting = true) => {
+    const filled: string[] = [];
+
+    if (res.fullName && (overwriteExisting || !name.trim())) {
+      setName(res.fullName);
+      filled.push('Name');
+    }
+    if (res.gender && (overwriteExisting || !gender)) {
+      setGender(res.gender);
+      filled.push('Gender');
+    }
+
+    const matchedCountry = res.nationality
+      ? matchCountryOption(res.mrzParsed?.nationalityCode, res.nationality)
+      : null;
+    if (matchedCountry && (overwriteExisting || !nationality)) {
+      setNationality(matchedCountry.name);
+      setNatQuery(`${matchedCountry.flag} ${matchedCountry.name}`);
+      filled.push('Nationality');
+    } else if (res.nationality && (overwriteExisting || !nationality)) {
+      setNationality(res.nationality);
+      setNatQuery(`${res.nationalityFlag || '📘'} ${res.nationality}`);
+      filled.push('Nationality');
+    }
+
+    if (res.idType && (overwriteExisting || !idType)) {
+      setIdType(res.idType);
+      filled.push('Doc Type');
+    }
+    if (res.passportNo && (overwriteExisting || !passportNo.trim())) {
+      setPassportNo(res.passportNo);
+      filled.push('Passport No.');
+    }
+    if (res.idLast4 && (overwriteExisting || !idLast4.trim())) {
+      setIdLast4(res.idLast4);
+      filled.push('Last 4 Digits');
+    }
+
+    if (res.mrzL1) setMrzL1(res.mrzL1);
+    if (res.mrzL2) setMrzL2(res.mrzL2);
+    if (res.mrzParsed) setMrzParsed(res.mrzParsed);
+    if (res.verifiedMrz) setMrzVerified(true);
+
+    return filled;
+  };
+
+  async function compressAndSetPhoto(originalUri: string) {
+    const manipulated = await ImageManipulator.manipulateAsync(
+      originalUri,
+      [{ resize: { width: 1280 } }],
+      { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG }
+    );
+    setPhotoUri(manipulated.uri);
+  }
+
+  async function runOcrOnOriginalImage(
+    originalUri: string,
+    target: 'form' | 'mrz_modal',
+    silentOnUnsupported: boolean
+  ) {
+    setOcrScanning(true);
+    try {
+      const preferred = target === 'mrz_modal' ? 'Passport' : idType || undefined;
+      const outcome = await scanImageForIdDetails(originalUri, preferred);
+
+      if (!outcome.ok) {
+        if (outcome.reason === 'unsupported_runtime') {
+          if (!silentOnUnsupported) {
+            Alert.alert(
+              'OCR Requires Development Build',
+              outcome.message,
+              target === 'form'
+                ? [
+                    { text: 'OK', style: 'cancel' },
+                    { text: 'Open MRZ Input', onPress: () => setShowMrzModal(true) },
+                  ]
+                : [{ text: 'OK' }]
+            );
+          }
+          return;
+        }
+        if (!silentOnUnsupported) {
+          void hapticWarning();
+          Alert.alert('Could Not Read ID Details', outcome.message);
+        }
+        return;
+      }
+
+      const ocr = outcome.result;
+
+      if (target === 'mrz_modal') {
+        if (ocr.mrzL1) setMrzL1(ocr.mrzL1);
+        if (ocr.mrzL2) setMrzL2(ocr.mrzL2);
+        if (ocr.mrzParsed) setMrzParsed(ocr.mrzParsed);
+        if (ocr.verifiedMrz) {
+          void hapticSuccess();
+        } else {
+          void hapticWarning();
+          Alert.alert(
+            'Partial Passport Read',
+            'Lines were extracted, but check digits did not fully validate. Verify Line 1 & Line 2 below or scan again with even lighting.'
+          );
+        }
+        return;
+      }
+
+      const hasUserEdits = Boolean(name.trim() || passportNo.trim() || idLast4.trim());
+      if (hasUserEdits && silentOnUnsupported) {
+        void hapticSelection();
+        setOcrBanner({
+          title: ocr.verifiedMrz ? 'Passport MRZ Detected in Photo' : 'ID Details Detected in Photo',
+          subtitle: ocr.extractedFieldsSummary.join(' • ') || 'Tap Apply to overwrite empty or existing fields.',
+          verified: ocr.verifiedMrz,
+          pendingResult: ocr,
+        });
+        return;
+      }
+
+      const filled = applyOcrResultToForm(ocr, !silentOnUnsupported || !hasUserEdits);
+      void hapticSuccess();
+      setOcrBanner({
+        title: ocr.verifiedMrz
+          ? 'Passport MRZ Verified via Camera OCR'
+          : `${ocr.idType || 'ID'} Scanned via On-Device OCR`,
+        subtitle:
+          filled.length > 0
+            ? `Auto-filled: ${filled.join(', ')}`
+            : ocr.extractedFieldsSummary.join(' • ') || 'Review fields below.',
+        verified: ocr.verifiedMrz,
+      });
+    } finally {
+      setOcrScanning(false);
+    }
+  }
+
+  async function scanIdWithOcr(
+    source: 'camera' | 'library',
+    target: 'form' | 'mrz_modal' = 'form'
+  ) {
+    try {
+      if (source === 'camera') {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Denied', 'Camera access is needed to scan IDs.');
+          return;
+        }
+      } else {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission Denied', 'Photo library access is needed to import an ID image.');
+          return;
+        }
+      }
+
+      const pickerResult =
+        source === 'camera'
+          ? await ImagePicker.launchCameraAsync({
+              mediaTypes: ['images'],
+              allowsEditing: true,
+              quality: 1,
+            })
+          : await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ['images'],
+              allowsEditing: true,
+              quality: 1,
+            });
+
+      if (pickerResult.canceled || !pickerResult.assets[0]?.uri) return;
+
+      const originalUri = pickerResult.assets[0].uri;
+      // Save compressed copy if photographing from main form (so clerk doesn't have to photograph twice)
+      if (target === 'form' && (source === 'camera' || !photoUri)) {
+        await compressAndSetPhoto(originalUri);
+      }
+
+      await runOcrOnOriginalImage(originalUri, target, false);
+    } catch (e) {
+      console.error('OCR scan flow error:', e);
+      Alert.alert('Scan Error', 'Unable to capture and read this image. Please try again.');
+    }
+  }
+
   async function takePhoto() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== "granted") {
@@ -340,17 +611,9 @@ export default function CheckInScreen() {
       quality: 1,
     });
 
-    if (!result.canceled) {
+    if (!result.canceled && result.assets[0]?.uri) {
       const originalUri = result.assets[0].uri;
-      
-      // Compress the image to save bandwidth and prevent crashes
-      const manipulated = await ImageManipulator.manipulateAsync(
-        originalUri,
-        [{ resize: { width: 1280 } }], // Shrink to max 1280px wide
-        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG } // 60% quality
-      );
-      
-      setPhotoUri(manipulated.uri);
+      await compressAndSetPhoto(originalUri);
     }
   }
 
@@ -545,7 +808,7 @@ export default function CheckInScreen() {
         Alert.alert(
           "Tourist Checked In (Flagged)",
           `${checkinName} has been assigned to ${unitLabel}.\n\n⚠️ Profile is flagged as incomplete. Please collect ID documents and payment details before checkout.`,
-          [{ text: "OK", onPress: () => router.replace("/home") }]
+          [{ text: "OK", onPress: () => leaveCheckInHome() }]
         );
         return;
       }
@@ -572,20 +835,20 @@ export default function CheckInScreen() {
             {
               text: "Skip",
               style: "cancel",
-              onPress: () => router.replace("/home")
+              onPress: () => leaveCheckInHome()
             },
             {
               text: "Send WhatsApp",
               onPress: async () => {
                 await openWhatsApp(phone, welcomeKit);
-                router.replace("/home");
+                leaveCheckInHome();
               }
             }
           ]
         );
       } else {
         Alert.alert("Success", "Guest checked in successfully!", [
-          { text: "Done", onPress: () => router.replace("/home") }
+          { text: "Done", onPress: () => leaveCheckInHome() }
         ]);
       }
 
@@ -633,6 +896,8 @@ export default function CheckInScreen() {
               style={[styles.photoBox, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]} 
               onPress={() => { takePhoto(); }} 
               activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={photoUri ? 'Retake guest ID photo' : 'Take guest ID photo'}
             >
               {photoUri ? (
                 <>
@@ -648,7 +913,7 @@ export default function CheckInScreen() {
                     <Ionicons name="camera" size={28} color={theme.accent} />
                   </View>
                   <Text style={[styles.photoTitle, { color: theme.text }]}>Take Guest ID Photo *</Text>
-                  <Text style={[styles.photoSubtitle, { color: theme.textSecondary }]}>Camera snaps encrypted ID directly to storage</Text>
+                  <Text style={[styles.photoSubtitle, { color: theme.textSecondary }]}>Encrypted locally &amp; auto-deleted after 6 months</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -748,28 +1013,70 @@ export default function CheckInScreen() {
             </View>
 
             {idType === 'Passport' && (
-              <TouchableOpacity
-                style={[styles.mrzTriggerBtn, { backgroundColor: theme.accentSubtle, borderColor: theme.border }]}
-                onPress={() => setShowMrzModal(true)}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="scan-outline" size={17} color={mrzVerified ? theme.free : theme.accent} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.mrzTriggerTitle, { color: mrzVerified ? theme.free : theme.accent }]}>
-                    {mrzVerified ? "Passport MRZ Verified" : "Scan / Parse Passport MRZ"}
-                  </Text>
-                  <Text style={[styles.mrzTriggerSub, { color: theme.textSecondary }]}>
-                    {mrzVerified
-                      ? `ICAO Checksum valid • ${mrzParsed?.fullName || ''}`
-                      : "Auto-fill name, passport no. & nationality with check digits"}
-                  </Text>
-                </View>
-                <Ionicons 
-                  name={mrzVerified ? "checkmark-circle" : "chevron-forward"} 
-                  size={18} 
-                  color={mrzVerified ? theme.free : theme.textTertiary} 
-                />
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity
+                  style={[styles.mrzTriggerBtn, { backgroundColor: theme.accentSubtle, borderColor: theme.border }]}
+                  onPress={() => setShowMrzModal(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="scan-outline" size={17} color={mrzVerified ? theme.free : theme.accentText} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.mrzTriggerTitle, { color: mrzVerified ? theme.free : theme.accentText }]}>
+                      {mrzVerified ? "Passport MRZ Verified" : "Scan / Parse Passport MRZ"}
+                    </Text>
+                    <Text style={[styles.mrzTriggerSub, { color: theme.textSecondary }]}>
+                      {mrzVerified
+                        ? `ICAO Checksum valid • ${mrzParsed?.fullName || ''}`
+                        : "Crop bottom 2 MRZ lines or paste text to auto-fill passport details"}
+                    </Text>
+                  </View>
+                  <Ionicons
+                    name={mrzVerified ? "checkmark-circle" : "chevron-forward"}
+                    size={18}
+                    color={mrzVerified ? theme.free : theme.textTertiary}
+                  />
+                </TouchableOpacity>
+
+                {ocrBanner && (
+                  <View
+                    style={[
+                      styles.ocrBannerCard,
+                      {
+                        backgroundColor: ocrBanner.verified ? theme.freeSubtle : theme.accentSubtle,
+                        borderColor: ocrBanner.verified ? theme.free : theme.border,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name={ocrBanner.verified ? 'checkmark-circle' : 'sparkles-outline'}
+                      size={18}
+                      color={ocrBanner.verified ? theme.free : theme.accentText}
+                      style={{ marginTop: 1 }}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[
+                          styles.ocrBannerTitle,
+                          { color: ocrBanner.verified ? theme.free : theme.accentText },
+                        ]}
+                      >
+                        {ocrBanner.title}
+                      </Text>
+                      <Text style={[styles.ocrBannerSub, { color: theme.textSecondary }]}>
+                        {ocrBanner.subtitle}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setOcrBanner(null)}
+                      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Dismiss OCR status banner"
+                    >
+                      <Ionicons name="close" size={16} color={theme.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </>
             )}
 
             <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Last 4 Digits of ID</Text>
@@ -1062,7 +1369,7 @@ export default function CheckInScreen() {
 
           {/* Action Submit Button */}
           <TouchableOpacity 
-            style={[styles.submitActionBtn, { backgroundColor: theme.free }, loading && styles.submitActionBtnDisabled]} 
+            style={[styles.submitActionBtn, { backgroundColor: '#15803D' }, loading && styles.submitActionBtnDisabled]} 
             onPress={() => completeCheckIn()} 
             disabled={loading}
             activeOpacity={0.8}
@@ -1366,28 +1673,62 @@ export default function CheckInScreen() {
                 showsVerticalScrollIndicator={false}
               >
                 <Text style={{ fontSize: 13, color: theme.textSecondary, lineHeight: 19 }}>
-                  Enter or paste the two 44-character machine-readable lines at the bottom of the guest’s passport. Check digits are validated on-device.
+                  Crop tightly around the two bottom MRZ lines of the passport page, or paste them below. Check digits are validated on-device.
                 </Text>
 
                 {/* Quick MRZ Action Bar */}
                 <View style={styles.mrzActionBar}>
                   <TouchableOpacity
+                    style={[styles.mrzActionBtn, { backgroundColor: theme.accentSubtle, borderColor: theme.accent }]}
+                    onPress={() => scanIdWithOcr('camera', 'mrz_modal')}
+                    disabled={ocrScanning}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel="Scan passport photo page with camera"
+                  >
+                    {ocrScanning ? (
+                      <ActivityIndicator size="small" color={theme.accent} />
+                    ) : (
+                      <Ionicons name="camera-outline" size={16} color={theme.accent} />
+                    )}
+                    <Text style={[styles.mrzActionText, { color: theme.accent }]}>
+                      {ocrScanning ? 'Reading MRZ…' : 'Scan Passport'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.mrzActionBtn, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}
+                    onPress={() => scanIdWithOcr('library', 'mrz_modal')}
+                    disabled={ocrScanning}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel="Import passport image from photos"
+                  >
+                    <Ionicons name="images-outline" size={15} color={theme.textSecondary} />
+                    <Text style={[styles.mrzActionText, { color: theme.textSecondary }]}>Import</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
                     style={[styles.mrzActionBtn, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}
                     onPress={() => pasteFromClipboard()}
                     activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel="Paste two-line MRZ from clipboard"
                   >
                     <Ionicons name="clipboard-outline" size={15} color={theme.accent} />
-                    <Text style={[styles.mrzActionText, { color: theme.accent }]}>Paste 2-Line MRZ</Text>
+                    <Text style={[styles.mrzActionText, { color: theme.accent }]}>Paste MRZ</Text>
                   </TouchableOpacity>
 
                   {(mrzL1.length > 0 || mrzL2.length > 0) && (
                     <TouchableOpacity
-                      style={[styles.mrzActionBtn, { backgroundColor: '#fee2e2', borderColor: '#fca5a5' }]}
+                      style={[styles.mrzActionBtn, { backgroundColor: theme.destructiveSubtle, borderColor: theme.destructive }]}
                       onPress={clearMrzInputs}
                       activeOpacity={0.7}
+                      accessibilityRole="button"
+                      accessibilityLabel="Clear MRZ lines"
                     >
-                      <Ionicons name="close-circle-outline" size={15} color="#dc2626" />
-                      <Text style={[styles.mrzActionText, { color: "#dc2626" }]}>Clear All</Text>
+                      <Ionicons name="close-circle-outline" size={15} color={theme.destructive} />
+                      <Text style={[styles.mrzActionText, { color: theme.destructive }]}>Clear</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -1411,7 +1752,9 @@ export default function CheckInScreen() {
                       <TouchableOpacity
                         style={styles.fieldActionBtn}
                         onPress={() => pasteFromClipboard(1)}
-                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Paste MRZ line 1"
                       >
                         <Ionicons name="clipboard-outline" size={16} color={theme.accent} />
                       </TouchableOpacity>
@@ -1422,7 +1765,9 @@ export default function CheckInScreen() {
                             setMrzL1('');
                             setMrzParsed(null);
                           }}
-                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                          accessibilityRole="button"
+                          accessibilityLabel="Clear MRZ line 1"
                         >
                           <Ionicons name="close-circle" size={16} color={theme.textTertiary} />
                         </TouchableOpacity>
@@ -1469,7 +1814,9 @@ export default function CheckInScreen() {
                       <TouchableOpacity
                         style={styles.fieldActionBtn}
                         onPress={() => pasteFromClipboard(2)}
-                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Paste MRZ line 2"
                       >
                         <Ionicons name="clipboard-outline" size={16} color={theme.accent} />
                       </TouchableOpacity>
@@ -1480,7 +1827,9 @@ export default function CheckInScreen() {
                             setMrzL2('');
                             setMrzParsed(null);
                           }}
-                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                          accessibilityRole="button"
+                          accessibilityLabel="Clear MRZ line 2"
                         >
                           <Ionicons name="close-circle" size={16} color={theme.textTertiary} />
                         </TouchableOpacity>
@@ -1510,10 +1859,10 @@ export default function CheckInScreen() {
 
                 {/* Live Parsed Results Card */}
                 {mrzParsed && (
-                  <View style={[styles.card, { borderColor: mrzParsed.ok ? '#86efac' : '#fca5a5', backgroundColor: mrzParsed.ok ? '#f0fdf4' : '#fef2f2' }]}>
+                  <View style={[styles.card, { borderColor: mrzParsed.ok ? theme.free : theme.destructive, backgroundColor: mrzParsed.ok ? theme.freeSubtle : theme.destructiveSubtle }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-                      <Ionicons name={mrzParsed.ok ? "checkmark-circle" : "alert-circle"} size={18} color={mrzParsed.ok ? "#16a34a" : "#dc2626"} />
-                      <Text style={{ fontWeight: '700', fontSize: 14, color: mrzParsed.ok ? '#15803d' : '#991b1b' }}>
+                      <Ionicons name={mrzParsed.ok ? "checkmark-circle" : "alert-circle"} size={18} color={mrzParsed.ok ? theme.free : theme.destructive} />
+                      <Text style={{ fontWeight: '700', fontSize: 14, color: mrzParsed.ok ? theme.free : theme.destructive, flex: 1 }}>
                         {mrzParsed.ok ? "Check Digits Validated (ICAO Doc 9303)" : "Check Digit Mismatch / Check Line Length"}
                       </Text>
                     </View>
@@ -1526,20 +1875,35 @@ export default function CheckInScreen() {
 
                     <TouchableOpacity
                       style={{
-                        backgroundColor: '#16a34a',
+                        backgroundColor: '#15803D',
+                        minHeight: 44,
                         paddingVertical: 12,
                         borderRadius: 10,
                         alignItems: 'center',
+                        justifyContent: 'center',
                         marginTop: 12
                       }}
                       onPress={() => {
+                        const matched = matchCountryOption(mrzParsed.nationalityCode, mrzParsed.nationalityName);
                         setName(mrzParsed.fullName);
                         setPassportNo(mrzParsed.passportNo);
                         setIdLast4(mrzParsed.passportNo.slice(-4));
-                        setNationality(mrzParsed.nationalityName);
-                        setNatQuery(`📘 ${mrzParsed.nationalityName}`);
+                        setIdType('Passport');
+                        if (matched) {
+                          setNationality(matched.name);
+                          setNatQuery(`${matched.flag} ${matched.name}`);
+                        } else {
+                          setNationality(mrzParsed.nationalityName);
+                          setNatQuery(`📘 ${mrzParsed.nationalityName}`);
+                        }
                         setGender(mrzParsed.sex === 'F' ? 'female' : 'male');
-                        setMrzVerified(true);
+                        setMrzVerified(mrzParsed.ok);
+                        setOcrBanner({
+                          title: mrzParsed.ok ? 'Passport MRZ Verified' : 'Passport MRZ Applied (Unverified)',
+                          subtitle: `Auto-filled ${mrzParsed.fullName || 'guest'} • ${mrzParsed.passportNo}`,
+                          verified: mrzParsed.ok,
+                        });
+                        void hapticSuccess();
                         setShowMrzModal(false);
                       }}
                     >
@@ -2085,8 +2449,8 @@ const styles = StyleSheet.create({
     flex: 1
   },
   badgeModal: {
-    backgroundColor: "#dbeafe",
-    color: "#1e40af",
+    backgroundColor: "#eff6ff",
+    color: "#2563eb",
     fontSize: 10,
     fontWeight: "700",
     paddingHorizontal: 8,
@@ -2106,12 +2470,12 @@ const styles = StyleSheet.create({
   checkinFloorTitle: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#475569',
+    color: '#64748b',
     letterSpacing: 0.5
   },
   checkinFloorCount: {
     fontSize: 11,
-    color: '#94a3b8',
+    color: '#64748b',
     fontWeight: '500'
   },
   mrzTriggerBtn: {
@@ -2128,7 +2492,7 @@ const styles = StyleSheet.create({
   mrzTriggerTitle: {
     fontSize: 13.5,
     fontWeight: '700',
-    color: '#1d4ed8'
+    color: '#2563eb'
   },
   mrzTriggerSub: {
     fontSize: 11.5,
@@ -2146,7 +2510,7 @@ const styles = StyleSheet.create({
   specimenBtnText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#334155'
+    color: '#475569'
   },
   checkinFloorBar: {
     marginBottom: 8,
@@ -2183,17 +2547,20 @@ const styles = StyleSheet.create({
   },
   mrzActionBar: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     marginBottom: 4,
   },
   mrzActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 10,
+    minHeight: 44,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    borderRadius: 12,
     borderWidth: 1,
   },
   mrzActionText: {
@@ -2463,5 +2830,75 @@ const styles = StyleSheet.create({
   backFloorActive: {
     fontSize: 13,
     fontWeight: '500',
+  },
+  ocrQuickRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+    marginTop: -6,
+  },
+  ocrPrimaryBtn: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  ocrPrimaryBtnText: {
+    fontSize: 13.5,
+    fontWeight: '700',
+  },
+  ocrSecondaryBtn: {
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  ocrSecondaryBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  ocrBannerCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    borderRadius: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 12,
+    marginBottom: 14,
+  },
+  ocrBannerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  ocrBannerSub: {
+    fontSize: 12,
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  ocrApplyChip: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    minHeight: 34,
+    justifyContent: 'center',
+  },
+  ocrApplyChipText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

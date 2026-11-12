@@ -224,20 +224,14 @@ export default function TeamAccessScreen() {
     setActionSubmitting(true);
 
     try {
-      const { error } = await supabase
-        .from('staff_profiles')
-        .update({ role: newRoleInput })
-        .eq('id', selectedMember.id);
+      const { error } = await supabase.rpc('update_staff_role', {
+        p_prop: propertyId,
+        p_actor: activeStaff?.id || null,
+        p_target: selectedMember.id,
+        p_new_role: newRoleInput,
+      });
 
       if (error) throw error;
-
-      if (selectedMember.user_id) {
-        await supabase
-          .from('members')
-          .update({ role: newRoleInput })
-          .eq('property_id', propertyId)
-          .eq('user_id', selectedMember.user_id);
-      }
 
       Alert.alert('Role Updated', `${selectedMember.name} is now assigned as ${formatRoleLabel(newRoleInput)}.`);
       setChangeRoleVisible(false);
@@ -464,7 +458,7 @@ export default function TeamAccessScreen() {
                           styles.avatarText,
                           {
                             color: isItemCoAdmin
-                              ? theme.accent
+                              ? theme.accentText
                               : isItemHousekeeping
                               ? theme.dirty
                               : theme.text
@@ -486,7 +480,7 @@ export default function TeamAccessScreen() {
                       </View>
                       <Text style={[styles.memberSub, { color: theme.textSecondary }]}>
                         {isItemOwner
-                          ? '👑 Supreme Owner'
+                          ? 'Supreme Owner'
                           : `Position: ${formatRoleLabel(item.role)}`}
                         {item.phone ? ` • ${item.phone}` : ''}
                       </Text>
@@ -510,7 +504,7 @@ export default function TeamAccessScreen() {
                           color: isItemOwner
                             ? '#D97706'
                             : isItemCoAdmin
-                            ? theme.accent
+                            ? theme.accentText
                             : isItemHousekeeping
                             ? theme.dirty
                             : theme.textSecondary
@@ -562,14 +556,14 @@ export default function TeamAccessScreen() {
                     selectedMember?.role === 'housekeeping' ? 'bed' : 'desktop'
                   }
                   size={26}
-                  color={selectedMember?.role === 'owner' ? '#D97706' : theme.accent}
+                  color={selectedMember?.role === 'owner' ? '#D97706' : theme.accentText}
                 />
               </View>
 
               <Text style={[styles.modalMemberName, { color: theme.text }]}>
                 {selectedMember?.name}
               </Text>
-              <Text style={[styles.modalMemberRole, { color: theme.accent }]}>
+              <Text style={[styles.modalMemberRole, { color: theme.accentText }]}>
                 {selectedMember?.role === 'owner' ? 'Supreme Owner' : formatRoleLabel(selectedMember?.role || 'desk')}
                 {selectedMember?.phone ? ` • ${selectedMember.phone}` : ''}
               </Text>

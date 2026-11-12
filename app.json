@@ -35,14 +35,15 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-screen.png",
-          "resizeMode": "cover",
-          "backgroundColor": "#021B79"
+          "resizeMode": "contain",
+          "backgroundColor": "#011787"
         }
       ],
       [
         "expo-image-picker",
         {
-          "photosPermission": "LogStay needs access to your camera to take guest ID photos."
+          "cameraPermission": "LogStay uses your camera to photograph guest IDs and scan passport details at check-in.",
+          "photosPermission": "LogStay accesses your photo library so you can attach or scan an existing guest ID image."
         }
       ],
       [
@@ -59,7 +60,11 @@
             "enableShrinkResourcesInReleaseBuilds": true
           }
         }
-      ]
+      ],
+      "expo-secure-store",
+      "expo-sharing",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {

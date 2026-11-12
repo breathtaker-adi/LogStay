@@ -20,10 +20,13 @@ import { useStaff } from '@/lib/staff-context';
 import { ScreenHeader } from '@/lib/screen-header';
 import { PropertyService } from '@/services';
 import { formatFriendlyError } from '@/lib/error-utils';
+import { useTheme } from '@/hooks/use-theme';
+import { Fonts } from '@/constants/theme';
 
 const PROPERTY_TYPES = ['Hostel', 'Hotel', 'Guest House', 'Resort', 'Homestay'];
 
 export default function SetupPropertyScreen() {
+  const theme = useTheme();
   const { setActiveStaff } = useStaff();
   const searchParams = useLocalSearchParams<{ code?: string }>();
   const [isOwner, setIsOwner] = useState(true);
@@ -98,20 +101,21 @@ export default function SetupPropertyScreen() {
 
         // Fetch owner staff profile and link active session
         if (createdPropId) {
-          await supabase
-            .from('staff_profiles')
-            .update({ name: ownerName.trim(), pin_hash: '' })
-            .eq('property_id', createdPropId)
-            .eq('role', 'owner');
-
           const { data: staffData } = await supabase
             .from('staff_profiles_safe')
-            .select('*')
+            .select('id, name, role')
             .eq('property_id', createdPropId)
             .eq('role', 'owner')
             .limit(1);
 
           const ownerProf = staffData?.[0];
+          if (ownerProf?.id && ownerProf.name !== ownerName.trim()) {
+            await supabase.rpc('update_staff_name', {
+              p_staff_id: ownerProf.id,
+              p_name: ownerName.trim(),
+            });
+          }
+
           await setActiveStaff({
             id: ownerProf?.id || createdPropId,
             name: ownerName.trim(),
@@ -144,62 +148,27 @@ export default function SetupPropertyScreen() {
           return;
         }
 
-        // Try atomic join_property_with_invite RPC with phone
+        // Atomic invite redemption + staff profile creation (RPC handles role & security)
         const { data: joinData, error: joinRpcError } = await supabase.rpc('join_property_with_invite', {
           p_code: propertyId.trim().toUpperCase(),
           p_name: staffName.trim(),
           p_phone: cleanedPhone
         });
 
-        if (!joinRpcError && joinData) {
-          await setActiveStaff({
-            id: joinData.staff_id,
-            name: joinData.name,
-            role: joinData.role,
-            attendanceId: null,
-          });
-
-          Alert.alert(
-            'Joined Successfully',
-            `Welcome to ${joinData.property_name || 'the property'}! You are signed in as ${joinData.role === 'desk' ? 'Front Desk' : joinData.role === 'housekeeping' ? 'Housekeeper' : joinData.role}.`
-          );
-          router.replace('/home');
-          return;
-        }
-
-        // Fallback: join_property + staff_profiles insert
-        const { data: fallbackPropId, error: joinError } = await supabase.rpc('join_property', {
-          p_code: propertyId.trim().toUpperCase()
-        });
-
-        if (joinError) throw joinError;
-        if (!fallbackPropId) throw new Error('Invalid or expired invite code.');
-
-        const { data: userData } = await supabase.auth.getUser();
-        const { data: newProfile, error: profError } = await supabase
-          .from('staff_profiles')
-          .insert({
-            property_id: fallbackPropId,
-            user_id: userData.user?.id,
-            name: staffName.trim(),
-            phone: cleanedPhone,
-            role: 'desk',
-            pin_hash: '',
-            active: true
-          })
-          .select()
-          .single();
-
-        if (profError) throw profError;
+        if (joinRpcError) throw joinRpcError;
+        if (!joinData) throw new Error('Invalid or expired invite code.');
 
         await setActiveStaff({
-          id: newProfile.id,
-          name: newProfile.name,
-          role: newProfile.role,
+          id: joinData.staff_id,
+          name: joinData.name,
+          role: joinData.role,
           attendanceId: null,
         });
 
-        Alert.alert('Joined Successfully', `Welcome! You have joined as Front Desk.`);
+        Alert.alert(
+          'Joined Successfully',
+          `Welcome to ${joinData.property_name || 'the property'}! You are signed in as ${joinData.role === 'desk' ? 'Front Desk' : joinData.role === 'housekeeping' ? 'Housekeeper' : joinData.role}.`
+        );
         router.replace('/home');
         return;
       }
@@ -212,7 +181,7 @@ export default function SetupPropertyScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.root}
+      style={[styles.root, { backgroundColor: theme.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
     >
@@ -229,51 +198,51 @@ export default function SetupPropertyScreen() {
         automaticallyAdjustKeyboardInsets={true}
       >
         {/* Mode Selector Segmented Tab */}
-        <View style={styles.segmentContainer}>
+        <View style={[styles.segmentContainer, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
           <TouchableOpacity
-            style={[styles.segmentBtn, isOwner && styles.segmentBtnActive]}
+            style={[styles.segmentBtn, isOwner && [styles.segmentBtnActive, { backgroundColor: theme.surface }]]}
             onPress={() => toggleMode(true)}
             activeOpacity={0.8}
           >
             <Ionicons
               name="business"
               size={18}
-              color={isOwner ? '#0f172a' : '#64748b'}
+              color={isOwner ? theme.accentText : theme.textSecondary}
             />
-            <Text style={[styles.segmentText, isOwner && styles.segmentTextActive]}>
+            <Text style={[styles.segmentText, { color: theme.textSecondary }, isOwner && [styles.segmentTextActive, { color: theme.text }]]}>
               I am an Owner
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.segmentBtn, !isOwner && styles.segmentBtnActive]}
+            style={[styles.segmentBtn, !isOwner && [styles.segmentBtnActive, { backgroundColor: theme.surface }]]}
             onPress={() => toggleMode(false)}
             activeOpacity={0.8}
           >
             <Ionicons
               name="people"
               size={18}
-              color={!isOwner ? '#0f172a' : '#64748b'}
+              color={!isOwner ? theme.accentText : theme.textSecondary}
             />
-            <Text style={[styles.segmentText, !isOwner && styles.segmentTextActive]}>
+            <Text style={[styles.segmentText, { color: theme.textSecondary }, !isOwner && [styles.segmentTextActive, { color: theme.text }]]}>
               I am Staff
             </Text>
           </TouchableOpacity>
         </View>
 
         {/* Form Card */}
-        <View style={styles.formCard}>
+        <View style={[styles.formCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           {isOwner ? (
             <>
               {/* Owner Full Name */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>YOUR FULL NAME</Text>
-                <View style={styles.inputWrapper}>
-                  <Ionicons name="person-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
+                <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>YOUR FULL NAME</Text>
+                <View style={[styles.inputWrapper, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
+                  <Ionicons name="person-outline" size={20} color={theme.textTertiary} style={styles.inputIcon} />
                   <TextInput
-                    style={styles.textInput}
+                    style={[styles.textInput, { color: theme.text }]}
                     placeholder="e.g. Harsh Vardhan"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor={theme.textTertiary}
                     value={ownerName}
                     onChangeText={setOwnerName}
                   />
@@ -282,13 +251,13 @@ export default function SetupPropertyScreen() {
 
               {/* Property Name */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>PROPERTY NAME</Text>
-                <View style={styles.inputWrapper}>
-                  <Ionicons name="home-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
+                <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>PROPERTY NAME</Text>
+                <View style={[styles.inputWrapper, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
+                  <Ionicons name="home-outline" size={20} color={theme.textTertiary} style={styles.inputIcon} />
                   <TextInput
-                    style={styles.textInput}
+                    style={[styles.textInput, { color: theme.text }]}
                     placeholder="e.g. Zostel Rishikesh, Blue Beds"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor={theme.textTertiary}
                     value={propertyName}
                     onChangeText={setPropertyName}
                   />
@@ -297,16 +266,26 @@ export default function SetupPropertyScreen() {
 
               {/* Property Type Chips */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>PROPERTY TYPE</Text>
+                <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>PROPERTY TYPE</Text>
                 <View style={styles.chipRow}>
                   {PROPERTY_TYPES.map((t) => (
                     <TouchableOpacity
                       key={t}
-                      style={[styles.typeChip, type === t && styles.typeChipActive]}
+                      style={[
+                        styles.typeChip,
+                        { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
+                        type === t && [styles.typeChipActive, { backgroundColor: theme.accentSubtle, borderColor: theme.accent }]
+                      ]}
                       onPress={() => setType(t)}
                       activeOpacity={0.7}
                     >
-                      <Text style={[styles.typeChipText, type === t && styles.typeChipTextActive]}>
+                      <Text
+                        style={[
+                          styles.typeChipText,
+                          { color: theme.textSecondary },
+                          type === t && [styles.typeChipTextActive, { color: theme.accentText }]
+                        ]}
+                      >
                         {t}
                       </Text>
                     </TouchableOpacity>
@@ -316,13 +295,13 @@ export default function SetupPropertyScreen() {
 
               {/* State / Province */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>STATE / REGION</Text>
-                <View style={styles.inputWrapper}>
-                  <Ionicons name="location-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
+                <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>STATE / REGION</Text>
+                <View style={[styles.inputWrapper, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
+                  <Ionicons name="location-outline" size={20} color={theme.textTertiary} style={styles.inputIcon} />
                   <TextInput
-                    style={styles.textInput}
+                    style={[styles.textInput, { color: theme.text }]}
                     placeholder="e.g. Goa, Rajasthan, Himachal Pradesh"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor={theme.textTertiary}
                     value={state}
                     onChangeText={setState}
                   />
@@ -332,20 +311,20 @@ export default function SetupPropertyScreen() {
           ) : (
             <>
               {/* Staff Joining Header Badge */}
-              <View style={styles.staffHeaderBadge}>
-                <Ionicons name="shield-checkmark" size={16} color="#2563eb" />
-                <Text style={styles.staffHeaderBadgeText}>DIRECT PROPERTY ONBOARDING</Text>
+              <View style={[styles.staffHeaderBadge, { backgroundColor: theme.accentSubtle }]}>
+                <Ionicons name="shield-checkmark" size={16} color={theme.accentText} />
+                <Text style={[styles.staffHeaderBadgeText, { color: theme.accentText }]}>DIRECT PROPERTY ONBOARDING</Text>
               </View>
 
               {/* Staff Full Name */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>YOUR FULL NAME</Text>
-                <View style={styles.inputWrapper}>
-                  <Ionicons name="person-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
+                <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>YOUR FULL NAME</Text>
+                <View style={[styles.inputWrapper, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
+                  <Ionicons name="person-outline" size={20} color={theme.textTertiary} style={styles.inputIcon} />
                   <TextInput
-                    style={styles.textInput}
+                    style={[styles.textInput, { color: theme.text }]}
                     placeholder="e.g. Ramesh Kumar"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor={theme.textTertiary}
                     value={staffName}
                     onChangeText={setStaffName}
                     autoCapitalize="words"
@@ -355,16 +334,16 @@ export default function SetupPropertyScreen() {
 
               {/* Staff Phone Number */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>PHONE NUMBER</Text>
-                <Text style={styles.helperText}>
+                <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>PHONE NUMBER</Text>
+                <Text style={[styles.helperText, { color: theme.textTertiary }]}>
                   Used for account verification and past performance history.
                 </Text>
-                <View style={styles.inputWrapper}>
-                  <Ionicons name="call-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
+                <View style={[styles.inputWrapper, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
+                  <Ionicons name="call-outline" size={20} color={theme.textTertiary} style={styles.inputIcon} />
                   <TextInput
-                    style={styles.textInput}
+                    style={[styles.textInput, { color: theme.text }]}
                     placeholder="e.g. +91 98765 43210"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor={theme.textTertiary}
                     value={staffPhone}
                     onChangeText={setStaffPhone}
                     keyboardType="phone-pad"
@@ -374,16 +353,16 @@ export default function SetupPropertyScreen() {
 
               {/* Staff Invite Code */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>MEMBER JOIN CODE</Text>
-                <Text style={styles.helperText}>
+                <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>MEMBER JOIN CODE</Text>
+                <Text style={[styles.helperText, { color: theme.textTertiary }]}>
                   Enter the 6-character code or open the direct link shared by your property manager.
                 </Text>
-                <View style={[styles.inputWrapper, styles.codeInputWrapper]}>
-                  <Ionicons name="key-outline" size={20} color="#2563eb" style={styles.inputIcon} />
+                <View style={[styles.inputWrapper, styles.codeInputWrapper, { backgroundColor: theme.accentSubtle, borderColor: theme.accent }]}>
+                  <Ionicons name="key-outline" size={20} color={theme.accentText} style={styles.inputIcon} />
                   <TextInput
-                    style={[styles.textInput, styles.codeInputText]}
+                    style={[styles.textInput, styles.codeInputText, { color: theme.accentText }]}
                     placeholder="e.g. 7K9X2A"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor={theme.textTertiary}
                     value={propertyId}
                     onChangeText={setPropertyId}
                     autoCapitalize="characters"
@@ -397,7 +376,11 @@ export default function SetupPropertyScreen() {
 
           {/* Submit Action */}
           <TouchableOpacity
-            style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
+            style={[
+              styles.submitBtn,
+              { backgroundColor: theme.accent, shadowColor: theme.accent },
+              loading && { backgroundColor: theme.textTertiary, opacity: 0.7 }
+            ]}
             onPress={saveData}
             disabled={loading}
             activeOpacity={0.8}
@@ -417,7 +400,7 @@ export default function SetupPropertyScreen() {
           {/* Option at enter code page for staff to check their past remarks ledger */}
           {!isOwner && (
             <TouchableOpacity
-              style={styles.remarksOptionCard}
+              style={[styles.remarksOptionCard, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}
               onPress={() => router.push({
                 pathname: '/my-remarks',
                 params: {
@@ -429,24 +412,24 @@ export default function SetupPropertyScreen() {
               accessibilityRole="button"
               accessibilityLabel="Check past remarks ledger"
             >
-              <View style={styles.remarksOptionIconBox}>
-                <Ionicons name="newspaper-outline" size={18} color="#2563eb" />
+              <View style={[styles.remarksOptionIconBox, { backgroundColor: theme.accentSubtle }]}>
+                <Ionicons name="newspaper-outline" size={18} color={theme.accentText} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.remarksOptionTitle}>Check Past Remarks Ledger</Text>
-                <Text style={styles.remarksOptionSub}>
+                <Text style={[styles.remarksOptionTitle, { color: theme.text }]}>Check Past Remarks Ledger</Text>
+                <Text style={[styles.remarksOptionSub, { color: theme.textSecondary }]}>
                   Previously disconnected from a property? View official remarks left by previous owners.
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
+              <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
             </TouchableOpacity>
           )}
         </View>
 
         {/* Security badge */}
         <View style={styles.securityFooter}>
-          <Ionicons name="shield-checkmark-outline" size={15} color="#94a3b8" />
-          <Text style={styles.securityText}>AES-256 Encrypted Local Desk Storage</Text>
+          <Ionicons name="shield-checkmark-outline" size={15} color={theme.textTertiary} />
+          <Text style={[styles.securityText, { color: theme.textTertiary }]}>AES-256 Encrypted Local Desk Storage</Text>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -467,9 +450,11 @@ const styles = StyleSheet.create({
   // Segmented Tab
   segmentContainer: {
     flexDirection: 'row',
-    backgroundColor: '#e2e8f0',
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     padding: 4,
-    borderRadius: 16,
+    borderRadius: 14,
     marginBottom: 20
   },
   segmentBtn: {
@@ -478,19 +463,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 12,
-    borderRadius: 12
+    paddingVertical: 11,
+    borderRadius: 11
   },
   segmentBtnActive: {
     backgroundColor: '#ffffff',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2
   },
   segmentText: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '600',
     color: '#64748b'
   },
@@ -502,29 +487,29 @@ const styles = StyleSheet.create({
   // Form Card
   formCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: 20,
+    padding: 22,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.04,
-    shadowRadius: 10,
+    shadowRadius: 8,
     elevation: 2
   },
   inputGroup: {
     marginBottom: 20
   },
   inputLabel: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
-    color: '#64748b',
-    letterSpacing: 0.6,
+    color: '#475569',
+    letterSpacing: 1.1,
     marginBottom: 8
   },
   helperText: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: '#64748b',
     marginBottom: 10,
     lineHeight: 16
   },
@@ -532,11 +517,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#f8fafc',
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 14,
+    borderRadius: 12,
     paddingHorizontal: 14,
-    height: 52
+    height: 50
   },
   inputIcon: {
     marginRight: 10
@@ -548,14 +533,15 @@ const styles = StyleSheet.create({
     fontWeight: '500'
   },
   codeInputWrapper: {
-    borderColor: '#93c5fd',
-    backgroundColor: '#f0f7ff',
+    borderColor: '#2563eb',
+    backgroundColor: '#eff6ff',
   },
   codeInputText: {
     fontSize: 18,
     fontWeight: '700',
     letterSpacing: 3,
-    color: '#1d4ed8',
+    fontVariant: ['tabular-nums'],
+    color: '#2563eb',
   },
   staffHeaderBadge: {
     flexDirection: 'row',
@@ -569,10 +555,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   staffHeaderBadgeText: {
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
-    color: '#1d4ed8',
-    letterSpacing: 0.5,
+    color: '#2563eb',
+    letterSpacing: 0.9,
   },
 
   // Chips
@@ -584,7 +570,7 @@ const styles = StyleSheet.create({
   typeChip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: 11,
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0'
@@ -596,7 +582,7 @@ const styles = StyleSheet.create({
   typeChipText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#64748b'
+    color: '#475569'
   },
   typeChipTextActive: {
     color: '#2563eb',
@@ -605,15 +591,15 @@ const styles = StyleSheet.create({
 
   // Submit Button
   submitBtn: {
-    backgroundColor: '#0f172a',
-    borderRadius: 16,
+    backgroundColor: '#2563eb',
+    borderRadius: 14,
     height: 52,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 8,
-    shadowColor: '#0f172a',
+    shadowColor: '#2563eb',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
+    shadowOpacity: 0.16,
     shadowRadius: 8,
     elevation: 3
   },
@@ -626,7 +612,7 @@ const styles = StyleSheet.create({
     gap: 8
   },
   submitBtnText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#ffffff'
   },
@@ -635,7 +621,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     backgroundColor: '#f8fafc',
-    borderRadius: 16,
+    borderRadius: 14,
     padding: 14,
     marginTop: 14,
     borderWidth: 1,
@@ -644,20 +630,20 @@ const styles = StyleSheet.create({
   remarksOptionIconBox: {
     width: 38,
     height: 38,
-    borderRadius: 12,
+    borderRadius: 11,
     backgroundColor: '#eff6ff',
     alignItems: 'center',
     justifyContent: 'center',
   },
   remarksOptionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontFamily: Fonts.serif,
+    fontSize: 14,
+    fontWeight: '600',
     color: '#0f172a',
-    letterSpacing: -0.2,
     marginBottom: 2,
   },
   remarksOptionSub: {
-    fontSize: 11,
+    fontSize: 11.5,
     color: '#64748b',
     lineHeight: 16,
   },

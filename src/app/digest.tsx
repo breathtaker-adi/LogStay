@@ -14,6 +14,8 @@ import { supabase } from '../lib/supabase';
 import { getCachedPropertyId } from '../lib/offline';
 import { ScreenHeader } from '@/lib/screen-header';
 import { detectShiftAnomalies, ShiftRecord } from '@/lib/anomaly';
+import { useTheme } from '@/hooks/use-theme';
+import { Fonts } from '@/constants/theme';
 
 // Configurable thresholds for insider-fraud detection
 export const PETTY_FLAG = 1000; // Flag petty cash entries > ₹1,000
@@ -49,6 +51,7 @@ interface ReconSnapshot {
 }
 
 export default function DailyDigestScreen() {
+  const theme = useTheme();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [propertyName, setPropertyName] = useState('Property');
@@ -124,10 +127,10 @@ export default function DailyDigestScreen() {
           .eq('property_id', propId)
           .gte('opened_at', todayIso),
 
-        // Staff profiles for name mapping & lockout alert
+        // Staff profiles for name mapping (column-safe view without pin_hash/lockouts)
         supabase
-          .from('staff_profiles')
-          .select('id, name, role, locked_until')
+          .from('staff_profiles_safe')
+          .select('id, name, role')
           .eq('property_id', propId)
           .eq('active', true),
 
@@ -403,87 +406,90 @@ export default function DailyDigestScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color="#2563eb" />
-        <Text style={styles.loadingText}>Compiling daily audit digest...</Text>
+      <View style={[styles.centerContainer, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.accentText} />
+        <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Compiling daily audit digest...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.safeArea}>
+    <View style={[styles.safeArea, { backgroundColor: theme.background }]}>
       <ScreenHeader
         title="Daily Digest"
         subtitle={`${propertyName} • ${todayDisplay}`}
         right={
-          <TouchableOpacity style={styles.refreshBtn} onPress={onRefresh}>
-            <Ionicons name="refresh" size={18} color="#2563eb" />
+          <TouchableOpacity style={[styles.refreshBtn, { backgroundColor: theme.surfaceSubtle }]} onPress={onRefresh}>
+            <Ionicons name="refresh" size={18} color={theme.accentText} />
           </TouchableOpacity>
         }
       />
 
       <ScrollView
-        style={styles.container}
+        style={[styles.container, { backgroundColor: theme.background }]}
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accentText} />}
       >
         {/* Timestamp */}
         <View style={styles.timeBadgeRow}>
-          <Text style={styles.timeBadgeText}>Last updated at {fetchedAt || 'just now'}</Text>
+          <Text style={[styles.timeBadgeText, { color: theme.textTertiary }]}>Last updated at {fetchedAt || 'just now'}</Text>
         </View>
 
         {/* SECTION A: CASH SUMMARY */}
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>💰 Cash Summary (Today)</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="wallet-outline" size={18} color={theme.accentText} />
+              <Text style={[styles.cardTitle, { color: theme.text }]}>Cash Summary (Today)</Text>
+            </View>
             {cashSummary.hasOpenShift && (
-              <View style={styles.openBadge}>
-                <Text style={styles.openBadgeText}>Shift Open</Text>
+              <View style={[styles.openBadge, { backgroundColor: '#dbeafe' }]}>
+                <Text style={[styles.openBadgeText, { color: '#1d4ed8' }]}>Shift Open</Text>
               </View>
             )}
           </View>
 
           <View style={styles.calcRow}>
-            <Text style={styles.calcLabel}>Opening Drawer Cash</Text>
-            <Text style={styles.calcValue}>₹{cashSummary.openingCash.toLocaleString('en-IN')}</Text>
+            <Text style={[styles.calcLabel, { color: theme.textSecondary }]}>Opening Drawer Cash</Text>
+            <Text style={[styles.calcValue, { color: theme.text }]}>₹{cashSummary.openingCash.toLocaleString('en-IN')}</Text>
           </View>
           <View style={styles.calcRow}>
             <Text style={[styles.calcLabel, { color: '#059669' }]}>+ Cash Collections</Text>
             <Text style={[styles.calcValue, { color: '#059669' }]}>+₹{cashSummary.collections.toLocaleString('en-IN')}</Text>
           </View>
           <View style={styles.calcRow}>
-            <Text style={[styles.calcLabel, { color: '#dc2626' }]}>− Petty Cash Expenses</Text>
-            <Text style={[styles.calcValue, { color: '#dc2626' }]}>−₹{cashSummary.pettyCash.toLocaleString('en-IN')}</Text>
+            <Text style={[styles.calcLabel, { color: theme.destructive }]}>− Petty Cash Expenses</Text>
+            <Text style={[styles.calcValue, { color: theme.destructive }]}>−₹{cashSummary.pettyCash.toLocaleString('en-IN')}</Text>
           </View>
           <View style={styles.calcRow}>
-            <Text style={[styles.calcLabel, { color: '#dc2626' }]}>− Cash Refunds</Text>
-            <Text style={[styles.calcValue, { color: '#dc2626' }]}>−₹{cashSummary.refunds.toLocaleString('en-IN')}</Text>
+            <Text style={[styles.calcLabel, { color: theme.destructive }]}>− Cash Refunds</Text>
+            <Text style={[styles.calcValue, { color: theme.destructive }]}>−₹{cashSummary.refunds.toLocaleString('en-IN')}</Text>
           </View>
 
-          <View style={styles.divider} />
+          <View style={[styles.divider, { backgroundColor: theme.borderSubtle }]} />
 
           <View style={styles.calcRowTotal}>
-            <Text style={styles.calcLabelTotal}>Expected Drawer Cash</Text>
-            <Text style={styles.calcValueTotal}>₹{cashSummary.expectedDrawer.toLocaleString('en-IN')}</Text>
+            <Text style={[styles.calcLabelTotal, { color: theme.text }]}>Expected Drawer Cash</Text>
+            <Text style={[styles.calcValueTotal, { color: theme.text }]}>₹{cashSummary.expectedDrawer.toLocaleString('en-IN')}</Text>
           </View>
 
           {cashSummary.hasClosedShift && (
             <>
               <View style={styles.calcRow}>
-                <Text style={styles.calcLabel}>Counted Cash (Closed Shifts)</Text>
-                <Text style={styles.calcValue}>₹{Number(cashSummary.countedCash).toLocaleString('en-IN')}</Text>
+                <Text style={[styles.calcLabel, { color: theme.textSecondary }]}>Counted Cash (Closed Shifts)</Text>
+                <Text style={[styles.calcValue, { color: theme.text }]}>₹{Number(cashSummary.countedCash).toLocaleString('en-IN')}</Text>
               </View>
-              <View style={[styles.calcRow, styles.varianceRow]}>
-                <Text style={styles.varianceLabel}>Drawer Variance</Text>
+              <View style={[styles.calcRow, styles.varianceRow, { borderTopColor: theme.borderSubtle }]}>
+                <Text style={[styles.varianceLabel, { color: theme.textSecondary }]}>Drawer Variance</Text>
                 <Text
                   style={[
                     styles.varianceValue,
-                    { color: (cashSummary.variance || 0) === 0 ? '#059669' : '#dc2626' },
+                    { color: (cashSummary.variance || 0) === 0 ? '#16a34a' : '#dc2626' },
                   ]}
                 >
                   {(cashSummary.variance || 0) > 0 ? '+' : ''}
                   ₹{Number(cashSummary.variance).toLocaleString('en-IN')}
-                  {(cashSummary.variance || 0) === 0 ? ' (Matched ✓)' : ' (Discrepancy ⚠️)'}
+                  {(cashSummary.variance || 0) === 0 ? ' (Matched ✓)' : ' (Discrepancy)'}
                 </Text>
               </View>
             </>
@@ -491,19 +497,36 @@ export default function DailyDigestScreen() {
         </View>
 
         {/* SECTION B: ALERTS */}
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>⚠️ Audit Alerts</Text>
-            <View style={[styles.alertCountBadge, alerts.length > 0 ? styles.badgeRed : styles.badgeGreen]}>
-              <Text style={styles.alertCountText}>{alerts.length}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="alert-circle-outline" size={18} color={alerts.length > 0 ? '#f59e0b' : '#16a34a'} />
+              <Text style={[styles.cardTitle, { color: theme.text }]}>Audit Alerts</Text>
+            </View>
+            <View
+              style={[
+                styles.alertCountBadge,
+                { backgroundColor: alerts.length > 0 ? '#fee2e2' : '#dcfce7' }
+              ]}
+            >
+              <Text
+                style={[
+                  styles.alertCountText,
+                  { color: alerts.length > 0 ? '#dc2626' : '#15803d' }
+                ]}
+              >
+                {alerts.length}
+              </Text>
             </View>
           </View>
 
           {alerts.length === 0 ? (
-            <View style={styles.emptyAlertsBox}>
-              <Text style={styles.emptyAlertsEmoji}>✓</Text>
-              <Text style={styles.emptyAlertsTitle}>No alerts today</Text>
-              <Text style={styles.emptyAlertsSub}>No refunds, excessive petty cash, or lockout anomalies recorded.</Text>
+            <View style={[styles.emptyAlertsBox, { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }]}>
+              <Ionicons name="checkmark-circle-outline" size={26} color="#16a34a" />
+              <Text style={[styles.emptyAlertsTitle, { color: '#15803d' }]}>No alerts today</Text>
+              <Text style={[styles.emptyAlertsSub, { color: theme.textSecondary }]}>
+                No refunds, excessive petty cash, or lockout anomalies recorded.
+              </Text>
             </View>
           ) : (
             <View style={styles.alertsList}>
@@ -512,15 +535,27 @@ export default function DailyDigestScreen() {
                   key={alert.id}
                   style={[
                     styles.alertCard,
-                    alert.severity === 'high' && styles.alertCardHigh,
-                    alert.severity === 'medium' && styles.alertCardMedium,
+                    {
+                      backgroundColor:
+                        alert.severity === 'high'
+                          ? '#fef2f2'
+                          : alert.severity === 'medium'
+                          ? '#fffbeb'
+                          : theme.surfaceSubtle,
+                      borderLeftColor:
+                        alert.severity === 'high'
+                          ? '#ef4444'
+                          : alert.severity === 'medium'
+                          ? '#f59e0b'
+                          : theme.textTertiary,
+                    },
                   ]}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.alertItemTitle}>{alert.title}</Text>
-                    <Text style={styles.alertItemSub}>{alert.subtitle}</Text>
+                    <Text style={[styles.alertItemTitle, { color: theme.text }]}>{alert.title}</Text>
+                    <Text style={[styles.alertItemSub, { color: theme.textSecondary }]}>{alert.subtitle}</Text>
                   </View>
-                  <Text style={styles.alertItemDetail}>{alert.detail}</Text>
+                  <Text style={[styles.alertItemDetail, { color: theme.textSecondary }]}>{alert.detail}</Text>
                 </View>
               ))}
             </View>
@@ -528,49 +563,52 @@ export default function DailyDigestScreen() {
         </View>
 
         {/* SECTION C: RECONCILIATION SNAPSHOT */}
-        <View style={styles.card}>
+        <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <View style={styles.cardHeader}>
-            <Text style={styles.cardTitle}>🛏️ Bed & Stay Reconciliation</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="bed-outline" size={18} color={theme.accentText} />
+              <Text style={[styles.cardTitle, { color: theme.text }]}>Bed & Stay Reconciliation</Text>
+            </View>
           </View>
 
           <View style={styles.snapshotGrid}>
-            <View style={styles.snapshotBox}>
-              <Text style={styles.snapshotNum}>{recon.activeGuestsCount}</Text>
-              <Text style={styles.snapshotLbl}>Active Guests</Text>
+            <View style={[styles.snapshotBox, { backgroundColor: theme.surfaceSubtle }]}>
+              <Text style={[styles.snapshotNum, { color: theme.text }]}>{recon.activeGuestsCount}</Text>
+              <Text style={[styles.snapshotLbl, { color: theme.textSecondary }]}>Active Guests</Text>
             </View>
-            <View style={styles.snapshotBox}>
-              <Text style={styles.snapshotNum}>{recon.totalBedsCount}</Text>
-              <Text style={styles.snapshotLbl}>Total Beds</Text>
+            <View style={[styles.snapshotBox, { backgroundColor: theme.surfaceSubtle }]}>
+              <Text style={[styles.snapshotNum, { color: theme.text }]}>{recon.totalBedsCount}</Text>
+              <Text style={[styles.snapshotLbl, { color: theme.textSecondary }]}>Total Beds</Text>
             </View>
-            <View style={styles.snapshotBox}>
-              <Text style={[styles.snapshotNum, { color: recon.dirtyBeds.length > 0 ? '#d97706' : '#059669' }]}>
+            <View style={[styles.snapshotBox, { backgroundColor: theme.surfaceSubtle }]}>
+              <Text style={[styles.snapshotNum, { color: recon.dirtyBeds.length > 0 ? theme.dirty : theme.free }]}>
                 {recon.dirtyBeds.length}
               </Text>
-              <Text style={styles.snapshotLbl}>Dirty Beds</Text>
+              <Text style={[styles.snapshotLbl, { color: theme.textSecondary }]}>Dirty Beds</Text>
             </View>
           </View>
 
           {recon.dirtyBeds.length > 0 && (
-            <View style={styles.subDetailSection}>
-              <Text style={styles.subDetailTitle}>Beds Needing Turnover:</Text>
-              <Text style={styles.subDetailList}>{recon.dirtyBeds.join(', ')}</Text>
+            <View style={[styles.subDetailSection, { borderTopColor: theme.borderSubtle }]}>
+              <Text style={[styles.subDetailTitle, { color: theme.dirty }]}>Beds Needing Turnover:</Text>
+              <Text style={[styles.subDetailList, { color: theme.textSecondary }]}>{recon.dirtyBeds.join(', ')}</Text>
             </View>
           )}
 
           {recon.maintenanceBeds.length > 0 && (
-            <View style={styles.subDetailSection}>
-              <Text style={[styles.subDetailTitle, { color: '#dc2626' }]}>Beds in Maintenance:</Text>
-              <Text style={styles.subDetailList}>{recon.maintenanceBeds.join(', ')}</Text>
+            <View style={[styles.subDetailSection, { borderTopColor: theme.borderSubtle }]}>
+              <Text style={[styles.subDetailTitle, { color: theme.destructive }]}>Beds in Maintenance:</Text>
+              <Text style={[styles.subDetailList, { color: theme.textSecondary }]}>{recon.maintenanceBeds.join(', ')}</Text>
             </View>
           )}
 
           {recon.longStays.length > 0 && (
-            <View style={styles.subDetailSection}>
+            <View style={[styles.subDetailSection, { borderTopColor: theme.borderSubtle }]}>
               <Text style={[styles.subDetailTitle, { color: '#7c3aed' }]}>
                 Long Stays ({`>`} {LONG_STAY_DAYS} days):
               </Text>
               {recon.longStays.map((ls, idx) => (
-                <Text key={idx} style={styles.longStayRow}>
+                <Text key={idx} style={[styles.longStayRow, { color: theme.textSecondary }]}>
                   • {ls.guestName} ({ls.bedLabel}) — {ls.days} days in-house
                 </Text>
               ))}
@@ -579,9 +617,9 @@ export default function DailyDigestScreen() {
         </View>
 
         {/* FOOTER */}
-        <View style={styles.footerBox}>
-          <Text style={styles.footerIcon}>📋</Text>
-          <Text style={styles.footerText}>
+        <View style={[styles.footerBox, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
+          <Ionicons name="clipboard-outline" size={18} color={theme.textSecondary} style={{ marginRight: 8 }} />
+          <Text style={[styles.footerText, { color: theme.textSecondary }]}>
             Physical check: count the physical cash drawer and compare against the expected drawer balance above.
           </Text>
         </View>
@@ -629,8 +667,9 @@ const styles = StyleSheet.create({
     color: '#2563eb',
   },
   headerTitle: {
+    fontFamily: Fonts.serif,
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: '#0f172a',
   },
   headerSubtitle: {
@@ -640,8 +679,8 @@ const styles = StyleSheet.create({
   },
   refreshBtn: {
     paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
     backgroundColor: '#f1f5f9',
   },
   refreshBtnText: {
@@ -662,20 +701,20 @@ const styles = StyleSheet.create({
   },
   timeBadgeText: {
     fontSize: 12,
-    color: '#94a3b8',
+    color: '#64748b',
     fontStyle: 'italic',
   },
   card: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 16,
-    marginBottom: 16,
+    marginBottom: 14,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
     elevation: 2,
   },
   cardHeader: {
@@ -685,8 +724,9 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontFamily: Fonts.serif,
+    fontSize: 17,
+    fontWeight: '600',
     color: '#0f172a',
   },
   openBadge: {
@@ -697,7 +737,7 @@ const styles = StyleSheet.create({
   },
   openBadgeText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#1d4ed8',
   },
   calcRow: {
@@ -712,11 +752,12 @@ const styles = StyleSheet.create({
   calcValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#1e293b',
+    fontVariant: ['tabular-nums'],
+    color: '#0f172a',
   },
   divider: {
     height: 1,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: '#f1f5f9',
     marginVertical: 10,
   },
   calcRowTotal: {
@@ -730,8 +771,10 @@ const styles = StyleSheet.create({
     color: '#0f172a',
   },
   calcValueTotal: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontFamily: Fonts.serif,
+    fontSize: 18,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
     color: '#0f172a',
   },
   varianceRow: {
@@ -743,14 +786,15 @@ const styles = StyleSheet.create({
   varianceLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#334155',
+    color: '#475569',
   },
   varianceValue: {
     fontSize: 14,
     fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
   alertCountBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 9,
     paddingVertical: 2,
     borderRadius: 12,
   },
@@ -762,14 +806,15 @@ const styles = StyleSheet.create({
   },
   alertCountText: {
     fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
     color: '#0f172a',
   },
   emptyAlertsBox: {
     alignItems: 'center',
     paddingVertical: 20,
     backgroundColor: '#f0fdf4',
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#bbf7d0',
   },
@@ -779,10 +824,11 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   emptyAlertsTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontFamily: Fonts.serif,
+    fontSize: 16,
+    fontWeight: '600',
     color: '#15803d',
-    marginTop: 4,
+    marginTop: 6,
   },
   emptyAlertsSub: {
     fontSize: 12,
@@ -799,7 +845,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 10,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: '#f8fafc',
     borderLeftWidth: 4,
     borderLeftColor: '#94a3b8',
@@ -815,17 +861,18 @@ const styles = StyleSheet.create({
   alertItemTitle: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#0f172a',
+    color: '#1e293b',
   },
   alertItemSub: {
     fontSize: 12,
-    color: '#475569',
+    color: '#64748b',
     marginTop: 2,
   },
   alertItemDetail: {
     fontSize: 11,
-    color: '#64748b',
+    color: '#475569',
     fontWeight: '500',
+    fontVariant: ['tabular-nums'],
     marginLeft: 8,
   },
   snapshotGrid: {
@@ -838,12 +885,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 10,
     backgroundColor: '#f8fafc',
-    borderRadius: 8,
+    borderRadius: 10,
     marginHorizontal: 3,
   },
   snapshotNum: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontFamily: Fonts.serif,
+    fontSize: 22,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
     color: '#0f172a',
   },
   snapshotLbl: {
@@ -860,23 +909,25 @@ const styles = StyleSheet.create({
   subDetailTitle: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#475569',
+    color: '#334155',
   },
   subDetailList: {
     fontSize: 12,
-    color: '#334155',
+    color: '#475569',
     marginTop: 2,
   },
   longStayRow: {
     fontSize: 12,
-    color: '#334155',
+    color: '#475569',
     marginTop: 2,
   },
   footerBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f1f5f9',
-    borderRadius: 8,
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#dbeafe',
+    borderRadius: 12,
     padding: 12,
     marginTop: 8,
   },
@@ -886,7 +937,7 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: 12,
-    color: '#475569',
+    color: '#1e40af',
     flex: 1,
     lineHeight: 16,
   },

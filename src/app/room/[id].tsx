@@ -28,6 +28,7 @@ import * as Crypto from 'expo-crypto';
 import { ScreenHeader } from '@/lib/screen-header';
 import { floorLabel, resolveFloorNo } from '@/lib/floors';
 import { useTheme } from '@/hooks/use-theme';
+import { Fonts } from '@/constants/theme';
 import { StayService } from '@/services/stay.service';
 
 export default function RoomDetailScreen() {
@@ -427,18 +428,18 @@ export default function RoomDetailScreen() {
             )}
 
             <TouchableOpacity
-              style={[styles.quickBtn, { backgroundColor: theme.accentSubtle, borderColor: theme.accent, borderWidth: 1 }]}
+              style={[styles.quickBtn, { backgroundColor: theme.accentSubtle, borderColor: theme.border, borderWidth: 1 }]}
               onPress={() => setShowIssueModal(true)}
               activeOpacity={0.8}
             >
-              <Ionicons name="warning-outline" size={15} color={theme.accent} />
-              <Text style={[styles.quickBtnText, { color: theme.accent }]}>Report Issue</Text>
+              <Ionicons name="warning-outline" size={15} color={theme.accentText} />
+              <Text style={[styles.quickBtnText, { color: theme.accentText }]}>Report Issue</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         {/* ── SEGMENTED TAB SELECTOR (iOS Segmented Control HIG) ───────── */}
-        <View style={[styles.tabContainer, { backgroundColor: theme.surfaceSubtle }]}>
+        <View style={[styles.tabContainer, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
           <Pressable
             style={[
               styles.tabButton,
@@ -449,11 +450,11 @@ export default function RoomDetailScreen() {
             <Ionicons
               name="grid-outline"
               size={15}
-              color={tab === 'overview' ? theme.accent : theme.textSecondary}
+              color={tab === 'overview' ? theme.accentText : theme.textSecondary}
             />
             <Text style={[
               styles.tabText,
-              { color: tab === 'overview' ? theme.accent : theme.textSecondary, fontWeight: tab === 'overview' ? '700' : '500' }
+              { color: tab === 'overview' ? theme.accentText : theme.textSecondary, fontWeight: tab === 'overview' ? '700' : '500' }
             ]}>
               Overview & Status
             </Text>
@@ -469,11 +470,11 @@ export default function RoomDetailScreen() {
             <Ionicons
               name="time-outline"
               size={15}
-              color={tab === 'history' ? theme.accent : theme.textSecondary}
+              color={tab === 'history' ? theme.accentText : theme.textSecondary}
             />
             <Text style={[
               styles.tabText,
-              { color: tab === 'history' ? theme.accent : theme.textSecondary, fontWeight: tab === 'history' ? '700' : '500' }
+              { color: tab === 'history' ? theme.accentText : theme.textSecondary, fontWeight: tab === 'history' ? '700' : '500' }
             ]}>
               Activity History
             </Text>
@@ -484,8 +485,8 @@ export default function RoomDetailScreen() {
           <>
             {/* ── CURRENT OCCUPANT CARD ────────────────────────────── */}
             <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <View style={styles.cardHeader}>
-                <Ionicons name="person-outline" size={18} color={theme.accent} />
+              <View style={[styles.cardHeader, { borderBottomColor: theme.borderSubtle }]}>
+                <Ionicons name="person-outline" size={18} color={theme.accentText} />
                 <Text style={[styles.cardTitle, { color: theme.text }]}>Current Occupant</Text>
               </View>
 
@@ -493,7 +494,7 @@ export default function RoomDetailScreen() {
                 <View>
                   <View style={styles.guestRow}>
                     <View style={[styles.guestAvatar, { backgroundColor: theme.accentSubtle }]}>
-                      <Text style={[styles.guestAvatarText, { color: theme.accent }]}>
+                      <Text style={[styles.guestAvatarText, { color: theme.accentText }]}>
                         {(guestName || 'G').charAt(0).toUpperCase()}
                       </Text>
                     </View>
@@ -515,16 +516,16 @@ export default function RoomDetailScreen() {
                           <Ionicons
                             name={new Date(currentStay.expected_checkout) < new Date() ? "alert-circle" : "time-outline"}
                             size={13}
-                            color={new Date(currentStay.expected_checkout) < new Date() ? "#dc2626" : theme.textSecondary}
+                            color={new Date(currentStay.expected_checkout) < new Date() ? theme.destructive : theme.textSecondary}
                           />
                           <Text
                             style={{
                               fontSize: 12,
-                              color: new Date(currentStay.expected_checkout) < new Date() ? "#dc2626" : theme.textSecondary,
+                              color: new Date(currentStay.expected_checkout) < new Date() ? theme.destructive : theme.textSecondary,
                               fontWeight: new Date(currentStay.expected_checkout) < new Date() ? "700" : "500"
                             }}
                           >
-                            {new Date(currentStay.expected_checkout) < new Date() ? "⚠️ OVERDUE · " : "Expected Checkout: "}
+                            {new Date(currentStay.expected_checkout) < new Date() ? "OVERDUE · " : "Expected Checkout: "}
                             {new Date(currentStay.expected_checkout).toLocaleDateString([], { day: 'numeric', month: 'short' })}
                           </Text>
                         </View>
@@ -539,9 +540,9 @@ export default function RoomDetailScreen() {
                         onPress={() => router.push(`/guest/${currentStay.guest_id}?stayId=${currentStay.id}`)}
                         activeOpacity={0.8}
                       >
-                        <Ionicons name="receipt-outline" size={16} color={theme.accent} />
-                        <Text style={[styles.folioActionText, { color: theme.accent }]}>View Guest Folio & Payments</Text>
-                        <Ionicons name="chevron-forward" size={16} color={theme.accent} style={{ marginLeft: 'auto' }} />
+                        <Ionicons name="receipt-outline" size={16} color={theme.accentText} />
+                        <Text style={[styles.folioActionText, { color: theme.accentText }]}>View Guest Folio & Payments</Text>
+                        <Ionicons name="chevron-forward" size={16} color={theme.accentText} style={{ marginLeft: 'auto' }} />
                       </TouchableOpacity>
 
                       <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
@@ -550,8 +551,8 @@ export default function RoomDetailScreen() {
                           onPress={() => setShowExtendModal(true)}
                           activeOpacity={0.8}
                         >
-                          <Ionicons name="calendar-outline" size={16} color={theme.accent} />
-                          <Text style={[styles.folioActionText, { color: theme.accent }]}>Extend Stay</Text>
+                          <Ionicons name="calendar-outline" size={16} color={theme.accentText} />
+                          <Text style={[styles.folioActionText, { color: theme.accentText }]}>Extend Stay</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -559,8 +560,8 @@ export default function RoomDetailScreen() {
                           onPress={handleOpenMoveModal}
                           activeOpacity={0.8}
                         >
-                          <Ionicons name="swap-horizontal-outline" size={16} color={theme.accent} />
-                          <Text style={[styles.folioActionText, { color: theme.accent }]}>Move Bed</Text>
+                          <Ionicons name="swap-horizontal-outline" size={16} color={theme.accentText} />
+                          <Text style={[styles.folioActionText, { color: theme.accentText }]}>Move Bed</Text>
                         </TouchableOpacity>
                       </View>
                     </>
@@ -572,12 +573,12 @@ export default function RoomDetailScreen() {
                     <Ionicons name="bed-outline" size={32} color={theme.free} />
                   </View>
                   <Text style={[styles.vacantTitle, { color: theme.text }]}>Bed is Currently Vacant</Text>
-                  <Text style={styles.vacantSubtitle}>
+                  <Text style={[styles.vacantSubtitle, { color: theme.textSecondary }]}>
                     Ready for walk-in or booked guest check-in.
                   </Text>
                   {can('check_in') && (
                     <TouchableOpacity
-                      style={styles.checkinShortcutBtn}
+                      style={[styles.checkinShortcutBtn, { backgroundColor: theme.free }]}
                       onPress={() => router.push('/checkin')}
                     >
                       <Ionicons name="log-in-outline" size={16} color="#ffffff" />
@@ -589,35 +590,35 @@ export default function RoomDetailScreen() {
             </View>
 
             {/* ── OPEN ISSUES CARD ─────────────────────────────────── */}
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
+            <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <View style={[styles.cardHeader, { borderBottomColor: theme.borderSubtle }]}>
                 <Ionicons name="alert-circle-outline" size={18} color="#d97706" />
-                <Text style={styles.cardTitle}>Open Issues ({issues.length})</Text>
+                <Text style={[styles.cardTitle, { color: theme.text }]}>Open Issues ({issues.length})</Text>
                 <TouchableOpacity
-                  style={styles.reportIssueLink}
+                  style={[styles.reportIssueLink, { backgroundColor: '#fef3c7' }]}
                   onPress={() => setShowIssueModal(true)}
                 >
-                  <Text style={styles.reportIssueLinkText}>+ Report</Text>
+                  <Text style={[styles.reportIssueLinkText, { color: '#d97706' }]}>+ Report</Text>
                 </TouchableOpacity>
               </View>
 
               {issues.length === 0 ? (
-                <View style={styles.noIssuesBox}>
+                <View style={[styles.noIssuesBox, { backgroundColor: '#f0fdf4' }]}>
                   <Ionicons name="checkmark-circle-outline" size={20} color="#16a34a" />
-                  <Text style={styles.noIssuesText}>No open issues reported for this room.</Text>
+                  <Text style={[styles.noIssuesText, { color: '#16a34a' }]}>No open issues reported for this room.</Text>
                 </View>
               ) : (
                 issues.map(issue => (
-                  <View key={issue.id} style={styles.issueItem}>
+                  <View key={issue.id} style={[styles.issueItem, { borderBottomColor: theme.borderSubtle }]}>
                     <View style={styles.issueTopLine}>
-                      <View style={styles.issueCategoryChip}>
-                        <Text style={styles.issueCategoryText}>{issue.category.toUpperCase()}</Text>
+                      <View style={[styles.issueCategoryChip, { backgroundColor: theme.destructiveSubtle }]}>
+                        <Text style={[styles.issueCategoryText, { color: theme.destructive }]}>{issue.category.toUpperCase()}</Text>
                       </View>
-                      <Text style={styles.issueTime}>
+                      <Text style={[styles.issueTime, { color: theme.textTertiary }]}>
                         {new Date(issue.created_at).toLocaleDateString([], { month: 'short', day: 'numeric' })}
                       </Text>
                     </View>
-                    <Text style={styles.issueNote}>{issue.note || 'No description provided'}</Text>
+                    <Text style={[styles.issueNote, { color: theme.textSecondary }]}>{issue.note || 'No description provided'}</Text>
                   </View>
                 ))
               )}
@@ -625,25 +626,25 @@ export default function RoomDetailScreen() {
 
             {/* ── OWNER ACTIONS CARD ───────────────────────────────── */}
             {activeStaff?.role === 'owner' && (
-              <View style={styles.ownerCard}>
+              <View style={[styles.ownerCard, { backgroundColor: theme.destructiveSubtle, borderColor: theme.destructive }]}>
                 <View style={styles.ownerHeader}>
-                  <Ionicons name="shield-checkmark-outline" size={18} color="#be123c" />
-                  <Text style={styles.ownerTitle}>OWNER ROOM ACTIONS</Text>
+                  <Ionicons name="shield-checkmark-outline" size={18} color={theme.destructive} />
+                  <Text style={[styles.ownerTitle, { color: theme.destructive }]}>OWNER ROOM ACTIONS</Text>
                 </View>
-                <Text style={styles.ownerDescription}>
+                <Text style={[styles.ownerDescription, { color: theme.textSecondary }]}>
                   Rename label, change floor allocation, or archive room.
                 </Text>
                 <View style={styles.ownerBtnRow}>
                   <TouchableOpacity
-                    style={styles.ownerEditBtn}
+                    style={[styles.ownerEditBtn, { backgroundColor: theme.surface, borderColor: theme.border }]}
                     onPress={() => setShowEditModal(true)}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name="create-outline" size={16} color="#334155" />
-                    <Text style={styles.ownerEditBtnText}>Edit Room</Text>
+                    <Ionicons name="create-outline" size={16} color={theme.text} />
+                    <Text style={[styles.ownerEditBtnText, { color: theme.text }]}>Edit Room</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={styles.ownerRemoveBtn}
+                    style={[styles.ownerRemoveBtn, { backgroundColor: theme.destructive }]}
                     onPress={handleRemoveRoom}
                     activeOpacity={0.8}
                   >
@@ -656,27 +657,27 @@ export default function RoomDetailScreen() {
           </>
         ) : (
           /* ── HISTORY TIMELINE ───────────────────────────────────── */
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="timer-outline" size={18} color="#2563eb" />
-              <Text style={styles.cardTitle}>Activity History Timeline</Text>
+          <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <View style={[styles.cardHeader, { borderBottomColor: theme.borderSubtle }]}>
+              <Ionicons name="timer-outline" size={18} color={theme.accentText} />
+              <Text style={[styles.cardTitle, { color: theme.text }]}>Activity History Timeline</Text>
             </View>
 
             {history.length === 0 ? (
-              <Text style={styles.emptyText}>No activity recorded yet.</Text>
+              <Text style={[styles.emptyText, { color: theme.textTertiary }]}>No activity recorded yet.</Text>
             ) : (
               history.map((item, idx) => (
-                <View key={idx} style={styles.historyItem}>
-                  <View style={[styles.historyIcon, item.type === 'clean' ? styles.historyCleanIcon : styles.historyStayIcon]}>
+                <View key={idx} style={[styles.historyItem, { borderBottomColor: theme.borderSubtle }]}>
+                  <View style={[styles.historyIcon, { backgroundColor: item.type === 'clean' ? theme.freeSubtle : theme.accentSubtle }]}>
                     {item.type === 'clean' ? (
-                      <Ionicons name="sparkles" size={14} color="#16a34a" />
+                      <Ionicons name="sparkles" size={14} color={theme.free} />
                     ) : (
-                      <MaterialCommunityIcons name="door-open" size={16} color="#2563eb" />
+                      <MaterialCommunityIcons name="door-open" size={16} color={theme.accentText} />
                     )}
                   </View>
                   <View style={styles.historyContent}>
-                    <Text style={styles.historyDetails}>{item.details}</Text>
-                    <Text style={styles.historyDate}>
+                    <Text style={[styles.historyDetails, { color: theme.text }]}>{item.details}</Text>
+                    <Text style={[styles.historyDate, { color: theme.textTertiary }]}>
                       {new Date(item.date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </Text>
                   </View>
@@ -695,37 +696,41 @@ export default function RoomDetailScreen() {
           style={styles.modalOverlay}
         >
           <ScrollView
-            contentContainerStyle={styles.modalContent}
+            contentContainerStyle={[styles.modalContent, { backgroundColor: theme.surface, borderTopWidth: 1, borderColor: theme.border }]}
             keyboardShouldPersistTaps="handled"
             bounces={false}
           >
             <View style={styles.modalTopHeader}>
-              <Text style={styles.modalTitle}>Report Room Issue</Text>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Report Room Issue</Text>
               <TouchableOpacity onPress={() => setShowIssueModal(false)}>
-                <Ionicons name="close-circle" size={24} color="#94a3b8" />
+                <Ionicons name="close-circle" size={24} color={theme.textTertiary} />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.inputLabel}>Select Category</Text>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Select Category</Text>
             <View style={styles.categoryGrid}>
               {(['ac', 'water', 'cleanliness', 'electrical', 'noise', 'other'] as const).map(cat => (
                 <Pressable
                   key={cat}
-                  style={[styles.catChip, issueCategory === cat && styles.catChipActive]}
+                  style={[
+                    styles.catChip,
+                    { backgroundColor: theme.surfaceSubtle, borderWidth: 1, borderColor: theme.border },
+                    issueCategory === cat && { backgroundColor: theme.accent, borderColor: theme.accent }
+                  ]}
                   onPress={() => setIssueCategory(cat)}
                 >
-                  <Text style={[styles.catText, issueCategory === cat && styles.catTextActive]}>
+                  <Text style={[styles.catText, { color: issueCategory === cat ? '#ffffff' : theme.textSecondary }]}>
                     {cat.toUpperCase()}
                   </Text>
                 </Pressable>
               ))}
             </View>
 
-            <Text style={styles.inputLabel}>Issue Details / Note</Text>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Issue Details / Note</Text>
             <TextInput
-              style={styles.noteInput}
+              style={[styles.noteInput, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border, color: theme.text }]}
               placeholder="e.g. AC remote display not responding, water pressure low..."
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={theme.textTertiary}
               value={issueNote}
               onChangeText={setIssueNote}
               multiline
@@ -733,13 +738,13 @@ export default function RoomDetailScreen() {
 
             <View style={styles.modalBtnRow}>
               <TouchableOpacity
-                style={styles.cancelBtn}
+                style={[styles.cancelBtn, { backgroundColor: theme.surfaceSubtle }]}
                 onPress={() => setShowIssueModal(false)}
               >
-                <Text style={styles.cancelBtnText}>Cancel</Text>
+                <Text style={[styles.cancelBtnText, { color: theme.textSecondary }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.submitBtn}
+                style={[styles.submitBtn, { backgroundColor: theme.accent }]}
                 onPress={handleReportIssue}
               >
                 <Text style={styles.submitBtnText}>Submit Report</Text>
@@ -757,54 +762,58 @@ export default function RoomDetailScreen() {
           style={styles.modalOverlay}
         >
           <ScrollView
-            contentContainerStyle={styles.modalContent}
+            contentContainerStyle={[styles.modalContent, { backgroundColor: theme.surface, borderTopWidth: 1, borderColor: theme.border }]}
             keyboardShouldPersistTaps="handled"
             bounces={false}
           >
             <View style={styles.modalTopHeader}>
-              <Text style={styles.modalTitle}>Edit Room Details</Text>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>Edit Room Details</Text>
               <TouchableOpacity onPress={() => setShowEditModal(false)}>
-                <Ionicons name="close-circle" size={24} color="#94a3b8" />
+                <Ionicons name="close-circle" size={24} color={theme.textTertiary} />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.inputLabel}>Room Label</Text>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Room Label</Text>
             <TextInput
-              style={styles.singleInput}
+              style={[styles.singleInput, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border, color: theme.text }]}
               value={editLabel}
               onChangeText={setEditLabel}
               placeholder="e.g. 101"
-              placeholderTextColor="#94a3b8"
+              placeholderTextColor={theme.textTertiary}
             />
 
-            <Text style={styles.inputLabel}>Floor Location</Text>
-            <View style={styles.stepperContainer}>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Floor Location</Text>
+            <View style={[styles.stepperContainer, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
               <TouchableOpacity 
-                style={[styles.stepperBtn, editFloorNo <= -2 && styles.stepperBtnDisabled]} 
+                style={[styles.stepperBtn, { backgroundColor: theme.surface }, editFloorNo <= -2 && { opacity: 0.45 }]} 
                 onPress={() => setEditFloorNo(prev => Math.max(-2, prev - 1))}
                 disabled={editFloorNo <= -2}
               >
-                <Ionicons name="remove" size={18} color={editFloorNo <= -2 ? "#cbd5e1" : "#1e293b"} />
+                <Ionicons name="remove" size={18} color={editFloorNo <= -2 ? theme.textTertiary : theme.text} />
               </TouchableOpacity>
               <View style={styles.stepperValueBox}>
-                <Text style={styles.stepperFloorTitle}>{floorLabel(editFloorNo)}</Text>
+                <Text style={[styles.stepperFloorTitle, { color: theme.text }]}>{floorLabel(editFloorNo)}</Text>
               </View>
               <TouchableOpacity 
-                style={[styles.stepperBtn, editFloorNo >= 60 && styles.stepperBtnDisabled]} 
+                style={[styles.stepperBtn, { backgroundColor: theme.surface }, editFloorNo >= 60 && { opacity: 0.45 }]} 
                 onPress={() => setEditFloorNo(prev => Math.min(60, prev + 1))}
                 disabled={editFloorNo >= 60}
               >
-                <Ionicons name="add" size={18} color={editFloorNo >= 60 ? "#cbd5e1" : "#1e293b"} />
+                <Ionicons name="add" size={18} color={editFloorNo >= 60 ? theme.textTertiary : theme.text} />
               </TouchableOpacity>
             </View>
             <View style={styles.quickFloorChips}>
               {[-1, 0, 1, 2, 3].map(f => (
                 <TouchableOpacity
                   key={f}
-                  style={[styles.quickChip, editFloorNo === f && styles.quickChipActive]}
+                  style={[
+                    styles.quickChip,
+                    { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
+                    editFloorNo === f && { backgroundColor: theme.accent, borderColor: theme.accent }
+                  ]}
                   onPress={() => setEditFloorNo(f)}
                 >
-                  <Text style={[styles.quickChipText, editFloorNo === f && styles.quickChipTextActive]}>
+                  <Text style={[styles.quickChipText, { color: editFloorNo === f ? '#ffffff' : theme.textSecondary }]}>
                     {f === -1 ? 'Basement' : f === 0 ? 'Ground' : `Floor ${f}`}
                   </Text>
                 </TouchableOpacity>
@@ -813,20 +822,20 @@ export default function RoomDetailScreen() {
 
             <View style={styles.modalBtnRow}>
               <TouchableOpacity
-                style={styles.cancelBtn}
+                style={[styles.cancelBtn, { backgroundColor: theme.surfaceSubtle }]}
                 onPress={() => setShowEditModal(false)}
               >
-                <Text style={styles.cancelBtnText}>Cancel</Text>
+                <Text style={[styles.cancelBtnText, { color: theme.textSecondary }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.submitBtn, { backgroundColor: '#dc2626' }]}
+                style={[styles.submitBtn, { backgroundColor: theme.destructive }]}
                 onPress={handleRemoveRoom}
                 disabled={submittingOwnerAction}
               >
                 <Text style={styles.submitBtnText}>Delete</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.submitBtn}
+                style={[styles.submitBtn, { backgroundColor: theme.accent }]}
                 onPress={handleSaveRoomEdit}
                 disabled={submittingOwnerAction}
               >
@@ -1065,7 +1074,8 @@ const styles = StyleSheet.create({
     flex: 1
   },
   heroTitle: {
-    fontSize: 18,
+    fontFamily: Fonts.serif,
+    fontSize: 19,
     fontWeight: '700',
     color: '#0f172a'
   },
@@ -1103,7 +1113,8 @@ const styles = StyleSheet.create({
   housekeepingInfoText: {
     fontSize: 12,
     color: '#475569',
-    fontWeight: '500'
+    fontWeight: '500',
+    fontVariant: ['tabular-nums']
   },
   actionRow: {
     flexDirection: 'row',
@@ -1119,15 +1130,15 @@ const styles = StyleSheet.create({
     borderRadius: 10
   },
   cleanBtn: {
-    backgroundColor: '#16a34a'
+    backgroundColor: '#3A5A3E'
   },
   maintBtn: {
-    backgroundColor: '#d97706'
+    backgroundColor: '#3F3F46'
   },
   issueBtn: {
-    backgroundColor: '#eff6ff',
+    backgroundColor: '#fef3c7',
     borderWidth: 1,
-    borderColor: '#bfdbfe'
+    borderColor: '#fde68a'
   },
   quickBtnText: {
     color: '#ffffff',
@@ -1187,7 +1198,8 @@ const styles = StyleSheet.create({
     borderBottomColor: '#f1f5f9'
   },
   cardTitle: {
-    fontSize: 15,
+    fontFamily: Fonts.serif,
+    fontSize: 16,
     fontWeight: '700',
     color: '#0f172a',
     flex: 1
@@ -1207,6 +1219,7 @@ const styles = StyleSheet.create({
     marginRight: 12
   },
   guestAvatarText: {
+    fontFamily: Fonts.serif,
     fontSize: 18,
     fontWeight: '700',
     color: '#2563eb'
@@ -1215,19 +1228,22 @@ const styles = StyleSheet.create({
     flex: 1
   },
   guestName: {
+    fontFamily: Fonts.serif,
     fontSize: 16,
     fontWeight: '700',
     color: '#0f172a'
   },
   guestPhone: {
     fontSize: 13,
-    color: '#64748b',
-    marginTop: 2
+    color: '#475569',
+    marginTop: 2,
+    fontVariant: ['tabular-nums']
   },
   guestCheckinDate: {
     fontSize: 12,
-    color: '#94a3b8',
-    marginTop: 2
+    color: '#64748b',
+    marginTop: 2,
+    fontVariant: ['tabular-nums']
   },
   folioActionBtn: {
     flexDirection: 'row',
@@ -1251,13 +1267,14 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#f0fdf4',
+    backgroundColor: '#E7ECE7',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 10
   },
   vacantTitle: {
-    fontSize: 15,
+    fontFamily: Fonts.serif,
+    fontSize: 16,
     fontWeight: '700',
     color: '#0f172a',
     marginBottom: 4
@@ -1289,7 +1306,7 @@ const styles = StyleSheet.create({
     borderRadius: 6
   },
   reportIssueLinkText: {
-    color: '#b45309',
+    color: '#d97706',
     fontSize: 12,
     fontWeight: '700'
   },
@@ -1303,7 +1320,7 @@ const styles = StyleSheet.create({
   },
   noIssuesText: {
     fontSize: 13,
-    color: '#166534',
+    color: '#16a34a',
     fontWeight: '500'
   },
   issueItem: {
@@ -1318,7 +1335,7 @@ const styles = StyleSheet.create({
     marginBottom: 4
   },
   issueCategoryChip: {
-    backgroundColor: '#fee2e2',
+    backgroundColor: '#fef3c7',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4
@@ -1326,19 +1343,20 @@ const styles = StyleSheet.create({
   issueCategoryText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#b91c1c'
+    color: '#d97706'
   },
   issueTime: {
     fontSize: 11,
-    color: '#94a3b8'
+    color: '#64748b',
+    fontVariant: ['tabular-nums']
   },
   issueNote: {
     fontSize: 13,
-    color: '#334155'
+    color: '#475569'
   },
   ownerCard: {
-    backgroundColor: '#fff1f2',
-    borderColor: '#fecdd3',
+    backgroundColor: '#fef2f2',
+    borderColor: '#fecaca',
     borderWidth: 1,
     borderRadius: 18,
     padding: 18,
@@ -1351,14 +1369,14 @@ const styles = StyleSheet.create({
     marginBottom: 4
   },
   ownerTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
-    color: '#be123c',
-    letterSpacing: 0.5
+    color: '#dc2626',
+    letterSpacing: 1.0
   },
   ownerDescription: {
     fontSize: 12,
-    color: '#9f1239',
+    color: '#475569',
     marginBottom: 14
   },
   ownerBtnRow: {
@@ -1373,12 +1391,12 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: '#e2e8f0',
     paddingVertical: 10,
     borderRadius: 10
   },
   ownerEditBtnText: {
-    color: '#334155',
+    color: '#475569',
     fontWeight: '700',
     fontSize: 13
   },
@@ -1398,7 +1416,7 @@ const styles = StyleSheet.create({
     fontSize: 13
   },
   emptyText: {
-    color: '#94a3b8',
+    color: '#64748b',
     fontStyle: 'italic',
     fontSize: 13,
     textAlign: 'center',
@@ -1420,7 +1438,7 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   historyCleanIcon: {
-    backgroundColor: '#dcfce7'
+    backgroundColor: '#E7ECE7'
   },
   historyStayIcon: {
     backgroundColor: '#eff6ff'
@@ -1435,12 +1453,13 @@ const styles = StyleSheet.create({
   },
   historyDate: {
     fontSize: 11,
-    color: '#94a3b8',
-    marginTop: 2
+    color: '#64748b',
+    marginTop: 2,
+    fontVariant: ['tabular-nums']
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15,23,42,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'flex-end'
   },
   modalContent: {
@@ -1461,14 +1480,17 @@ const styles = StyleSheet.create({
     marginBottom: 16
   },
   modalTitle: {
-    fontSize: 18,
+    fontFamily: Fonts.serif,
+    fontSize: 19,
     fontWeight: '700',
     color: '#0f172a'
   },
   inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
     color: '#475569',
+    letterSpacing: 1.0,
+    textTransform: 'uppercase',
     marginBottom: 6
   },
   singleInput: {
@@ -1498,7 +1520,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#2563eb'
   },
   catText: {
-    color: '#64748b',
+    color: '#475569',
     fontSize: 11,
     fontWeight: '600'
   },
@@ -1530,7 +1552,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9'
   },
   cancelBtnText: {
-    color: '#64748b',
+    color: '#475569',
     fontWeight: '700',
     fontSize: 14
   },
@@ -1572,6 +1594,7 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   stepperFloorTitle: {
+    fontFamily: Fonts.serif,
     fontSize: 15,
     fontWeight: '700',
     color: '#0f172a'

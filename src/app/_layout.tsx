@@ -27,6 +27,7 @@ export default function RootLayout() {
           <Stack.Screen name="checkout" />
           <Stack.Screen name="shift" />
           <Stack.Screen name="guests" />
+          <Stack.Screen name="broadcast" />
           <Stack.Screen name="guest/[id]" />
           <Stack.Screen name="room/[id]" />
           <Stack.Screen name="dorm/[roomId]" />
@@ -38,6 +39,7 @@ export default function RootLayout() {
               gestureDirection: 'vertical',
             }}
           />
+          <Stack.Screen name="room-matrix" />
           <Stack.Screen name="settings" />
           <Stack.Screen name="concierge" />
           <Stack.Screen name="team" />

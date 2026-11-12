@@ -19,6 +19,7 @@ import { isOnline, saveToOutbox, removeStayFromCache, updateLocalUnitStatus } fr
 import { useStaff } from "../lib/staff-context";
 import { ScreenHeader } from "@/lib/screen-header";
 import { useTheme } from "@/hooks/use-theme";
+import { Fonts } from "@/constants/theme";
 import { buildCheckoutReceiptMessage, openWhatsApp } from "@/lib/whatsapp";
 
 export default function CheckoutScreen() {
@@ -243,7 +244,7 @@ export default function CheckoutScreen() {
                 <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                   <View style={styles.cardTop}>
                     <View style={[styles.avatar, { backgroundColor: theme.accentSubtle, borderColor: theme.accent }]}>
-                      <Text style={[styles.avatarText, { color: theme.accent }]}>{initial}</Text>
+                      <Text style={[styles.avatarText, { color: theme.accentText }]}>{initial}</Text>
                     </View>
                     <View style={styles.cardInfo}>
                       <Text style={[styles.guestName, { color: theme.text }]} numberOfLines={1}>{guestName}</Text>
@@ -266,12 +267,12 @@ export default function CheckoutScreen() {
                       onPress={() => router.push(`/guest/${item.guest_id}?stayId=${item.id}`)}
                       activeOpacity={0.7}
                     >
-                      <Ionicons name="receipt-outline" size={15} color={theme.accent} />
-                      <Text style={[styles.folioBtnText, { color: theme.accent }]}>Folio</Text>
+                      <Ionicons name="receipt-outline" size={15} color={theme.accentText} />
+                      <Text style={[styles.folioBtnText, { color: theme.accentText }]}>Folio</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={[styles.checkoutBtn, { backgroundColor: theme.occupied }]}
+                      style={[styles.checkoutBtn, { backgroundColor: '#dc2626', shadowColor: '#dc2626' }]}
                       onPress={() => handleCheckout(item)}
                       activeOpacity={0.8}
                     >
@@ -284,8 +285,8 @@ export default function CheckoutScreen() {
             }}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <View style={[styles.emptyIconCircle, { backgroundColor: theme.freeSubtle }]}>
-                  <Ionicons name="checkmark-done-circle-outline" size={48} color={theme.free} />
+                <View style={[styles.emptyIconCircle, { backgroundColor: '#dcfce7' }]}>
+                  <Ionicons name="checkmark-done-circle-outline" size={48} color="#16a34a" />
                 </View>
                 <Text style={[styles.emptyTitle, { color: theme.text }]}>
                   {search ? 'No Matching Stays' : 'All Clear! No Active Guests'}
@@ -319,7 +320,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#ffffff",
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: "#e2e8f0",
     borderRadius: 12,
     paddingHorizontal: 12,
@@ -359,7 +360,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: "#e2e8f0",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
@@ -380,20 +381,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: "#bfdbfe"
   },
   avatarText: {
+    fontFamily: Fonts.serif,
     fontSize: 18,
-    fontWeight: "800",
+    fontWeight: "700",
     color: "#2563eb"
   },
   cardInfo: {
     flex: 1
   },
   guestName: {
-    fontSize: 16,
-    fontWeight: "700",
+    fontFamily: Fonts.serif,
+    fontSize: 17,
+    fontWeight: "600",
     color: "#0f172a",
     marginBottom: 4
   },
@@ -407,7 +410,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#ccfbf1",
+    backgroundColor: "#E7ECE7",
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6
@@ -415,7 +418,8 @@ const styles = StyleSheet.create({
   bedLabel: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#0f766e"
+    fontVariant: ["tabular-nums"],
+    color: "#3A5A3E"
   },
   dateBadge: {
     flexDirection: "row",
@@ -428,8 +432,9 @@ const styles = StyleSheet.create({
   },
   dateText: {
     fontSize: 11,
-    color: "#64748b",
-    fontWeight: "600"
+    color: "#475569",
+    fontWeight: "600",
+    fontVariant: ["tabular-nums"]
   },
   actionRow: {
     flexDirection: "row",
@@ -447,9 +452,9 @@ const styles = StyleSheet.create({
     height: 44,
     paddingHorizontal: 16,
     borderRadius: 10,
-    backgroundColor: "#eff6ff",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#dbeafe"
+    backgroundColor: "#f1f5f9",
+    borderWidth: 1,
+    borderColor: "#cbd5e1"
   },
   folioBtnText: {
     color: "#2563eb",
@@ -467,7 +472,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     shadowColor: "#dc2626",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
+    shadowOpacity: 0.18,
     shadowRadius: 3,
     elevation: 2
   },
@@ -492,9 +497,10 @@ const styles = StyleSheet.create({
     marginBottom: 16
   },
   emptyTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#1e293b",
+    fontFamily: Fonts.serif,
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#0f172a",
     marginBottom: 6
   },
   emptySubtitle: {

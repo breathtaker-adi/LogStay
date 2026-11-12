@@ -17,9 +17,11 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useStaff } from '@/lib/staff-context';
 import { useTheme } from '@/hooks/use-theme';
+import { Fonts } from '@/constants/theme';
 import { ScreenHeader } from '@/lib/screen-header';
 import { ApprovalService, ApprovalRequest, ApprovalKind } from '@/services/approval.service';
 import { supabase } from '@/lib/supabase';
@@ -114,20 +116,34 @@ export default function ApprovalsScreen() {
     }
   };
 
-  const handleApprove = async (id: string) => {
+  const handleApprove = async (req: ApprovalRequest) => {
+    const isBroadcast = req.kind === 'guest_broadcast';
     Alert.alert(
-      'Approve Request',
-      'Are you sure you want to approve this request?',
+      isBroadcast ? 'Approve Guest Broadcast' : 'Approve Request',
+      isBroadcast
+        ? 'Approve this announcement so it can be delivered to all checked-in guests?'
+        : 'Are you sure you want to approve this request?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Approve',
+          text: isBroadcast ? 'Approve & Send' : 'Approve',
           style: 'default',
           onPress: async () => {
             try {
-              await ApprovalService.decideApproval(id, true);
-              Alert.alert('Approved', 'Request has been approved.');
+              await ApprovalService.decideApproval(req.id, true);
               await fetchRequests();
+              if (isBroadcast) {
+                Alert.alert(
+                  'Broadcast Approved',
+                  'Ready for delivery via SMS or WhatsApp to all checked-in guests.',
+                  [
+                    { text: 'Stay Here', style: 'cancel' },
+                    { text: 'Open Dispatch', onPress: () => router.push('/broadcast' as any) },
+                  ]
+                );
+              } else {
+                Alert.alert('Approved', 'Request has been approved.');
+              }
             } catch (err: any) {
               Alert.alert('Error', err.message || 'Could not approve request.');
             }
@@ -162,13 +178,15 @@ export default function ApprovalsScreen() {
   const getKindBadge = (kind: ApprovalKind) => {
     switch (kind) {
       case 'refund':
-        return { label: 'Refund', bg: '#fef2f2', text: '#dc2626', icon: 'arrow-undo-outline' };
+        return { label: 'Refund', bg: theme.destructiveSubtle, text: theme.destructive, icon: 'arrow-undo-outline' };
       case 'discount':
-        return { label: 'Discount', bg: '#eff6ff', text: '#2563eb', icon: 'pricetag-outline' };
+        return { label: 'Discount', bg: theme.accentSubtle, text: theme.accentText, icon: 'pricetag-outline' };
       case 'write_off':
         return { label: 'Write-Off', bg: '#fffbeb', text: '#d97706', icon: 'trash-outline' };
       case 'price_override':
-        return { label: 'Price Override', bg: '#faf5ff', text: '#9333ea', icon: 'create-outline' };
+        return { label: 'Price Override', bg: theme.maintenanceSubtle, text: theme.maintenance, icon: 'create-outline' };
+      case 'guest_broadcast':
+        return { label: 'Guest Broadcast', bg: theme.accentSubtle, text: theme.accentText, icon: 'megaphone-outline' };
     }
   };
 
@@ -241,14 +259,20 @@ export default function ApprovalsScreen() {
                       <Ionicons name={badge.icon as any} size={14} color={badge.text} style={{ marginRight: 4 }} />
                       <Text style={[styles.kindBadgeText, { color: badge.text }]}>{badge.label}</Text>
                     </View>
-                    <Text style={[styles.amountText, { color: theme.text }]}>
-                      ₹{Number(req.amount).toLocaleString('en-IN')}
-                    </Text>
+                    {req.kind === 'guest_broadcast' ? (
+                      <Text style={[styles.amountText, { color: theme.accentText, fontSize: 13 }]}>
+                        All In-House
+                      </Text>
+                    ) : (
+                      <Text style={[styles.amountText, { color: theme.text }]}>
+                        ₹{Number(req.amount).toLocaleString('en-IN')}
+                      </Text>
+                    )}
                   </View>
 
                   <Text style={[styles.reasonText, { color: theme.text }]}>{req.reason}</Text>
 
-                  <View style={styles.metaRow}>
+                  <View style={[styles.metaRow, { borderTopColor: theme.borderSubtle }]}>
                     <Text style={[styles.metaText, { color: theme.textSecondary }]}>
                       Requested by <Text style={{ fontWeight: '600', color: theme.text }}>{req.requested_by_name}</Text>
                     </Text>
@@ -290,19 +314,29 @@ export default function ApprovalsScreen() {
                     </View>
                   )}
 
+                  {req.kind === 'guest_broadcast' && req.status === 'approved' && (
+                    <TouchableOpacity
+                      style={[styles.actionBtn, { backgroundColor: '#16a34a', marginTop: 10 }]}
+                      onPress={() => router.push('/broadcast' as any)}
+                    >
+                      <Ionicons name="megaphone-outline" size={16} color="#ffffff" />
+                      <Text style={styles.approveBtnText}>Open Dispatch Queue &amp; Send</Text>
+                    </TouchableOpacity>
+                  )}
+
                   {/* Manager Action Buttons */}
                   {req.status === 'pending' && isManager && (
                     <View style={styles.actionBtnRow}>
                       <TouchableOpacity
-                        style={[styles.actionBtn, styles.declineBtn]}
+                        style={[styles.actionBtn, styles.declineBtn, { backgroundColor: '#fee2e2' }]}
                         onPress={() => handleDeclinePrompt(req.id)}
                       >
                         <Ionicons name="close" size={16} color="#dc2626" />
-                        <Text style={styles.declineBtnText}>Decline</Text>
+                        <Text style={[styles.declineBtnText, { color: '#dc2626' }]}>Decline</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.actionBtn, styles.approveBtn]}
-                        onPress={() => handleApprove(req.id)}
+                        style={[styles.actionBtn, styles.approveBtn, { backgroundColor: '#16a34a' }]}
+                        onPress={() => handleApprove(req)}
                       >
                         <Ionicons name="checkmark" size={16} color="#ffffff" />
                         <Text style={styles.approveBtnText}>Approve</Text>
@@ -462,7 +496,7 @@ export default function ApprovalsScreen() {
                 <Text style={{ color: theme.text }}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalBtn, { backgroundColor: '#dc2626' }]}
+                style={[styles.modalBtn, { backgroundColor: theme.destructive }]}
                 onPress={handleConfirmDecline}
               >
                 <Text style={{ color: '#fff', fontWeight: '700' }}>Confirm Decline</Text>
@@ -518,7 +552,8 @@ const styles = StyleSheet.create({
     marginTop: 40,
   },
   emptyTitle: {
-    fontSize: 17,
+    fontFamily: Fonts.serif,
+    fontSize: 18,
     fontWeight: '700',
     marginTop: 12,
   },
@@ -555,6 +590,7 @@ const styles = StyleSheet.create({
   amountText: {
     fontSize: 18,
     fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
   reasonText: {
     fontSize: 14,

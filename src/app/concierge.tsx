@@ -282,10 +282,10 @@ export default function GuestConciergeScreen() {
 
             {/* Pending Proposal Review Card for Owner / Co-Admin */}
             {pendingConcierge && canDirectSave && (
-              <View style={[styles.reviewCard, { backgroundColor: theme.dirtySubtle, borderColor: theme.dirty }]}>
+              <View style={[styles.reviewCard, { backgroundColor: '#fffbeb', borderColor: '#f59e0b' }]}>
                 <View style={styles.reviewHeaderRow}>
-                  <Ionicons name="time" size={18} color={theme.dirty} />
-                  <Text style={[styles.reviewHeaderTitle, { color: theme.dirty }]}>
+                  <Ionicons name="time" size={18} color="#b45309" />
+                  <Text style={[styles.reviewHeaderTitle, { color: '#b45309' }]}>
                     Pending Update from {pendingConcierge.submitted_by || 'Front Desk'}
                   </Text>
                 </View>
@@ -338,7 +338,7 @@ export default function GuestConciergeScreen() {
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.reviewApproveBtn, { backgroundColor: theme.free }]}
+                    style={[styles.reviewApproveBtn, { backgroundColor: '#16a34a' }]}
                     onPress={() => handleReviewProposal(true)}
                     disabled={reviewing}
                     activeOpacity={0.8}
@@ -358,10 +358,10 @@ export default function GuestConciergeScreen() {
 
             {/* Pending Notice for Front Desk */}
             {pendingConcierge && isDesk && (
-              <View style={[styles.infoBanner, { backgroundColor: theme.dirtySubtle, borderColor: theme.dirty }]}>
-                <Ionicons name="hourglass-outline" size={20} color={theme.dirty} style={{ marginTop: 2 }} />
+              <View style={[styles.infoBanner, { backgroundColor: '#fffbeb', borderColor: '#f59e0b' }]}>
+                <Ionicons name="hourglass-outline" size={20} color="#b45309" style={{ marginTop: 2 }} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.infoBannerTitle, { color: theme.dirty }]}>
+                  <Text style={[styles.infoBannerTitle, { color: '#b45309' }]}>
                     Update Awaiting Approval
                   </Text>
                   <Text style={[styles.infoBannerBody, { color: theme.textSecondary }]}>

@@ -18,6 +18,7 @@ describe('permissions > can()', () => {
     'set_maintenance',
     'view_id_photo',
     'refund_payment',
+    'broadcast_guests',
   ];
 
   const expectedMatrix: Record<Role, Record<Action, boolean>> = {
@@ -35,6 +36,7 @@ describe('permissions > can()', () => {
       set_maintenance: true,
       view_id_photo: true,
       refund_payment: true,
+      broadcast_guests: true,
     },
     co_admin: {
       check_in: true,
@@ -50,6 +52,7 @@ describe('permissions > can()', () => {
       set_maintenance: true,
       view_id_photo: true,
       refund_payment: true,
+      broadcast_guests: true,
     },
     desk: {
       check_in: true,
@@ -65,6 +68,7 @@ describe('permissions > can()', () => {
       set_maintenance: true,
       view_id_photo: true,
       refund_payment: false,
+      broadcast_guests: true,
     },
     housekeeping: {
       check_in: false,
@@ -80,6 +84,7 @@ describe('permissions > can()', () => {
       set_maintenance: false,
       view_id_photo: false,
       refund_payment: false,
+      broadcast_guests: false,
     },
   };
 

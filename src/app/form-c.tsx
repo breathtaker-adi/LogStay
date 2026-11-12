@@ -18,10 +18,13 @@ import {
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../lib/supabase";
 import { ScreenHeader } from "@/lib/screen-header";
+import { useTheme } from "@/hooks/use-theme";
+import { Fonts } from "@/constants/theme";
 
 type FormCFilter = 'all' | 'pending' | 'filed';
 
 export default function FormCScreen() {
+  const theme = useTheme();
   const [foreignStays, setForeignStays] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -125,46 +128,58 @@ export default function FormCScreen() {
 
   if (loading && foreignStays.length === 0) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#2563eb" />
+      <View style={[styles.center, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.accentText} />
       </View>
     );
   }
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: theme.background }]}>
       <ScreenHeader
         title="Form C Tracker"
         subtitle={`Bureau of Immigration Compliance • ${pendingCount} Pending`}
       />
 
       {/* ── FILTER TABS ─────────────────────────────────────────── */}
-      <View style={styles.filterBar}>
+      <View style={[styles.filterBar, { backgroundColor: theme.surface, borderBottomColor: theme.border }]}>
         <Pressable
-          style={[styles.filterPill, activeFilter === 'all' && styles.filterPillActive]}
+          style={[
+            styles.filterPill,
+            { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
+            activeFilter === 'all' && { backgroundColor: theme.accent, borderColor: theme.accent }
+          ]}
           onPress={() => setFilterWithAnimation('all')}
         >
-          <Text style={[styles.filterText, activeFilter === 'all' && styles.filterTextActive]}>
+          <Text style={[styles.filterText, { color: activeFilter === 'all' ? '#ffffff' : theme.textSecondary }]}>
             All ({foreignStays.length})
           </Text>
         </Pressable>
 
         <Pressable
-          style={[styles.filterPill, activeFilter === 'pending' && styles.filterPillActivePending]}
+          style={[
+            styles.filterPill,
+            { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
+            activeFilter === 'pending' && { backgroundColor: '#f59e0b', borderColor: '#f59e0b' }
+          ]}
           onPress={() => setFilterWithAnimation('pending')}
         >
-          <View style={[styles.filterDot, { backgroundColor: '#d97706' }]} />
-          <Text style={[styles.filterText, activeFilter === 'pending' && { color: '#ffffff' }]}>
+          <View style={[styles.filterDot, { backgroundColor: activeFilter === 'pending' ? '#ffffff' : '#f59e0b' }]} />
+          <Text style={[styles.filterText, { color: activeFilter === 'pending' ? '#ffffff' : theme.textSecondary }]}>
             Pending ({pendingCount})
           </Text>
         </Pressable>
 
         <Pressable
-          style={[styles.filterPill, activeFilter === 'filed' && styles.filterPillActiveFiled]}
+          style={[
+            styles.filterPill,
+            { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
+            activeFilter === 'filed' && { backgroundColor: '#16a34a', borderColor: '#16a34a' }
+          ]}
           onPress={() => setFilterWithAnimation('filed')}
         >
-          <View style={[styles.filterDot, { backgroundColor: '#16a34a' }]} />
-          <Text style={[styles.filterText, activeFilter === 'filed' && { color: '#ffffff' }]}>
+          <View style={[styles.filterDot, { backgroundColor: activeFilter === 'filed' ? '#ffffff' : '#16a34a' }]} />
+          <Text style={[styles.filterText, { color: activeFilter === 'filed' ? '#ffffff' : theme.textSecondary }]}>
             Filed ({filedCount})
           </Text>
         </Pressable>
@@ -174,7 +189,7 @@ export default function FormCScreen() {
         data={filteredStays}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.accentText} />}
         renderItem={({ item }) => {
           const isFiled = item.foreign_details?.form_c_filed;
           const guest = Array.isArray(item.guests) ? item.guests[0] : item.guests;
@@ -184,51 +199,69 @@ export default function FormCScreen() {
           const isActing = actionLoadingId === item.id;
 
           return (
-            <View style={[styles.card, isFiled ? styles.cardFiled : styles.cardPending]}>
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor: theme.surface,
+                  borderColor: isFiled ? '#86efac' : '#fde68a'
+                }
+              ]}
+            >
               <View style={styles.cardTopRow}>
-                <View style={[styles.avatarBox, isFiled ? styles.avatarFiled : styles.avatarPending]}>
-                  <Ionicons name="earth" size={20} color={isFiled ? "#16a34a" : "#d97706"} />
+                <View
+                  style={[
+                    styles.avatarBox,
+                    { backgroundColor: isFiled ? '#dcfce7' : '#fef3c7' }
+                  ]}
+                >
+                  <Ionicons name="earth" size={20} color={isFiled ? '#16a34a' : '#d97706'} />
                 </View>
 
                 <View style={styles.cardDetails}>
-                  <Text style={styles.guestName}>{guestName}</Text>
+                  <Text style={[styles.guestName, { color: theme.text }]}>{guestName}</Text>
                   <View style={styles.badgeRow}>
-                    <View style={styles.nationalityBadge}>
-                      <Text style={styles.nationalityText}>{nationality}</Text>
+                    <View style={[styles.nationalityBadge, { backgroundColor: theme.accentSubtle }]}>
+                      <Text style={[styles.nationalityText, { color: theme.accentText }]}>{nationality}</Text>
                     </View>
-                    <View style={styles.passportBadge}>
-                      <Ionicons name="document-text-outline" size={11} color="#475569" />
-                      <Text style={styles.passportText}>Passport: {passportNo}</Text>
+                    <View style={[styles.passportBadge, { backgroundColor: theme.surfaceSubtle }]}>
+                      <Ionicons name="document-text-outline" size={11} color={theme.textSecondary} />
+                      <Text style={[styles.passportText, { color: theme.textSecondary }]}>Passport: {passportNo}</Text>
                     </View>
                   </View>
                 </View>
 
-                <View style={[styles.statusBadge, isFiled ? styles.statusBadgeFiled : styles.statusBadgePending]}>
-                  <View style={[styles.statusDot, { backgroundColor: isFiled ? "#16a34a" : "#d97706" }]} />
-                  <Text style={[styles.statusText, { color: isFiled ? "#166534" : "#92400e" }]}>
+                <View
+                  style={[
+                    styles.statusBadge,
+                    { backgroundColor: isFiled ? '#dcfce7' : '#fef3c7' }
+                  ]}
+                >
+                  <View style={[styles.statusDot, { backgroundColor: isFiled ? '#16a34a' : '#d97706' }]} />
+                  <Text style={[styles.statusText, { color: isFiled ? '#15803d' : '#b45309' }]}>
                     {isFiled ? "Filed" : "Pending"}
                   </Text>
                 </View>
               </View>
 
-              <View style={styles.cardDivider} />
+              <View style={[styles.cardDivider, { backgroundColor: theme.borderSubtle }]} />
 
               <View style={styles.cardFooter}>
                 <View style={styles.dateContainer}>
-                  <Ionicons name="calendar-outline" size={13} color="#64748b" />
-                  <Text style={styles.dateText}>
+                  <Ionicons name="calendar-outline" size={13} color={theme.textSecondary} />
+                  <Text style={[styles.dateText, { color: theme.textSecondary }]}>
                     Arrival: {new Date(item.check_in).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
                   </Text>
                 </View>
 
                 {isFiled ? (
-                  <View style={styles.filedConfirmBadge}>
+                  <View style={[styles.filedConfirmBadge, { backgroundColor: '#dcfce7' }]}>
                     <Ionicons name="checkmark-circle" size={15} color="#16a34a" />
-                    <Text style={styles.filedConfirmText}>BoI Recorded</Text>
+                    <Text style={[styles.filedConfirmText, { color: '#15803d' }]}>BoI Recorded</Text>
                   </View>
                 ) : (
                   <TouchableOpacity
-                    style={styles.markFiledBtn}
+                    style={[styles.markFiledBtn, { backgroundColor: theme.accent }]}
                     onPress={() => markAsFiled(item.id)}
                     disabled={isActing}
                     activeOpacity={0.8}
@@ -249,17 +282,17 @@ export default function FormCScreen() {
         }}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconBox}>
-              <MaterialCommunityIcons name="passport-biometric" size={42} color="#94a3b8" />
+            <View style={[styles.emptyIconBox, { backgroundColor: theme.surfaceSubtle }]}>
+              <MaterialCommunityIcons name="passport-biometric" size={42} color={theme.textTertiary} />
             </View>
-            <Text style={styles.emptyTitle}>
+            <Text style={[styles.emptyTitle, { color: theme.text }]}>
               {activeFilter === 'pending'
                 ? 'No Pending Form C Filings'
                 : activeFilter === 'filed'
                 ? 'No Filed Form C Records'
                 : 'No Foreign Guests Found'}
             </Text>
-            <Text style={styles.emptyText}>
+            <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
               {activeFilter === 'pending'
                 ? 'All registered foreign guests have had their Form C recorded.'
                 : 'Foreign guests checked in at your property will appear here for compliance.'}
@@ -289,7 +322,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9'
+    borderBottomColor: '#e2e8f0'
   },
   filterPill: {
     flexDirection: 'row',
@@ -303,12 +336,12 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0'
   },
   filterPillActive: {
-    backgroundColor: '#0f172a',
-    borderColor: '#0f172a'
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb'
   },
   filterPillActivePending: {
-    backgroundColor: '#d97706',
-    borderColor: '#d97706'
+    backgroundColor: '#f59e0b',
+    borderColor: '#f59e0b'
   },
   filterPillActiveFiled: {
     backgroundColor: '#16a34a',
@@ -317,7 +350,8 @@ const styles = StyleSheet.create({
   filterText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#475569'
+    color: '#475569',
+    fontVariant: ['tabular-nums']
   },
   filterTextActive: {
     color: '#ffffff'
@@ -333,7 +367,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: "#ffffff",
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
@@ -348,7 +382,7 @@ const styles = StyleSheet.create({
     borderColor: "#fde68a"
   },
   cardFiled: {
-    borderColor: "#bbf7d0"
+    borderColor: "#86efac"
   },
   cardTopRow: {
     flexDirection: "row",
@@ -357,30 +391,31 @@ const styles = StyleSheet.create({
   avatarBox: {
     width: 42,
     height: 42,
-    borderRadius: 14,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12
   },
   avatarPending: {
-    backgroundColor: "#fffbeb"
+    backgroundColor: "#fef3c7"
   },
   avatarFiled: {
-    backgroundColor: "#f0fdf4"
+    backgroundColor: "#dcfce7"
   },
   cardDetails: {
     flex: 1
   },
   guestName: {
-    fontSize: 16,
-    fontWeight: "700",
+    fontFamily: Fonts.serif,
+    fontSize: 17,
+    fontWeight: "600",
     color: "#0f172a"
   },
   badgeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginTop: 4
+    marginTop: 5
   },
   nationalityBadge: {
     backgroundColor: '#eff6ff',
@@ -391,6 +426,7 @@ const styles = StyleSheet.create({
   nationalityText: {
     fontSize: 10,
     fontWeight: '700',
+    letterSpacing: 0.4,
     color: '#2563eb'
   },
   passportBadge: {
@@ -405,6 +441,7 @@ const styles = StyleSheet.create({
   passportText: {
     fontSize: 10,
     fontWeight: '600',
+    fontVariant: ['tabular-nums'],
     color: '#475569'
   },
   statusBadge: {
@@ -448,19 +485,20 @@ const styles = StyleSheet.create({
   dateText: {
     color: "#64748b",
     fontSize: 12,
-    fontWeight: "500"
+    fontWeight: "500",
+    fontVariant: ['tabular-nums']
   },
   filedConfirmBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#f0fdf4",
+    backgroundColor: "#dcfce7",
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8
   },
   filedConfirmText: {
-    color: "#166534",
+    color: "#15803d",
     fontSize: 12,
     fontWeight: "700"
   },
@@ -468,7 +506,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "#d97706",
+    backgroundColor: "#2563eb",
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 10
@@ -493,8 +531,9 @@ const styles = StyleSheet.create({
     marginBottom: 16
   },
   emptyTitle: {
-    fontSize: 16,
-    fontWeight: "700",
+    fontFamily: Fonts.serif,
+    fontSize: 17,
+    fontWeight: "600",
     color: "#0f172a",
     marginBottom: 6,
     textAlign: "center"

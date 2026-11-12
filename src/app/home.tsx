@@ -9,13 +9,14 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
-  ImageBackground,
+  Image,
   Animated,
   Dimensions,
   Modal,
   BackHandler,
   Platform,
-  PanResponder
+  PanResponder,
+  AccessibilityInfo
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -41,6 +42,14 @@ import { floorLabel, resolveFloorNo } from "../lib/floors";
 import { useTheme } from "@/hooks/use-theme";
 import { Fonts } from "@/constants/theme";
 import { AppleExitModal } from "@/components/apple-exit-modal";
+import {
+  GridRoomRecord,
+  GridUnitRecord,
+  RoomGridMap,
+  RoomGridTile,
+} from "@/components/room-grid-map";
+import { computeAvailabilitySummary, formatAvailabilityLabel } from "../lib/room-grid";
+import { hapticSelection } from "@/lib/haptics";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const DRAWER_WIDTH = Math.min(SCREEN_WIDTH * 0.78, 320);
@@ -92,6 +101,60 @@ export default function HomeScreen() {
   // Free Rooms Bottom Sheet Animation State
   const [freeRoomsSheetVisible, setFreeRoomsSheetVisible] = useState(false);
   const [freeRoomsAnim] = useState(() => new Animated.Value(SCREEN_HEIGHT));
+
+  // Floor Grid Map Data + Segmented View Toggle State
+  const [gridRooms, setGridRooms] = useState<GridRoomRecord[]>([]);
+  const [gridUnits, setGridUnits] = useState<GridUnitRecord[]>([]);
+  const [activeUnitIds, setActiveUnitIds] = useState<Set<string>>(new Set());
+  const availabilitySummary = useMemo(
+    () => computeAvailabilitySummary(gridRooms, gridUnits, activeUnitIds),
+    [gridRooms, gridUnits, activeUnitIds]
+  );
+  const freeSummaryText = useMemo(
+    () => formatAvailabilityLabel(availabilitySummary),
+    [availabilitySummary]
+  );
+  const [dashboardView, setDashboardView] = useState<'activities' | 'grid'>('activities');
+  const [segmentWidth, setSegmentWidth] = useState(0);
+  const [segmentAnim] = useState(() => new Animated.Value(0));
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (mounted) setReduceMotion(Boolean(enabled));
+      })
+      .catch(() => {});
+    const sub = AccessibilityInfo.addEventListener?.('reduceMotionChanged', (enabled) => {
+      setReduceMotion(Boolean(enabled));
+    });
+    return () => {
+      mounted = false;
+      sub?.remove?.();
+    };
+  }, []);
+
+  const switchDashboardView = useCallback(
+    (next: 'activities' | 'grid') => {
+      if (next === dashboardView) return;
+      void hapticSelection();
+      setDashboardView(next);
+      const target = next === 'grid' ? 1 : 0;
+      if (reduceMotion) {
+        segmentAnim.setValue(target);
+      } else {
+        Animated.spring(segmentAnim, {
+          toValue: target,
+          damping: 22,
+          stiffness: 260,
+          mass: 0.75,
+          useNativeDriver: true,
+        }).start();
+      }
+    },
+    [dashboardView, reduceMotion, segmentAnim]
+  );
 
   const openDrawer = useCallback(() => {
     setDrawerVisible(true);
@@ -363,6 +426,9 @@ export default function HomeScreen() {
 
       setStatusCounts({ free: freeC, occupied: occC, dirty: dirtyC, maintenance: maintC });
       setRooms(localGrid);
+      setGridRooms(localRooms);
+      setGridUnits(localUnits);
+      setActiveUnitIds(localOccupiedIds);
       setActiveGuests(localStays.length);
       const count = await getPendingCount();
       setPendingCount(count);
@@ -503,7 +569,7 @@ export default function HomeScreen() {
         // 5. Shift Handover status
         const { data: handoverShift } = await supabase
           .from('shifts')
-          .select('id, closing_cash, status')
+          .select('id, closing_cash, counted_cash, status')
           .eq('property_id', memberData.property_id)
           .eq('status', 'pending_handover')
           .limit(1)
@@ -528,7 +594,7 @@ export default function HomeScreen() {
           paymentsTotal,
           paymentsCount,
           shiftStatus: handoverShift ? 'Pending Handover' : (shiftData ? 'Open' : 'Closed'),
-          shiftCash: shiftData ? (shiftData.opening_cash || 0) : (handoverShift ? (handoverShift.closing_cash || 0) : 0),
+          shiftCash: shiftData ? (shiftData.opening_cash || 0) : (handoverShift ? (handoverShift.closing_cash ?? handoverShift.counted_cash ?? 0) : 0),
           paymentDueCount: dueCount,
           paymentDueTotal: dueTotal,
           dueOutCount,
@@ -668,7 +734,7 @@ export default function HomeScreen() {
         >
           <Ionicons name="notifications-outline" size={24} color="#ffffff" style={styles.topBarIconShadow} />
           {issueCount > 0 && (
-            <View style={styles.notifBadge}>
+            <View style={[styles.notifBadge, { backgroundColor: theme.destructive }]}>
               <Text style={styles.notifBadgeText}>{issueCount > 9 ? '9+' : issueCount}</Text>
             </View>
           )}
@@ -684,11 +750,12 @@ export default function HomeScreen() {
       >
         {/* ── HERO BANNER ────────────────────────────────────────── */}
         <View style={styles.bannerContainer}>
-          <ImageBackground
-            source={bannerSource}
-            style={styles.bannerBackground}
-            imageStyle={styles.bannerImage}
-          >
+          <View style={styles.bannerBackground}>
+            <Image
+              source={bannerSource}
+              style={[StyleSheet.absoluteFill, styles.bannerImage]}
+              resizeMode="cover"
+            />
             <View style={styles.bannerOverlay}>
               {/* Center Identity Section — Prominently shows Property Name */}
               <View style={styles.bannerIdentityContainer}>
@@ -715,20 +782,20 @@ export default function HomeScreen() {
                 )}
               </View>
             </View>
-          </ImageBackground>
+          </View>
         </View>
 
         {/* Pending Sync Alert — icon instead of emoji */}
         {pendingCount > 0 && (
           <Pressable
-            style={[styles.syncBadge, { backgroundColor: theme.dirtySubtle, borderColor: '#FDE68A' }]}
+            style={[styles.syncBadge, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}
             onPress={() => router.push('/outbox')}
             accessibilityRole="button"
             accessibilityLabel={`${pendingCount} pending sync items. Tap to view queue.`}
           >
             <Ionicons name="cloud-upload-outline" size={15} color="#92400e" style={{ marginRight: 6 }} />
-            <Text style={styles.syncText}>{pendingCount} Pending Sync</Text>
-            <Text style={[styles.syncText, { marginLeft: 'auto', opacity: 0.7 }]}>View Queue →</Text>
+            <Text style={[styles.syncText, { color: '#92400e' }]}>{pendingCount} Pending Sync</Text>
+            <Text style={[styles.syncText, { color: '#92400e', marginLeft: 'auto', opacity: 0.75 }]}>View Queue →</Text>
           </Pressable>
         )}
 
@@ -755,11 +822,17 @@ export default function HomeScreen() {
             style={[styles.statCard, { backgroundColor: theme.backgroundElement, borderColor: theme.separator }]}
             onPress={() => navigateRooms()}
             accessibilityRole="button"
-            accessibilityLabel={`${rooms.length} rooms total`}
+            accessibilityLabel={`${availabilitySummary.totalRooms} rooms, ${availabilitySummary.totalBeds} total beds`}
           >
-            <View style={[styles.statAccentBar, { backgroundColor: theme.free }]} />
-            <Text style={[styles.statNumber, { color: theme.free }]}>{rooms.length}</Text>
-            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>Rooms Total</Text>
+            <View style={[styles.statAccentBar, { backgroundColor: '#16a34a' }]} />
+            <Text style={[styles.statNumber, { color: '#16a34a' }]}>
+              {gridRooms.length > 0 ? availabilitySummary.totalRooms : rooms.length}
+            </Text>
+            <Text style={[styles.statLabel, { color: theme.textSecondary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+              {availabilitySummary.totalBeds > availabilitySummary.totalRooms
+                ? `Rooms (${availabilitySummary.totalBeds} Beds)`
+                : 'Rooms Total'}
+            </Text>
           </Pressable>
 
           {can('shift') ? (
@@ -798,19 +871,19 @@ export default function HomeScreen() {
         {/* ── HOUSEKEEPING FLOOR CLEANING BREAKDOWN BANNER ───────────── */}
         {dirtyFloorDetails.length > 0 && (
           <Pressable
-            style={[styles.housekeepingCleanBanner, { backgroundColor: theme.dirtySubtle, borderColor: '#FEF08A' }]}
+            style={[styles.housekeepingCleanBanner, { backgroundColor: theme.dirtySubtle, borderColor: theme.dirty }]}
             onPress={() => navigateRooms('dirty')}
             accessibilityRole="button"
             accessibilityLabel={`Needs cleaning: ${dirtyFloorDetails.map(d => `${d.title} (${d.count})`).join(', ')}`}
           >
-            <View style={[styles.housekeepingCleanBadge, { backgroundColor: '#FEF9C3' }]}>
-              <Ionicons name="sparkles" size={13} color="#B45309" />
-              <Text style={styles.housekeepingCleanTitle}>NEEDS CLEANING</Text>
+            <View style={[styles.housekeepingCleanBadge, { backgroundColor: theme.backgroundElement }]}>
+              <Ionicons name="sparkles" size={13} color={theme.dirty} />
+              <Text style={[styles.housekeepingCleanTitle, { color: theme.dirty }]}>NEEDS CLEANING</Text>
             </View>
             <Text style={[styles.housekeepingCleanText, { color: theme.text }]} numberOfLines={2}>
               {dirtyFloorDetails.map(d => `${d.title} (${d.count})`).join(', ')}
             </Text>
-            <Ionicons name="chevron-forward" size={14} color="#B45309" />
+            <Ionicons name="chevron-forward" size={14} color={theme.dirty} />
           </Pressable>
         )}
 
@@ -861,14 +934,119 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* ── TODAY'S OPERATIONS (Apple Inset Grouped Section) ──────── */}
+        {/* ── APPLE HIG SEGMENTED CONTROL: TODAY'S ACTIVITIES vs GRID OF ROOMS ── */}
+        <View style={styles.viewToggleWrap}>
+          <View
+            style={[
+              styles.viewToggleTrack,
+              {
+                backgroundColor: theme.backgroundSelected,
+                borderColor: theme.separator,
+              },
+            ]}
+            accessibilityRole="tablist"
+            onLayout={(e) => {
+              const nextW = (e.nativeEvent.layout.width - 6) / 2;
+              if (nextW > 0 && Math.abs(nextW - segmentWidth) > 0.5) {
+                setSegmentWidth(nextW);
+              }
+            }}
+          >
+            {segmentWidth > 0 && (
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.viewToggleIndicator,
+                  {
+                    width: segmentWidth,
+                    backgroundColor: theme.backgroundElement,
+                    borderColor: theme.separator,
+                    transform: [
+                      {
+                        translateX: segmentAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, segmentWidth],
+                        }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+            )}
+
+            <Pressable
+              style={styles.viewToggleSegment}
+              onPress={() => switchDashboardView('activities')}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: dashboardView === 'activities' }}
+              accessibilityLabel="Today's Activities"
+            >
+              <Text
+                style={[
+                  styles.viewToggleText,
+                  {
+                    color: dashboardView === 'activities' ? theme.text : theme.textSecondary,
+                    fontWeight: dashboardView === 'activities' ? '700' : '500',
+                  },
+                ]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
+              >
+                Today&apos;s Activities
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.viewToggleSegment}
+              onPress={() => switchDashboardView('grid')}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: dashboardView === 'grid' }}
+              accessibilityLabel="Grid of Rooms"
+            >
+              <Text
+                style={[
+                  styles.viewToggleText,
+                  {
+                    color: dashboardView === 'grid' ? theme.text : theme.textSecondary,
+                    fontWeight: dashboardView === 'grid' ? '700' : '500',
+                  },
+                ]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
+              >
+                Grid of Rooms
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {dashboardView === 'grid' ? (
+          <RoomGridMap
+            rooms={gridRooms}
+            units={gridUnits}
+            activeUnitIds={activeUnitIds}
+            onOpenFullMatrix={() => router.push('/room-matrix' as any)}
+            onSelectTile={(tile: RoomGridTile) => {
+              if (tile.isDorm) {
+                router.push({ pathname: '/dorm/[roomId]', params: { roomId: tile.roomId } });
+              } else if (tile.primaryUnitId) {
+                router.push(`/room/${tile.primaryUnitId}`);
+              } else {
+                Alert.alert('Notice', 'No unit found for this room.');
+              }
+            }}
+          />
+        ) : (
+        /* ── TODAY'S OPERATIONS (Editorial Inset Grouped Section) ─── */
         <View style={styles.operationsSection}>
           <View style={styles.operationsHeader}>
-            <Text style={[styles.operationsSectionTitle, { color: theme.textSecondary }]}>
+            <Text style={[styles.operationsSectionTitle, { color: theme.roomEyebrow }]}>
               TODAY&apos;S OPERATIONS
             </Text>
-            <Text style={[styles.operationsSectionSub, { color: theme.textTertiary }]}>
-              Live arrivals, departures, payments &amp; shift controls
+            <Text style={[styles.operationsSectionSub, { color: theme.textSecondary }]}>
+              Live arrivals, departures, broadcasts, payments &amp; shift controls
             </Text>
           </View>
 
@@ -934,16 +1112,16 @@ export default function HomeScreen() {
               activeOpacity={0.7}
               accessibilityRole="button"
             >
-              <View style={[styles.operationIconBox, { backgroundColor: todayActivities.overdueCount > 0 ? theme.occupiedSubtle : theme.freeSubtle }]}>
+              <View style={[styles.operationIconBox, { backgroundColor: todayActivities.overdueCount > 0 ? '#fee2e2' : '#dcfce7' }]}>
                 <Ionicons
                   name={todayActivities.overdueCount > 0 ? "alert-circle" : "time-outline"}
                   size={20}
-                  color={todayActivities.overdueCount > 0 ? theme.occupied : theme.free}
+                  color={todayActivities.overdueCount > 0 ? '#dc2626' : '#16a34a'}
                 />
               </View>
               <View style={styles.operationContent}>
                 <Text style={[styles.operationTitle, { color: theme.text }]}>Due Out & Overdue</Text>
-                <Text style={[styles.operationSub, { color: todayActivities.overdueCount > 0 ? theme.occupied : theme.textSecondary }]}>
+                <Text style={[styles.operationSub, { color: todayActivities.overdueCount > 0 ? '#dc2626' : theme.textSecondary }]}>
                   {todayActivities.overdueCount > 0
                     ? `⚠️ ${todayActivities.overdueCount} guest(s) overdue for checkout`
                     : (todayActivities.dueOutCount > 0
@@ -955,13 +1133,13 @@ export default function HomeScreen() {
                 <View
                   style={[
                     styles.operationBadge,
-                    { backgroundColor: todayActivities.overdueCount > 0 ? theme.occupiedSubtle : theme.freeSubtle }
+                    { backgroundColor: todayActivities.overdueCount > 0 ? '#fee2e2' : '#dcfce7' }
                   ]}
                 >
                   <Text
                     style={[
                       styles.operationBadgeText,
-                      { color: todayActivities.overdueCount > 0 ? theme.occupied : theme.free }
+                      { color: todayActivities.overdueCount > 0 ? '#dc2626' : '#16a34a' }
                     ]}
                   >
                     {todayActivities.overdueCount > 0 ? `${todayActivities.overdueCount} Overdue` : `${todayActivities.dueOutCount} Due`}
@@ -979,8 +1157,8 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityLabel={`Payments collected: ₹${todayActivities.paymentsTotal}`}
             >
-              <View style={[styles.operationIconBox, { backgroundColor: theme.freeSubtle }]}>
-                <Ionicons name="cash-outline" size={20} color={theme.free} />
+              <View style={[styles.operationIconBox, { backgroundColor: '#dcfce7' }]}>
+                <Ionicons name="cash-outline" size={20} color="#16a34a" />
               </View>
               <View style={styles.operationContent}>
                 <Text style={[styles.operationTitle, { color: theme.text }]}>Payments Collected</Text>
@@ -989,8 +1167,8 @@ export default function HomeScreen() {
                 </Text>
               </View>
               <View style={styles.operationTrailing}>
-                <View style={[styles.operationBadge, { backgroundColor: theme.freeSubtle }]}>
-                  <Text style={[styles.operationBadgeText, { color: theme.free }]}>
+                <View style={[styles.operationBadge, { backgroundColor: '#dcfce7' }]}>
+                  <Text style={[styles.operationBadgeText, { color: '#16a34a' }]}>
                     ₹{todayActivities.paymentsTotal.toLocaleString('en-IN')}
                   </Text>
                 </View>
@@ -1006,16 +1184,16 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityLabel={`Shift status: ${todayActivities.shiftStatus}`}
             >
-              <View style={[styles.operationIconBox, { backgroundColor: todayActivities.handoverPending ? theme.dirtySubtle : theme.surfaceSubtle }]}>
+              <View style={[styles.operationIconBox, { backgroundColor: todayActivities.handoverPending ? '#fef3c7' : theme.surfaceSubtle }]}>
                 <Ionicons
                   name={todayActivities.handoverPending ? "people" : "swap-horizontal-outline"}
                   size={20}
-                  color={todayActivities.handoverPending ? theme.dirty : theme.accent}
+                  color={todayActivities.handoverPending ? '#d97706' : theme.accent}
                 />
               </View>
               <View style={styles.operationContent}>
                 <Text style={[styles.operationTitle, { color: theme.text }]}>Shift Change & Drawer</Text>
-                <Text style={[styles.operationSub, { color: todayActivities.handoverPending ? theme.dirty : theme.textSecondary }]}>
+                <Text style={[styles.operationSub, { color: todayActivities.handoverPending ? '#d97706' : theme.textSecondary }]}>
                   {todayActivities.handoverPending
                     ? '🤝 Handover pending: incoming staff please accept'
                     : (todayActivities.shiftStatus === 'Open' ? `Active Drawer • ₹${todayActivities.shiftCash} float` : 'No active shift open')}
@@ -1025,13 +1203,13 @@ export default function HomeScreen() {
                 <View
                   style={[
                     styles.operationBadge,
-                    { backgroundColor: todayActivities.handoverPending ? theme.dirtySubtle : (todayActivities.shiftStatus === 'Open' ? theme.freeSubtle : theme.surfaceSubtle) }
+                    { backgroundColor: todayActivities.handoverPending ? '#fef3c7' : (todayActivities.shiftStatus === 'Open' ? '#dcfce7' : theme.surfaceSubtle) }
                   ]}
                 >
                   <Text
                     style={[
                       styles.operationBadgeText,
-                      { color: todayActivities.handoverPending ? theme.dirty : (todayActivities.shiftStatus === 'Open' ? theme.free : theme.textSecondary) }
+                      { color: todayActivities.handoverPending ? '#d97706' : (todayActivities.shiftStatus === 'Open' ? '#16a34a' : theme.textSecondary) }
                     ]}
                   >
                     {todayActivities.handoverPending ? 'Handover' : todayActivities.shiftStatus}
@@ -1049,11 +1227,11 @@ export default function HomeScreen() {
               accessibilityRole="button"
               accessibilityLabel={`Payment Due: ${todayActivities.paymentDueCount} folios, ₹${todayActivities.paymentDueTotal}`}
             >
-              <View style={[styles.operationIconBox, { backgroundColor: todayActivities.paymentDueCount > 0 ? theme.occupiedSubtle : theme.freeSubtle }]}>
+              <View style={[styles.operationIconBox, { backgroundColor: todayActivities.paymentDueCount > 0 ? '#fee2e2' : '#dcfce7' }]}>
                 <Ionicons
                   name={todayActivities.paymentDueCount > 0 ? "alert-circle-outline" : "checkmark-circle-outline"}
                   size={20}
-                  color={todayActivities.paymentDueCount > 0 ? theme.occupied : theme.free}
+                  color={todayActivities.paymentDueCount > 0 ? '#dc2626' : '#16a34a'}
                 />
               </View>
               <View style={styles.operationContent}>
@@ -1068,13 +1246,13 @@ export default function HomeScreen() {
                 <View
                   style={[
                     styles.operationBadge,
-                    { backgroundColor: todayActivities.paymentDueCount > 0 ? theme.occupiedSubtle : theme.freeSubtle }
+                    { backgroundColor: todayActivities.paymentDueCount > 0 ? '#fee2e2' : '#dcfce7' }
                   ]}
                 >
                   <Text
                     style={[
                       styles.operationBadgeText,
-                      { color: todayActivities.paymentDueCount > 0 ? theme.occupied : theme.free }
+                      { color: todayActivities.paymentDueCount > 0 ? '#dc2626' : '#16a34a' }
                     ]}
                   >
                     {todayActivities.paymentDueCount > 0 ? `₹${todayActivities.paymentDueTotal.toLocaleString('en-IN')}` : 'Settled'}
@@ -1086,37 +1264,42 @@ export default function HomeScreen() {
 
             {/* 6. Manager Approvals Row */}
             <TouchableOpacity
-              style={[styles.operationRow, (activeStaff?.role === 'owner' || activeStaff?.role === 'co_admin') ? [styles.operationRowBorder, { borderBottomColor: theme.separator }] : null]}
+              style={[
+                styles.operationRow,
+                (can('broadcast_guests') || activeStaff?.role === 'owner' || activeStaff?.role === 'co_admin')
+                  ? [styles.operationRowBorder, { borderBottomColor: theme.separator }]
+                  : null,
+              ]}
               onPress={() => router.push('/approvals')}
               activeOpacity={0.7}
               accessibilityRole="button"
             >
-              <View style={[styles.operationIconBox, { backgroundColor: todayActivities.pendingApprovals > 0 ? theme.dirtySubtle : theme.freeSubtle }]}>
+              <View style={[styles.operationIconBox, { backgroundColor: todayActivities.pendingApprovals > 0 ? '#fef3c7' : '#dcfce7' }]}>
                 <Ionicons
                   name="shield-checkmark-outline"
                   size={20}
-                  color={todayActivities.pendingApprovals > 0 ? theme.dirty : theme.free}
+                  color={todayActivities.pendingApprovals > 0 ? '#d97706' : '#16a34a'}
                 />
               </View>
               <View style={styles.operationContent}>
                 <Text style={[styles.operationTitle, { color: theme.text }]}>Manager Approvals</Text>
                 <Text style={[styles.operationSub, { color: theme.textSecondary }]}>
                   {todayActivities.pendingApprovals > 0
-                    ? `${todayActivities.pendingApprovals} refund/discount requests awaiting decision`
-                    : 'All discount & refund requests reviewed'}
+                    ? `${todayActivities.pendingApprovals} request(s) awaiting decision`
+                    : 'All discount, refund & broadcast requests reviewed'}
                 </Text>
               </View>
               <View style={styles.operationTrailing}>
                 <View
                   style={[
                     styles.operationBadge,
-                    { backgroundColor: todayActivities.pendingApprovals > 0 ? theme.dirtySubtle : theme.freeSubtle }
+                    { backgroundColor: todayActivities.pendingApprovals > 0 ? '#fef3c7' : '#dcfce7' }
                   ]}
                 >
                   <Text
                     style={[
                       styles.operationBadgeText,
-                      { color: todayActivities.pendingApprovals > 0 ? theme.dirty : theme.free }
+                      { color: todayActivities.pendingApprovals > 0 ? '#d97706' : '#16a34a' }
                     ]}
                   >
                     {todayActivities.pendingApprovals > 0 ? `${todayActivities.pendingApprovals} Pending` : 'Clear'}
@@ -1126,7 +1309,43 @@ export default function HomeScreen() {
               </View>
             </TouchableOpacity>
 
-            {/* 7. UPI Reconciliation Row (Owner & Co-Admin only) */}
+            {/* 7. Guest Broadcast Row (Owner / Co-Admin send directly; Front Desk requests approval) */}
+            {can('broadcast_guests') && (
+              <TouchableOpacity
+                style={[
+                  styles.operationRow,
+                  (activeStaff?.role === 'owner' || activeStaff?.role === 'co_admin')
+                    ? [styles.operationRowBorder, { borderBottomColor: theme.separator }]
+                    : null,
+                ]}
+                onPress={() => router.push('/broadcast' as any)}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={`Guest Broadcast to ${activeGuests} checked-in guests`}
+              >
+                <View style={[styles.operationIconBox, { backgroundColor: theme.accentSubtle }]}>
+                  <Ionicons name="megaphone-outline" size={20} color={theme.accentText} />
+                </View>
+                <View style={styles.operationContent}>
+                  <Text style={[styles.operationTitle, { color: theme.text }]}>Guest Broadcast</Text>
+                  <Text style={[styles.operationSub, { color: theme.textSecondary }]}>
+                    {activeStaff?.role === 'desk'
+                      ? 'Draft notice for Owner / Co-Admin approval'
+                      : 'Send notice to all checked-in guests'}
+                  </Text>
+                </View>
+                <View style={styles.operationTrailing}>
+                  <View style={[styles.operationBadge, { backgroundColor: theme.accentSubtle }]}>
+                    <Text style={[styles.operationBadgeText, { color: theme.accentText }]}>
+                      {activeGuests} In-House
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
+                </View>
+              </TouchableOpacity>
+            )}
+
+            {/* 8. UPI Reconciliation Row (Owner & Co-Admin only) */}
             {(activeStaff?.role === 'owner' || activeStaff?.role === 'co_admin') && (
               <TouchableOpacity
                 style={styles.operationRow}
@@ -1138,7 +1357,7 @@ export default function HomeScreen() {
                   <Ionicons
                     name="qr-code-outline"
                     size={20}
-                    color={todayActivities.unverifiedUpiCount > 0 ? "#ea580c" : "#16a34a"}
+                    color={todayActivities.unverifiedUpiCount > 0 ? '#ea580c' : '#16a34a'}
                   />
                 </View>
                 <View style={styles.operationContent}>
@@ -1171,9 +1390,10 @@ export default function HomeScreen() {
             )}
           </View>
         </View>
+        )}
       </ScrollView>
 
-      {/* ── FREE ROOMS AVAILABLE — pinned bottom bar ───────────────── */}
+      {/* ── FREE ROOMS / BEDS AVAILABLE — pinned bottom bar ────────── */}
       <Pressable
         style={({ pressed }) => [
           styles.freeRoomsBar,
@@ -1186,12 +1406,12 @@ export default function HomeScreen() {
         ]}
         onPress={openFreeRoomsSheet}
         accessibilityRole="button"
-        accessibilityLabel={`${statusCounts.free} free rooms available. Tap or swipe up anywhere to view.`}
+        accessibilityLabel={`${freeSummaryText}. Tap or swipe up anywhere to view.`}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <View style={[styles.freeRoomsDot, { backgroundColor: theme.free }]} />
           <Text style={[styles.freeRoomsTitle, { color: theme.text }]}>
-            {statusCounts.free} Free {statusCounts.free === 1 ? 'Room' : 'Rooms'} Available
+            {freeSummaryText}
           </Text>
         </View>
         <Ionicons name="chevron-up" size={18} color={theme.textSecondary} />
@@ -1286,6 +1506,18 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               )}
 
+              {can('broadcast_guests') && (
+                <TouchableOpacity
+                  style={styles.drawerItem}
+                  onPress={() => handleNav('/broadcast')}
+                >
+                  <View style={styles.drawerIconBox}>
+                    <Ionicons name="megaphone-outline" size={24} color={theme.accent} />
+                  </View>
+                  <Text style={[styles.drawerItemText, { color: theme.text }]}>Guest Broadcast</Text>
+                </TouchableOpacity>
+              )}
+
               {can('shift') && (
                 <TouchableOpacity
                   style={styles.drawerItem}
@@ -1307,7 +1539,7 @@ export default function HomeScreen() {
                 </View>
                 <Text style={[styles.drawerItemText, { color: theme.text }]}>Notifications</Text>
                 {issueCount > 0 && (
-                  <View style={styles.drawerBadge}>
+                  <View style={[styles.drawerBadge, { backgroundColor: theme.destructive }]}>
                     <Text style={styles.drawerBadgeText}>{issueCount}</Text>
                   </View>
                 )}
@@ -1365,11 +1597,11 @@ export default function HomeScreen() {
             {/* Bottom Logout Button */}
             <View style={styles.drawerBottomWrapper}>
               <TouchableOpacity
-                style={styles.drawerLogoutBtn}
+                style={[styles.drawerLogoutBtn, { backgroundColor: theme.destructiveSubtle }]}
                 onPress={handleLogoutPress}
               >
-                <MaterialCommunityIcons name="power" size={20} color="#dc2626" />
-                <Text style={styles.drawerLogoutText}>Logout</Text>
+                <MaterialCommunityIcons name="power" size={20} color={theme.destructive} />
+                <Text style={[styles.drawerLogoutText, { color: theme.destructive }]}>Logout</Text>
               </TouchableOpacity>
             </View>
           </Animated.View>
@@ -1408,7 +1640,7 @@ export default function HomeScreen() {
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <View style={[styles.freeRoomsDot, { backgroundColor: theme.free }]} />
                   <Text style={[styles.sheetTitle, { color: theme.text }]}>
-                    {statusCounts.free} Free {statusCounts.free === 1 ? 'Room' : 'Rooms'} Available
+                    {freeSummaryText}
                   </Text>
                 </View>
                 <Text style={[styles.sheetSubtitle, { color: theme.textSecondary }]}>
@@ -1442,11 +1674,11 @@ export default function HomeScreen() {
                 <TouchableOpacity
                   style={[styles.sheetMatrixBtn, { backgroundColor: theme.accent }]}
                   onPress={() => {
-                    closeFreeRoomsSheet(() => navigateRooms());
+                    closeFreeRoomsSheet(() => router.push('/room-matrix' as any));
                   }}
                   activeOpacity={0.8}
                 >
-                  <Text style={styles.sheetMatrixBtnText}>View Room Grid</Text>
+                  <Text style={styles.sheetMatrixBtnText}>Open Full Matrix</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -1581,10 +1813,11 @@ const styles = StyleSheet.create({
   },
   topBarTitle: {
     color: '#ffffff',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
-    fontFamily: Fonts.sans,
-    letterSpacing: 0.6,
+    fontFamily: Fonts.serif,
+    fontStyle: 'italic',
+    letterSpacing: 0.4,
     textShadowColor: 'rgba(0, 0, 0, 0.45)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
@@ -1597,7 +1830,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     overflow: 'hidden',
     height: BANNER_HEIGHT,
-    backgroundColor: '#1e293b',
+    backgroundColor: '#0F172A',
   },
   bannerBackground: {
     width: '100%',
@@ -1608,7 +1841,7 @@ const styles = StyleSheet.create({
   },
   bannerOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(0, 0, 0, 0.28)',
+    backgroundColor: 'rgba(15, 23, 42, 0.34)',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 14,
@@ -1630,10 +1863,11 @@ const styles = StyleSheet.create({
   bannerUserName: {
     fontSize: 34,
     fontWeight: '700',
-    fontFamily: Fonts.sans,
+    fontFamily: Fonts.serif,
+    fontStyle: 'italic',
     color: '#ffffff',
     textAlign: 'center',
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
     textShadowColor: 'rgba(0, 0, 0, 0.45)',
     textShadowOffset: { width: 0, height: 1.5 },
     textShadowRadius: 6,
@@ -1643,16 +1877,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 5,
     borderRadius: 14,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    backgroundColor: 'rgba(15, 23, 42, 0.48)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255, 255, 255, 0.25)',
   },
   bannerPositionText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: '#ffffff',
-    letterSpacing: 0.5,
-    textTransform: 'capitalize',
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
   },
   bannerBottomRow: {
     flexDirection: 'row',
@@ -1664,7 +1898,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 12,
@@ -1694,7 +1928,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   syncText: {
-    color: "#92400e",
     fontWeight: "600",
     fontSize: 13
   },
@@ -1734,6 +1967,7 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 22,
     fontWeight: '700',
+    fontVariant: ['tabular-nums'],
     marginTop: 10,
     marginBottom: 4,
   },
@@ -1766,8 +2000,7 @@ const styles = StyleSheet.create({
   housekeepingCleanTitle: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#854d0e',
-    letterSpacing: 0.5
+    letterSpacing: 0.8
   },
   housekeepingCleanText: {
     flex: 1,
@@ -1803,6 +2036,45 @@ const styles = StyleSheet.create({
   legendPillText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+
+  // ── Segmented Toggle (Today's Activities vs Grid of Rooms) ────────
+  viewToggleWrap: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+  },
+  viewToggleTrack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 3,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    position: 'relative',
+  },
+  viewToggleIndicator: {
+    position: 'absolute',
+    top: 3,
+    bottom: 3,
+    left: 3,
+    borderRadius: 11,
+    borderWidth: StyleSheet.hairlineWidth,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+  viewToggleSegment: {
+    flex: 1,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    zIndex: 1,
+  },
+  viewToggleText: {
+    fontSize: 14,
+    letterSpacing: -0.2,
   },
 
   // ── Today's Operations Section ──────────────────────────────────
@@ -1991,7 +2263,7 @@ const styles = StyleSheet.create({
     marginTop: 10
   },
   drawerLogoutBtn: {
-    backgroundColor: '#fee2e2',
+    backgroundColor: '#FEE2E2',
     borderRadius: 24,
     paddingVertical: 12,
     paddingHorizontal: 20,
@@ -2003,13 +2275,13 @@ const styles = StyleSheet.create({
   drawerLogoutText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#dc2626'
+    color: '#DC2626'
   },
   notifBadge: {
     position: 'absolute',
     top: 0,
     right: 0,
-    backgroundColor: '#dc2626',
+    backgroundColor: '#EF4444',
     borderRadius: 9,
     minWidth: 18,
     height: 18,
@@ -2026,7 +2298,7 @@ const styles = StyleSheet.create({
   },
   drawerBadge: {
     marginLeft: 'auto',
-    backgroundColor: '#ef4444',
+    backgroundColor: '#EF4444',
     borderRadius: 10,
     paddingHorizontal: 7,
     paddingVertical: 2,

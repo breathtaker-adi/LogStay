@@ -256,17 +256,17 @@ export default function AccountDeviceScreen() {
               activeOpacity={0.7}
             >
               <View style={styles.actionLeft}>
-                <View style={[styles.actionIconBox, { backgroundColor: '#fee2e2' }]}>
-                  <Ionicons name="log-out-outline" size={18} color="#dc2626" />
+                <View style={[styles.actionIconBox, { backgroundColor: theme.destructiveSubtle }]}>
+                  <Ionicons name="log-out-outline" size={18} color={theme.destructive} />
                 </View>
                 <View>
-                  <Text style={[styles.actionTitle, { color: '#dc2626' }]}>Sign Out of Device</Text>
+                  <Text style={[styles.actionTitle, { color: theme.destructive }]}>Sign Out of Device</Text>
                   <Text style={[styles.actionSub, { color: theme.textSecondary }]}>
                     Disconnect this phone from the property account
                   </Text>
                 </View>
               </View>
-              <Ionicons name="chevron-forward" size={16} color="#dc2626" />
+              <Ionicons name="chevron-forward" size={16} color={theme.destructive} />
             </TouchableOpacity>
           </View>
         </ScrollView>

@@ -21,8 +21,11 @@ import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { formatPoliceRegisterCSV, formatFormC } from "@/lib/exports";
 import { ScreenHeader } from "@/lib/screen-header";
+import { useTheme } from "@/hooks/use-theme";
+import { Fonts } from "@/constants/theme";
 
 export default function ExportsScreen() {
+  const theme = useTheme();
   const [loadingType, setLoadingType] = useState<'police' | 'form_c' | null>(null);
   
   // Format today as YYYY-MM-DD
@@ -175,7 +178,7 @@ export default function ExportsScreen() {
   }
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: theme.background }]}>
       <ScreenHeader
         title="Compliance Exports"
         subtitle="Police Register & Form C Reports"
@@ -193,44 +196,44 @@ export default function ExportsScreen() {
           automaticallyAdjustKeyboardInsets={true}
         >
           {/* ── DATE RANGE SELECTION CARD ─────────────────────────── */}
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <View style={styles.cardHeader}>
-              <Ionicons name="calendar-outline" size={18} color="#2563eb" />
-              <Text style={styles.cardTitle}>Export Date Range</Text>
+              <Ionicons name="calendar-outline" size={18} color={theme.accentText} />
+              <Text style={[styles.cardTitle, { color: theme.text }]}>Export Date Range</Text>
             </View>
 
             {/* Quick Presets */}
             <View style={styles.presetsRow}>
               <TouchableOpacity
-                style={styles.presetChip}
+                style={[styles.presetChip, { backgroundColor: theme.accentSubtle }]}
                 onPress={() => applyPreset('today')}
               >
-                <Text style={styles.presetChipText}>Today</Text>
+                <Text style={[styles.presetChipText, { color: theme.accentText }]}>Today</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.presetChip}
+                style={[styles.presetChip, { backgroundColor: theme.accentSubtle }]}
                 onPress={() => applyPreset('7days')}
               >
-                <Text style={styles.presetChipText}>Last 7 Days</Text>
+                <Text style={[styles.presetChipText, { color: theme.accentText }]}>Last 7 Days</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.presetChip}
+                style={[styles.presetChip, { backgroundColor: theme.accentSubtle }]}
                 onPress={() => applyPreset('month')}
               >
-                <Text style={styles.presetChipText}>This Month</Text>
+                <Text style={[styles.presetChipText, { color: theme.accentText }]}>This Month</Text>
               </TouchableOpacity>
             </View>
 
             {/* Inputs */}
             <View style={styles.dateInputsRow}>
               <View style={styles.dateInputCol}>
-                <Text style={styles.inputLabel}>FROM DATE</Text>
-                <View style={styles.inputBox}>
-                  <Ionicons name="calendar" size={16} color="#64748b" />
+                <Text style={[styles.inputLabel, { color: theme.roomEyebrow }]}>FROM DATE</Text>
+                <View style={[styles.inputBox, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
+                  <Ionicons name="calendar" size={16} color={theme.textSecondary} />
                   <TextInput
-                    style={styles.dateInput}
+                    style={[styles.dateInput, { color: theme.text }]}
                     placeholder="YYYY-MM-DD"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor={theme.textTertiary}
                     value={startDate}
                     onChangeText={setStartDate}
                   />
@@ -238,13 +241,13 @@ export default function ExportsScreen() {
               </View>
 
               <View style={styles.dateInputCol}>
-                <Text style={styles.inputLabel}>TO DATE</Text>
-                <View style={styles.inputBox}>
-                  <Ionicons name="calendar" size={16} color="#64748b" />
+                <Text style={[styles.inputLabel, { color: theme.roomEyebrow }]}>TO DATE</Text>
+                <View style={[styles.inputBox, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}>
+                  <Ionicons name="calendar" size={16} color={theme.textSecondary} />
                   <TextInput
-                    style={styles.dateInput}
+                    style={[styles.dateInput, { color: theme.text }]}
                     placeholder="YYYY-MM-DD"
-                    placeholderTextColor="#94a3b8"
+                    placeholderTextColor={theme.textTertiary}
                     value={endDate}
                     onChangeText={setEndDate}
                   />
@@ -254,21 +257,21 @@ export default function ExportsScreen() {
           </View>
 
           {/* ── EXPORT CARD 1: POLICE REGISTER ─────────────────────── */}
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <View style={styles.exportHeader}>
-              <View style={styles.exportIconBox}>
-                <Ionicons name="shield-checkmark" size={24} color="#2563eb" />
+              <View style={[styles.exportIconBox, { backgroundColor: theme.accentSubtle }]}>
+                <Ionicons name="shield-checkmark" size={24} color={theme.accentText} />
               </View>
               <View style={styles.exportInfo}>
-                <Text style={styles.exportTitle}>Police Guest Register</Text>
-                <Text style={styles.exportSubtitle}>
+                <Text style={[styles.exportTitle, { color: theme.text }]}>Police Guest Register</Text>
+                <Text style={[styles.exportSubtitle, { color: theme.textSecondary }]}>
                   Standard Indian police record format with serial number, ID type, masked ID number, contact info, and room allocations.
                 </Text>
               </View>
             </View>
 
             <TouchableOpacity
-              style={[styles.exportBtn, styles.policeBtn]}
+              style={[styles.exportBtn, { backgroundColor: theme.accent }]}
               onPress={generateCSV}
               disabled={loadingType !== null}
               activeOpacity={0.8}
@@ -285,21 +288,21 @@ export default function ExportsScreen() {
           </View>
 
           {/* ── EXPORT CARD 2: FORM C (BoI) ───────────────────────── */}
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <View style={styles.exportHeader}>
-              <View style={[styles.exportIconBox, { backgroundColor: '#f0fdf4' }]}>
+              <View style={[styles.exportIconBox, { backgroundColor: '#dcfce7' }]}>
                 <MaterialCommunityIcons name="earth" size={24} color="#16a34a" />
               </View>
               <View style={styles.exportInfo}>
-                <Text style={styles.exportTitle}>Form C (Bureau of Immigration / BoI)</Text>
-                <Text style={styles.exportSubtitle}>
+                <Text style={[styles.exportTitle, { color: theme.text }]}>Form C (Bureau of Immigration / BoI)</Text>
+                <Text style={[styles.exportSubtitle, { color: theme.textSecondary }]}>
                   Official Bureau of Immigration (BoI) compliant CSV format for foreign nationals including passport, visa, embarkation and stay data.
                 </Text>
               </View>
             </View>
 
             <TouchableOpacity
-              style={[styles.exportBtn, styles.formCBtn]}
+              style={[styles.exportBtn, { backgroundColor: '#16a34a' }]}
               onPress={generateFormC}
               disabled={loadingType !== null}
               activeOpacity={0.8}
@@ -353,7 +356,8 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   cardTitle: {
-    fontSize: 15,
+    fontFamily: Fonts.serif,
+    fontSize: 17,
     fontWeight: '700',
     color: '#0f172a'
   },
@@ -384,7 +388,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#64748b',
-    letterSpacing: 0.5,
+    letterSpacing: 0.7,
     marginBottom: 6
   },
   inputBox: {
@@ -402,7 +406,8 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     color: '#0f172a',
-    fontWeight: '600'
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
   },
   exportHeader: {
     flexDirection: 'row',
@@ -421,15 +426,16 @@ const styles = StyleSheet.create({
     flex: 1
   },
   exportTitle: {
-    fontSize: 16,
+    fontFamily: Fonts.serif,
+    fontSize: 17,
     fontWeight: '700',
     color: '#0f172a',
     marginBottom: 4
   },
   exportSubtitle: {
-    fontSize: 12,
-    color: '#64748b',
-    lineHeight: 17
+    fontSize: 12.5,
+    color: '#475569',
+    lineHeight: 18
   },
   exportBtn: {
     flexDirection: 'row',
@@ -452,7 +458,7 @@ const styles = StyleSheet.create({
   },
   exportBtnText: {
     color: '#ffffff',
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '700'
   }
 });

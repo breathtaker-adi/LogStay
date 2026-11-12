@@ -3,6 +3,8 @@ import React from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { ScreenHeader } from '@/lib/screen-header';
+import { useTheme } from '@/hooks/use-theme';
+import { Fonts } from '@/constants/theme';
 
 interface PolicyCardProps {
   icon: any;
@@ -16,8 +18,9 @@ interface PolicyCardProps {
 }
 
 function PolicyCard({ icon, iconBg, iconColor, tag, tagBg, tagColor, title, children }: PolicyCardProps) {
+  const theme = useTheme();
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
       <View style={styles.cardHeader}>
         <View style={[styles.iconBox, { backgroundColor: iconBg }]}>
           <Ionicons name={icon} size={20} color={iconColor} />
@@ -26,7 +29,7 @@ function PolicyCard({ icon, iconBg, iconColor, tag, tagBg, tagColor, title, chil
           <View style={[styles.tagPill, { backgroundColor: tagBg }]}>
             <Text style={[styles.tagText, { color: tagColor }]}>{tag}</Text>
           </View>
-          <Text style={styles.sectionTitle}>{title}</Text>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>{title}</Text>
         </View>
       </View>
       <View style={styles.cardBody}>
@@ -37,8 +40,9 @@ function PolicyCard({ icon, iconBg, iconColor, tag, tagBg, tagColor, title, chil
 }
 
 export default function PrivacyScreen() {
+  const theme = useTheme();
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: theme.background }]}>
       <ScreenHeader
         title="Privacy & Security"
         subtitle="Guest data protection & compliance policy"
@@ -57,7 +61,7 @@ export default function PrivacyScreen() {
           tagColor="#1e40af"
           title="Why we collect guest data"
         >
-          <Text style={styles.bodyText}>
+          <Text style={[styles.bodyText, { color: theme.textSecondary }]}>
             As mandated by the Indian Bureau of Immigration and local State Police regulations, 
             all hotels, hostels, and guest houses are legally required to verify and retain 
             identification details of every residing guest.
@@ -76,20 +80,20 @@ export default function PrivacyScreen() {
         >
           <View style={styles.bulletList}>
             <View style={styles.bulletRow}>
-              <View style={styles.bulletDot} />
-              <Text style={styles.bulletText}>Full Legal Name & Phone Number</Text>
+              <View style={[styles.bulletDot, { backgroundColor: theme.accentText }]} />
+              <Text style={[styles.bulletText, { color: theme.textSecondary }]}>Full Legal Name & Phone Number</Text>
             </View>
             <View style={styles.bulletRow}>
-              <View style={styles.bulletDot} />
-              <Text style={styles.bulletText}>Nationality & Government ID Type (Aadhaar, Passport, Driving License)</Text>
+              <View style={[styles.bulletDot, { backgroundColor: theme.accentText }]} />
+              <Text style={[styles.bulletText, { color: theme.textSecondary }]}>Nationality & Government ID Type (Aadhaar, Passport, Driving License)</Text>
             </View>
             <View style={styles.bulletRow}>
-              <View style={styles.bulletDot} />
-              <Text style={styles.bulletText}>Secure capture photo of the government ID document</Text>
+              <View style={[styles.bulletDot, { backgroundColor: theme.accentText }]} />
+              <Text style={[styles.bulletText, { color: theme.textSecondary }]}>Secure capture photo of the government ID document</Text>
             </View>
             <View style={styles.bulletRow}>
-              <View style={styles.bulletDot} />
-              <Text style={styles.bulletText}>For foreign nationals: Visa type, number, arrival date, and port of entry (Form C)</Text>
+              <View style={[styles.bulletDot, { backgroundColor: theme.accentText }]} />
+              <Text style={[styles.bulletText, { color: theme.textSecondary }]}>For foreign nationals: Visa type, number, arrival date, and port of entry (Form C)</Text>
             </View>
           </View>
         </PolicyCard>
@@ -104,11 +108,11 @@ export default function PrivacyScreen() {
           tagColor="#92400e"
           title="Retention & 6-month photo purge"
         >
-          <Text style={styles.bodyText}>
+          <Text style={[styles.bodyText, { color: theme.textSecondary }]}>
             Guest ID photographs are stored in private encrypted storage and are automatically 
             purged after 6 months from check-in.
           </Text>
-          <Text style={[styles.bodyText, { marginTop: 8 }]}>
+          <Text style={[styles.bodyText, { color: theme.textSecondary, marginTop: 8 }]}>
             Text records (name, masked ID last-4, stay duration) are maintained solely for 
             the statutory period mandated by law for police register verification.
           </Text>
@@ -124,12 +128,12 @@ export default function PrivacyScreen() {
           tagColor="#9d174d"
           title="Access controls & view auditing"
         >
-          <Text style={styles.bodyText}>
+          <Text style={[styles.bodyText, { color: theme.textSecondary }]}>
             Guest records are strictly scoped to verified property staff. Whenever any staff member 
             opens or views a guest ID photo, an immutable record is logged to the property audit log 
             with timestamp and staff identifier.
           </Text>
-          <Text style={[styles.bodyText, { marginTop: 8 }]}>
+          <Text style={[styles.bodyText, { color: theme.textSecondary, marginTop: 8 }]}>
             Guest records and ID photos are never indexed, shared, or made public.
           </Text>
         </PolicyCard>
@@ -146,24 +150,24 @@ export default function PrivacyScreen() {
         >
           <View style={styles.bulletList}>
             <View style={styles.bulletRow}>
-              <View style={styles.bulletDot} />
-              <Text style={styles.bulletText}>Local offline database is encrypted with AES-256 (SQLCipher).</Text>
+              <View style={[styles.bulletDot, { backgroundColor: theme.accentText }]} />
+              <Text style={[styles.bulletText, { color: theme.textSecondary }]}>Local offline database is encrypted with AES-256 (SQLCipher).</Text>
             </View>
             <View style={styles.bulletRow}>
-              <View style={styles.bulletDot} />
-              <Text style={styles.bulletText}>Authentication sessions and security tokens are secured in the device hardware keystore.</Text>
+              <View style={[styles.bulletDot, { backgroundColor: theme.accentText }]} />
+              <Text style={[styles.bulletText, { color: theme.textSecondary }]}>Authentication sessions and security tokens are secured in the device hardware keystore.</Text>
             </View>
             <View style={styles.bulletRow}>
-              <View style={styles.bulletDot} />
-              <Text style={styles.bulletText}>Direct database table writes are revoked; all mutations pass through role-validated stored procedures.</Text>
+              <View style={[styles.bulletDot, { backgroundColor: theme.accentText }]} />
+              <Text style={[styles.bulletText, { color: theme.textSecondary }]}>Direct database table writes are revoked; all mutations pass through role-validated stored procedures.</Text>
             </View>
           </View>
         </PolicyCard>
 
         {/* Footer */}
         <View style={styles.footerNote}>
-          <MaterialCommunityIcons name="shield-lock-outline" size={16} color="#94a3b8" />
-          <Text style={styles.footerText}>LogStay Privacy & Security Engine v1.0</Text>
+          <MaterialCommunityIcons name="shield-lock-outline" size={16} color={theme.textTertiary} />
+          <Text style={[styles.footerText, { color: theme.textTertiary }]}>LogStay Privacy & Security Engine v1.0</Text>
         </View>
       </ScrollView>
     </View>
@@ -218,10 +222,11 @@ const styles = StyleSheet.create({
   tagText: {
     fontSize: 9.5,
     fontWeight: '700',
-    letterSpacing: 0.5
+    letterSpacing: 0.8
   },
   sectionTitle: {
-    fontSize: 16,
+    fontFamily: Fonts.serif,
+    fontSize: 17,
     fontWeight: '700',
     color: '#0f172a'
   },
@@ -245,7 +250,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#2563eb',
     marginTop: 7,
     marginRight: 10
   },
