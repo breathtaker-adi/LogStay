@@ -1,0 +1,69 @@
+name: Deploy Website to GitHub Pages
+
+on:
+  push:
+    branches: [ master, main ]
+    paths:
+      - 'logstay-website-v2/**'
+      - '.github/workflows/deploy-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Website Export
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Install Dependencies
+        working-directory: logstay-website-v2
+        run: |
+          npm install
+          npx prisma generate
+
+      - name: Build Next.js Static Export
+        working-directory: logstay-website-v2
+        env:
+          NEXT_PUBLIC_BASE_PATH: '/LogStay'
+          GITHUB_PAGES: 'true'
+          DATABASE_URL: 'file:./dev.db'
+        run: npx next build
+
+      - name: Add .nojekyll
+        run: touch logstay-website-v2/out/.nojekyll
+
+      - name: Upload Pages Artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: logstay-website-v2/out
+
+  deploy:
+    name: Deploy to GitHub Pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -18,6 +18,7 @@
   "exclude": [
     "node_modules",
     "supabase",
-    "Docs"
+    "Docs",
+    "logstay-website-v2"
   ]
 }

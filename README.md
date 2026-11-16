@@ -5,8 +5,8 @@
 Built with **Expo SDK 58**, **React Native 0.88**, **TypeScript**, and **Supabase PostgreSQL**. Designed for instant responsiveness, offline resilience, and statutory compliance (Form C international guest reporting, DPDP Act ID photo purge, and RBI-aligned UPI payment reconciliation).
 
 <p align="center">
-  <a href="https://logstay.app" target="_blank">
-    <img src="https://img.shields.io/badge/Website-logstay.app-0066FF?style=for-the-badge&logo=googlechrome&logoColor=white" alt="LogStay Website" />
+  <a href="https://breathtaker-adi.github.io/LogStay/" target="_blank">
+    <img src="https://img.shields.io/badge/Website-breathtaker--adi.github.io%2FLogStay-0066FF?style=for-the-badge&logo=githubpages&logoColor=white" alt="LogStay Website" />
   </a>
   <img src="https://img.shields.io/badge/Expo-SDK_58-000020?style=for-the-badge&logo=expo&logoColor=white" alt="Expo SDK 58" />
   <img src="https://img.shields.io/badge/React_Native-0.88-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React Native 0.88" />
@@ -28,7 +28,7 @@ Built with **Expo SDK 58**, **React Native 0.88**, **TypeScript**, and **Supabas
       <img src="assets/media/logstay-poster.jpg" alt="LogStay Product Showcase Video" width="100%" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.3);" />
     </a>
     <br />
-    <em>▶️ <b><a href="assets/media/logstay-showcase.mp4">Click here to download/stream full 1080p launch video</a></b> &bull; 🌐 <b><a href="https://logstay.app">Visit Official Website (logstay.app)</a></b></em>
+    <em>▶️ <b><a href="assets/media/logstay-showcase.mp4">Click here to download/stream full 1080p launch video</a></b> &bull; 🌐 <b><a href="https://breathtaker-adi.github.io/LogStay/">Visit Official Website & Interactive Demo</a></b></em>
   </p>
 </div>
 

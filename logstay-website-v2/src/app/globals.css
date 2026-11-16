@@ -1,0 +1,282 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-inter), var(--font-geist-sans);
+  --font-mono: var(--font-jetbrains), var(--font-geist-mono);
+  --font-serif: var(--font-fraunces);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  /* Atelier Noir semantic colors */
+  --color-ember: var(--ember);
+  --color-ember-light: var(--ember-light);
+  --color-bone: var(--bone);
+  --color-bone-muted: var(--bone-muted);
+  --color-stone: var(--stone);
+  --color-sage: var(--sage);
+  --color-sandstone: var(--sandstone);
+  --color-smoke: var(--smoke);
+}
+
+/* Atelier Noir — Dark-mode-first, warm obsidian + ember accent */
+:root {
+  --radius: 0.25rem;
+
+  /* Surface stack — warm dark, never cold */
+  --background: #0E0C0A;
+  --foreground: #EDE6D8;
+  --card: #1C1814;
+  --card-foreground: #EDE6D8;
+  --popover: #15110D;
+  --popover-foreground: #EDE6D8;
+  --primary: #C2683D;
+  --primary-foreground: #0E0C0A;
+  --secondary: #221C16;
+  --secondary-foreground: #EDE6D8;
+  --muted: #15110D;
+  --muted-foreground: #8A7E6C;
+  --accent: #C2683D;
+  --accent-foreground: #EDE6D8;
+  --destructive: #B85A48;
+  --border: #2A241D;
+  --input: #221C16;
+  --ring: #C2683D;
+
+  /* Atelier Noir semantic */
+  --ember: #C2683D;
+  --ember-light: #E89968;
+  --ember-text: #E89968;  /* readable ember for body text on dark */
+  --ember-bright: #F0A878; /* brighter ember for emphasis on dark */
+  --bone: #EDE6D8;
+  --bone-muted: #D8CDB8;
+  --stone: #8A7E6C;
+  --sage: #6B7A5A;
+  --sandstone: #B89A6E;
+  --smoke: #4A4640;
+
+  /* Charts */
+  --chart-1: #C2683D;
+  --chart-2: #6B7A5A;
+  --chart-3: #B89A6E;
+  --chart-4: #E89968;
+  --chart-5: #8A7E6C;
+
+  /* Sidebar */
+  --sidebar: #15110D;
+  --sidebar-foreground: #EDE6D8;
+  --sidebar-primary: #C2683D;
+  --sidebar-primary-foreground: #EDE6D8;
+  --sidebar-accent: #221C16;
+  --sidebar-accent-foreground: #EDE6D8;
+  --sidebar-border: #2A241D;
+  --sidebar-ring: #C2683D;
+}
+
+.light {
+  /* Warm parchment light mode */
+  --background: #F5EFE3;
+  --foreground: #1A1612;
+  --card: #FFFFFF;
+  --card-foreground: #1A1612;
+  --popover: #FFFFFF;
+  --popover-foreground: #1A1612;
+  --primary: #C2683D;
+  --primary-foreground: #F5EFE3;
+  --secondary: #EDE5D4;
+  --secondary-foreground: #1A1612;
+  --muted: #EDE5D4;
+  --muted-foreground: #6B6258;
+  --accent: #C2683D;
+  --accent-foreground: #F5EFE3;
+  --destructive: #B85A48;
+  --border: #D8CDB8;
+  --input: #EDE5D4;
+  --ring: #C2683D;
+
+  /* Atelier Noir semantic — preserved across modes */
+  --ember: #B85A2E;  /* darker ember for light mode contrast */
+  --ember-light: #B85A2E;
+  --ember-text: #A04F2A;  /* darker ember for body text on parchment */
+  --ember-bright: #C2683D;
+  --bone: #1A1612;
+  --bone-muted: #4A4640;
+  --stone: #6B6258;
+  --sage: #6B7A5A;
+  --sandstone: #B89A6E;
+  --smoke: #4A4640;
+
+  --chart-1: #C2683D;
+  --chart-2: #6B7A5A;
+  --chart-3: #B89A6E;
+  --chart-4: #E89968;
+  --chart-5: #8A7E6C;
+
+  --sidebar: #EDE5D4;
+  --sidebar-foreground: #1A1612;
+  --sidebar-primary: #C2683D;
+  --sidebar-primary-foreground: #F5EFE3;
+  --sidebar-accent: #EDE5D4;
+  --sidebar-accent-foreground: #1A1612;
+  --sidebar-border: #D8CDB8;
+  --sidebar-ring: #C2683D;
+}
+
+/* Default dark mode applied directly to html */
+html.dark {
+  /* Uses :root defaults above (dark-mode-first) */
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "ss01", "ss02";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  /* Selection */
+  ::selection {
+    background: rgba(194, 104, 61, 0.3);
+    color: var(--bone);
+  }
+  /* Custom scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: var(--background); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--ember); }
+}
+
+/* === Atelier Noir Utility Classes === */
+@layer utilities {
+  .font-serif { font-family: var(--font-fraunces), 'Times New Roman', Georgia, serif; }
+  .font-display { font-family: var(--font-fraunces), serif; font-variation-settings: 'opsz' 144, 'wght' 360; }
+  .font-headline { font-family: var(--font-fraunces), serif; font-variation-settings: 'opsz' 72, 'wght' 420; }
+  .font-title { font-family: var(--font-fraunces), serif; font-variation-settings: 'opsz' 48, 'wght' 460; }
+  .font-subsection { font-family: var(--font-fraunces), serif; font-variation-settings: 'opsz' 36, 'wght' 460; }
+  .font-body-serif { font-family: var(--font-fraunces), serif; font-variation-settings: 'opsz' 24, 'wght' 380; }
+
+  .text-ember { color: var(--ember); }
+  .text-bone { color: var(--bone); }
+  .text-bone-muted { color: var(--bone-muted); }
+  .text-stone { color: var(--stone); }
+
+  .bg-ink { background: var(--background); }
+  .bg-surface { background: var(--card); }
+  .bg-section { background: var(--popover); }
+
+  .border-hairline { border-color: var(--border); }
+
+  .tracking-eyebrow { letter-spacing: 0.28em; text-transform: uppercase; }
+  .tracking-mono { letter-spacing: 0.18em; text-transform: uppercase; }
+
+  /* Glassmorphic ember glow for cards on hover */
+  .ember-glow {
+    box-shadow: 0 0 0 1px var(--border), 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+  .ember-glow-accent {
+    box-shadow: 0 0 0 1px rgba(194, 104, 61, 0.4), 0 8px 32px rgba(194, 104, 61, 0.15);
+  }
+
+  /* Aurora radial — more dramatic for hero */
+  .aurora-bg {
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 0%, rgba(194, 104, 61, 0.22), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 30%, rgba(232, 153, 104, 0.18), transparent 65%),
+      radial-gradient(ellipse 50% 35% at 15% 70%, rgba(107, 122, 90, 0.12), transparent 70%),
+      radial-gradient(ellipse 100% 60% at 50% 100%, rgba(194, 104, 61, 0.15), transparent 70%);
+  }
+
+  /* Hairline grid background */
+  .grid-bg {
+    background-image:
+      linear-gradient(to right, rgba(216, 205, 184, 0.025) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(216, 205, 184, 0.025) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+
+  /* Perspective grid floor — warm synthwave-style */
+  .grid-floor {
+    background-image:
+      linear-gradient(to right, rgba(194, 104, 61, 0.18) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(194, 104, 61, 0.18) 1px, transparent 1px);
+    background-size: 60px 60px;
+    transform: perspective(400px) rotateX(60deg) translateY(20%);
+    transform-origin: bottom center;
+    mask-image: linear-gradient(to top, rgba(0,0,0,1) 0%, transparent 80%);
+    -webkit-mask-image: linear-gradient(to top, rgba(0,0,0,1) 0%, transparent 80%);
+  }
+
+  /* Film grain texture overlay */
+  .grain {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+    opacity: 0.06;
+    mix-blend-mode: overlay;
+  }
+
+  /* Text gradient — ember to bone */
+  .text-gradient-ember {
+    background: linear-gradient(135deg, var(--ember-bright), var(--ember) 60%, var(--bone-muted));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  /* Readable ember text — uses --ember-text token which adapts per mode */
+  .text-ember-readable {
+    color: var(--ember-text);
+  }
+}
+
+/* Lenis smooth scroll */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-stopped { overflow: hidden; }
+.lenis.lenis-smooth iframe { pointer-events: none; }
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

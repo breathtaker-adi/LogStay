@@ -9,6 +9,11 @@ dist/
 web-build/
 expo-env.d.ts
 
+# Next.js Web Build
+.next/
+logstay-website-v2/out/
+logstay-website-v2/.env
+
 # Native
 .kotlin/
 *.orig.*
