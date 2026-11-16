@@ -5,6 +5,7 @@ const repoName = "/LogStay";
 
 const nextConfig: NextConfig = {
   output: "export",
+  trailingSlash: true,
   basePath: process.env.NEXT_PUBLIC_BASE_PATH ?? (isGithubPages ? repoName : ""),
   assetPrefix: process.env.NEXT_PUBLIC_BASE_PATH ?? (isGithubPages ? repoName : undefined),
   images: {
