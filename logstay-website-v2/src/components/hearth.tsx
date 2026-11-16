@@ -235,7 +235,7 @@ export function Hearth({
     <canvas
       ref={canvasRef}
       aria-hidden="true"
-      className={`pointer-events-none fixed inset-0 z-0 h-full w-full ${className}`}
+      className={`pointer-events-none fixed inset-0 z-0 h-full w-full hidden dark:block ${className}`}
       style={{
         background:
           "radial-gradient(ellipse 70% 50% at 50% 30%, rgba(194,104,61,0.06), transparent 70%)",

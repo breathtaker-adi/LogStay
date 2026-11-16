@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowDown, Wifi, WifiOff, ScanLine } from "lucide-react";
+import { ArrowDown, ScanLine } from "lucide-react";
 import { MagneticButton } from "@/components/magnetic-button";
 
 /**
@@ -21,13 +21,15 @@ export function Hero() {
     <section className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 py-24 text-center md:px-12">
       {/* Layered background */}
       <div aria-hidden className="pointer-events-none absolute inset-0 z-0">
-        {/* Base aurora gradients */}
-        <div className="absolute inset-0 aurora-bg" />
+        {/* Base aurora gradients in dark mode */}
+        <div className="absolute inset-0 aurora-bg hidden dark:block" />
+        {/* Subtle light mesh in light mode */}
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-50/60 via-white to-white dark:hidden" />
         {/* Perspective grid floor */}
-        <div className="absolute inset-x-0 bottom-0 h-[60vh] grid-floor opacity-60" />
-        {/* Top vignette to deepen the sky */}
+        <div className="absolute inset-x-0 bottom-0 h-[60vh] grid-floor opacity-30 dark:opacity-60" />
+        {/* Top vignette to deepen the sky in dark mode */}
         <div
-          className="absolute inset-x-0 top-0 h-[40vh]"
+          className="absolute inset-x-0 top-0 h-[40vh] hidden dark:block"
           style={{
             background:
               "linear-gradient(to bottom, rgba(14,12,10,0.9), transparent)",
@@ -42,29 +44,11 @@ export function Hero() {
           }}
         />
         {/* Film grain */}
-        <div className="absolute inset-0 grain" />
+        <div className="absolute inset-0 grain hidden dark:block" />
       </div>
 
       {/* Content */}
       <div className="relative z-10 flex flex-col items-center">
-        {/* Eyebrow */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
-          className="mb-10 flex items-center gap-3 rounded-full border border-border bg-card/60 px-4 py-1.5 backdrop-blur"
-        >
-          <WifiOff className="h-3 w-3 text-ember-readable" />
-          <span className="font-mono text-[10px] tracking-eyebrow text-bone-muted">
-            Works without internet
-          </span>
-          <span className="text-stone">·</span>
-          <Wifi className="h-3 w-3 text-sage" />
-          <span className="font-mono text-[10px] tracking-eyebrow text-bone-muted">
-            Syncs when online
-          </span>
-        </motion.div>
-
         {/* Hero headline — two lines */}
         <h1 className="font-display max-w-5xl text-5xl leading-[0.95] tracking-tight text-bone sm:text-7xl md:text-8xl">
           {line1.map((word, i) => (

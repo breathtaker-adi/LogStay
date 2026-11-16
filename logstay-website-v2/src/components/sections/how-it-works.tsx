@@ -50,7 +50,7 @@ export function HowItWorksSection() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-3">
         {STEPS.map((step, i) => {
           const Icon = step.icon;
           return (
@@ -60,37 +60,39 @@ export function HowItWorksSection() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-60px" }}
               transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: i * 0.12 }}
-              className="relative rounded-md border border-border bg-card p-6 md:p-8"
+              className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-border/80 bg-card p-6 md:p-8 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06),0_2px_6px_-2px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.5)] transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_20px_35px_-8px_rgba(0,0,0,0.12),0_8px_16px_-4px_rgba(0,0,0,0.06)] dark:hover:shadow-[0_20px_40px_-8px_rgba(0,0,0,0.8)] hover:border-ember/40"
             >
-              {/* Big number ghost */}
+              {/* Big number ghost contained within the card */}
               <div
-                className="absolute -right-2 -top-4 font-display text-8xl leading-none opacity-10 select-none"
+                className="pointer-events-none absolute right-4 top-3 select-none font-display text-7xl font-bold leading-none opacity-[0.08] dark:opacity-10 transition-opacity duration-300 group-hover:opacity-15 md:text-8xl"
                 style={{ color: step.color }}
                 aria-hidden
               >
                 {step.num}
               </div>
 
-              <div
-                className="mb-6 flex h-12 w-12 items-center justify-center rounded-md border"
-                style={{ borderColor: `${step.color}55`, background: `${step.color}15` }}
-              >
-                <Icon className="h-5 w-5" style={{ color: step.color }} />
+              <div>
+                <div
+                  className="mb-6 flex h-12 w-12 items-center justify-center rounded-xl border transition-transform duration-300 group-hover:scale-105"
+                  style={{ borderColor: `${step.color}55`, background: `${step.color}15` }}
+                >
+                  <Icon className="h-5 w-5" style={{ color: step.color }} />
+                </div>
+
+                <div className="mb-2 font-mono text-[10px] font-semibold tracking-mono text-stone">
+                  Step {step.num}
+                </div>
+                <h3 className="font-subsection text-xl font-semibold leading-snug text-bone">
+                  {step.title}
+                </h3>
+                <p className="mt-3 text-sm leading-relaxed text-stone">
+                  {step.body}
+                </p>
               </div>
 
-              <div className="mb-2 font-mono text-[10px] tracking-mono text-stone">
-                Step {step.num}
-              </div>
-              <h3 className="font-subsection text-xl leading-snug text-bone">
-                {step.title}
-              </h3>
-              <p className="mt-3 text-sm leading-relaxed text-stone">
-                {step.body}
-              </p>
-
               <div
-                className="mt-6 inline-block rounded-full border px-3 py-1 font-mono text-[10px] tracking-mono"
-                style={{ borderColor: `${step.color}55`, color: step.color }}
+                className="mt-6 inline-flex w-fit items-center rounded-full border px-3 py-1 font-mono text-[10px] tracking-mono font-medium"
+                style={{ borderColor: `${step.color}55`, color: step.color, background: `${step.color}08` }}
               >
                 {step.detail}
               </div>

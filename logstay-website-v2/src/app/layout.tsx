@@ -44,7 +44,12 @@ export const metadata: Metadata = {
   ],
   authors: [{ name: "LogStay Technologies" }],
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: [
+      { url: "/LogStay/logo.svg", type: "image/svg+xml" },
+      { url: "/LogStay/favicon.png", type: "image/png" },
+    ],
+    shortcut: "/LogStay/favicon.png",
+    apple: "/LogStay/icon.png",
   },
   openGraph: {
     title: "LogStay — Your front desk, always open.",
@@ -67,13 +72,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" className="light" suppressHydrationWarning>
       <body
         className={`${fraunces.variable} ${inter.variable} ${jetbrainsMono.variable} antialiased bg-background text-foreground`}
       >
         <ThemeProvider
           attribute="class"
-          defaultTheme="dark"
+          defaultTheme="light"
           enableSystem={false}
           disableTransitionOnChange
         >

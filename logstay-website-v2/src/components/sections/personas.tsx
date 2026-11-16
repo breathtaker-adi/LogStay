@@ -57,7 +57,7 @@ export function PersonasSection() {
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-2">
         {PERSONAS.map((p, i) => {
           const Icon = p.icon;
           return (
@@ -67,20 +67,29 @@ export function PersonasSection() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-50px" }}
               transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: i * 0.08 }}
-              className="group relative overflow-hidden rounded-md border border-border bg-card p-6 md:p-8"
+              className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-border/80 bg-card p-6 md:p-8 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06),0_2px_6px_-2px_rgba(0,0,0,0.04)] dark:shadow-[0_4px_24px_-4px_rgba(0,0,0,0.5)] transition-all duration-300 hover:-translate-y-1.5 hover:shadow-[0_20px_35px_-8px_rgba(0,0,0,0.12),0_8px_16px_-4px_rgba(0,0,0,0.06)] dark:hover:shadow-[0_20px_40px_-8px_rgba(0,0,0,0.8)] hover:border-ember/40"
             >
+              {/* Subtle top ambient accent bar on hover */}
+              <div
+                className="absolute inset-x-0 top-0 h-1 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                style={{ background: `linear-gradient(to right, ${p.color}, transparent)` }}
+              />
+
               <div className="flex items-start gap-5">
                 <div
-                  className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-md border"
+                  className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border transition-transform duration-300 group-hover:scale-105"
                   style={{ borderColor: `${p.color}55`, background: `${p.color}15` }}
                 >
                   <Icon className="h-5 w-5" style={{ color: p.color }} />
                 </div>
                 <div className="flex-1">
-                  <div className="font-mono text-[10px] tracking-mono text-stone">
+                  <span
+                    className="inline-block rounded-full px-2.5 py-0.5 font-mono text-[10px] font-semibold tracking-mono"
+                    style={{ background: `${p.color}15`, color: p.color }}
+                  >
                     {p.role}
-                  </div>
-                  <h3 className="mt-1 font-subsection text-lg leading-snug text-bone">
+                  </span>
+                  <h3 className="mt-2.5 font-subsection text-lg font-semibold leading-snug text-bone">
                     {p.title}
                   </h3>
                   <p className="mt-3 text-sm leading-relaxed text-stone">
@@ -89,12 +98,12 @@ export function PersonasSection() {
                 </div>
               </div>
 
-              <div className="mt-6 flex items-center gap-3 border-t border-border pt-4">
-                <span className="font-mono text-[10px] tracking-mono text-stone">
+              <div className="mt-6 flex items-center justify-between border-t border-border/80 pt-4">
+                <span className="font-mono text-[10px] font-medium tracking-mono text-stone">
                   The business impact
                 </span>
                 <span
-                  className="font-mono text-sm"
+                  className="font-mono text-xs font-semibold"
                   style={{ color: p.color }}
                 >
                   {p.impact}

@@ -53,11 +53,62 @@
   --color-smoke: var(--smoke);
 }
 
-/* Atelier Noir — Dark-mode-first, warm obsidian + ember accent */
+/* Light-mode-first (clean white), dark mode toggled with .dark */
 :root {
-  --radius: 0.25rem;
+  --radius: 0.5rem;
 
-  /* Surface stack — warm dark, never cold */
+  /* Clean white surface stack */
+  --background: #FFFFFF;
+  --foreground: #111827;
+  --card: #FFFFFF;
+  --card-foreground: #111827;
+  --popover: #FFFFFF;
+  --popover-foreground: #111827;
+  --primary: #C2683D;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F8FAFC;
+  --secondary-foreground: #1E293B;
+  --muted: #F1F5F9;
+  --muted-foreground: #64748B;
+  --accent: #C2683D;
+  --accent-foreground: #FFFFFF;
+  --destructive: #EF4444;
+  --border: #E2E8F0;
+  --input: #F1F5F9;
+  --ring: #C2683D;
+
+  /* Brand semantic colors — high contrast for white background */
+  --ember: #C2683D;
+  --ember-light: #B85A2E;
+  --ember-text: #B85A2E;
+  --ember-bright: #9E431B;
+  --bone: #0F172A;
+  --bone-muted: #334155;
+  --stone: #64748B;
+  --sage: #15803D;
+  --sandstone: #B45309;
+  --smoke: #94A3B8;
+
+  /* Charts */
+  --chart-1: #C2683D;
+  --chart-2: #15803D;
+  --chart-3: #B45309;
+  --chart-4: #EA580C;
+  --chart-5: #64748B;
+
+  /* Sidebar */
+  --sidebar: #F8FAFC;
+  --sidebar-foreground: #0F172A;
+  --sidebar-primary: #C2683D;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F1F5F9;
+  --sidebar-accent-foreground: #0F172A;
+  --sidebar-border: #E2E8F0;
+  --sidebar-ring: #C2683D;
+}
+
+.dark {
+  /* Atelier Noir — Warm obsidian + ember accent */
   --background: #0E0C0A;
   --foreground: #EDE6D8;
   --card: #1C1814;
@@ -77,11 +128,10 @@
   --input: #221C16;
   --ring: #C2683D;
 
-  /* Atelier Noir semantic */
   --ember: #C2683D;
   --ember-light: #E89968;
-  --ember-text: #E89968;  /* readable ember for body text on dark */
-  --ember-bright: #F0A878; /* brighter ember for emphasis on dark */
+  --ember-text: #E89968;
+  --ember-bright: #F0A878;
   --bone: #EDE6D8;
   --bone-muted: #D8CDB8;
   --stone: #8A7E6C;
@@ -89,14 +139,12 @@
   --sandstone: #B89A6E;
   --smoke: #4A4640;
 
-  /* Charts */
   --chart-1: #C2683D;
   --chart-2: #6B7A5A;
   --chart-3: #B89A6E;
   --chart-4: #E89968;
   --chart-5: #8A7E6C;
 
-  /* Sidebar */
   --sidebar: #15110D;
   --sidebar-foreground: #EDE6D8;
   --sidebar-primary: #C2683D;
@@ -108,57 +156,50 @@
 }
 
 .light {
-  /* Warm parchment light mode */
-  --background: #F5EFE3;
-  --foreground: #1A1612;
+  --background: #FFFFFF;
+  --foreground: #111827;
   --card: #FFFFFF;
-  --card-foreground: #1A1612;
+  --card-foreground: #111827;
   --popover: #FFFFFF;
-  --popover-foreground: #1A1612;
+  --popover-foreground: #111827;
   --primary: #C2683D;
-  --primary-foreground: #F5EFE3;
-  --secondary: #EDE5D4;
-  --secondary-foreground: #1A1612;
-  --muted: #EDE5D4;
-  --muted-foreground: #6B6258;
+  --primary-foreground: #FFFFFF;
+  --secondary: #F8FAFC;
+  --secondary-foreground: #1E293B;
+  --muted: #F1F5F9;
+  --muted-foreground: #64748B;
   --accent: #C2683D;
-  --accent-foreground: #F5EFE3;
-  --destructive: #B85A48;
-  --border: #D8CDB8;
-  --input: #EDE5D4;
+  --accent-foreground: #FFFFFF;
+  --destructive: #EF4444;
+  --border: #E2E8F0;
+  --input: #F1F5F9;
   --ring: #C2683D;
 
-  /* Atelier Noir semantic — preserved across modes */
-  --ember: #B85A2E;  /* darker ember for light mode contrast */
+  --ember: #C2683D;
   --ember-light: #B85A2E;
-  --ember-text: #A04F2A;  /* darker ember for body text on parchment */
-  --ember-bright: #C2683D;
-  --bone: #1A1612;
-  --bone-muted: #4A4640;
-  --stone: #6B6258;
-  --sage: #6B7A5A;
-  --sandstone: #B89A6E;
-  --smoke: #4A4640;
+  --ember-text: #B85A2E;
+  --ember-bright: #9E431B;
+  --bone: #0F172A;
+  --bone-muted: #334155;
+  --stone: #64748B;
+  --sage: #15803D;
+  --sandstone: #B45309;
+  --smoke: #94A3B8;
 
   --chart-1: #C2683D;
-  --chart-2: #6B7A5A;
-  --chart-3: #B89A6E;
-  --chart-4: #E89968;
-  --chart-5: #8A7E6C;
+  --chart-2: #15803D;
+  --chart-3: #B45309;
+  --chart-4: #EA580C;
+  --chart-5: #64748B;
 
-  --sidebar: #EDE5D4;
-  --sidebar-foreground: #1A1612;
+  --sidebar: #F8FAFC;
+  --sidebar-foreground: #0F172A;
   --sidebar-primary: #C2683D;
-  --sidebar-primary-foreground: #F5EFE3;
-  --sidebar-accent: #EDE5D4;
-  --sidebar-accent-foreground: #1A1612;
-  --sidebar-border: #D8CDB8;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: #F1F5F9;
+  --sidebar-accent-foreground: #0F172A;
+  --sidebar-border: #E2E8F0;
   --sidebar-ring: #C2683D;
-}
-
-/* Default dark mode applied directly to html */
-html.dark {
-  /* Uses :root defaults above (dark-mode-first) */
 }
 
 @layer base {
