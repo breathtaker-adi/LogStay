@@ -1,43 +1,44 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Crown, Users, ConciergeBell, Brush } from "lucide-react";
+import { Crown, Users, ConciergeBell, Sparkles } from "lucide-react";
 
 /**
- * PersonasSection — the 4 roles LogStay serves.
+ * PersonasSection — The 4 roles LogStay serves.
+ * High-impact sales framing showing how every team member wins.
  */
 const PERSONAS = [
   {
     icon: Crown,
-    role: "For the owner",
-    title: "Run the property from anywhere.",
-    body: "A live multi-property dashboard. Instant push alerts when a cash drawer doesn't balance. Automated compliance logging that holds up in any audit.",
-    impact: "Recovers 5–8% leaked margin",
+    role: "For the Property Owner",
+    title: "Complete peace of mind from anywhere in the world.",
+    body: "Real-time occupancy and revenue on your phone. Instant push alerts if a cash drawer has a variance. Zero stress over missing cash or lost booking revenue, whether you are on property or traveling abroad.",
+    impact: "Recovers 5–9% leaked profit annually",
     color: "#C2683D",
   },
   {
     icon: Users,
-    role: "For the manager",
-    title: "Stop auditing shift sheets by hand.",
-    body: "Automatic shift-change reconciliation. One-tap seasonal rate changes. Cryptographic audit trails for every override, so disputes end in seconds, not hours.",
-    impact: "15+ hours back every week",
+    role: "For the General Manager",
+    title: "Reclaim 15+ hours every week from paperwork.",
+    body: "End manual shift tallying and dispute resolution. Shift handovers are verified automatically. Adjust seasonal rates in one tap, and export official Form C foreign registration without tedious manual data entry.",
+    impact: "15+ hours saved every week",
     color: "#E89968",
   },
   {
     icon: ConciergeBell,
-    role: "For the front desk",
-    title: "End the reception queue.",
-    body: "Three-second passport scans. Drag-and-drop bed assignment. WhatsApp PDF receipts. The wifi can drop mid-check-in and nobody notices.",
-    impact: "Zero check-in queues",
+    role: "For Front Desk Staff",
+    title: "Check in guests faster than they put down their bags.",
+    body: "Three-second optical passport scans. Tap to assign any bed on a visual floor grid. Digital receipts delivered straight to WhatsApp. Even when the Wi-Fi completely dies in a storm, reception never slows down.",
+    impact: "Zero reception lines & zero typos",
     color: "#B89A6E",
   },
   {
-    icon: Brush,
-    role: "For housekeeping",
-    title: "Know exactly what to clean next.",
-    body: "A distraction-free task queue sorted by urgency. One tap to mark a bed clean — and the front desk instantly sees it's ready for the next guest.",
-    impact: "35% faster room turnover",
-    color: "#6B7A5A",
+    icon: Sparkles,
+    role: "For Housekeeping Teams",
+    title: "Turn rooms 35% faster with zero hallway shouting.",
+    body: "A clean, distraction-free priority queue right on the cleaner's phone. Tap to mark a room clean, and front desk sees the room turn green instantly. No more confusion over which room is ready for arrivals.",
+    impact: "35% faster room turnover speed",
+    color: "#5B8C67",
   },
 ];
 
@@ -49,11 +50,11 @@ export function PersonasSection() {
           Who it's for
         </div>
         <h2 className="font-headline text-4xl leading-tight text-bone md:text-5xl">
-          Built for the four people <span className="italic text-ember-readable">who actually run the place.</span>
+          Built for the four people <span className="italic text-ember-readable">who actually run your property.</span>
         </h2>
         <p className="mt-4 font-body-serif text-base text-stone">
-          Every role sees a different view of the same property —
-          and no one can do something they shouldn't.
+          Each team member gets a focused, distraction-free view designed for their exact workflow.
+          Zero confusing clutter, and total operational harmony.
         </p>
       </div>
 
@@ -84,29 +85,26 @@ export function PersonasSection() {
                 </div>
                 <div className="flex-1">
                   <span
-                    className="inline-block rounded-full px-2.5 py-0.5 font-mono text-[10px] font-semibold tracking-mono"
+                    className="inline-block rounded-full px-2.5 py-0.5 font-mono text-[10px] font-bold tracking-mono uppercase"
                     style={{ background: `${p.color}15`, color: p.color }}
                   >
                     {p.role}
                   </span>
-                  <h3 className="mt-2.5 font-subsection text-lg font-semibold leading-snug text-bone">
+                  <h3 className="mt-2.5 font-subsection text-lg font-bold leading-snug text-bone">
                     {p.title}
                   </h3>
-                  <p className="mt-3 text-sm leading-relaxed text-stone">
+                  <p className="mt-3 font-body-serif text-sm leading-relaxed text-stone">
                     {p.body}
                   </p>
                 </div>
               </div>
 
               <div className="mt-6 flex items-center justify-between border-t border-border/80 pt-4">
-                <span className="font-mono text-[10px] font-medium tracking-mono text-stone">
-                  The business impact
-                </span>
-                <span
-                  className="font-mono text-xs font-semibold"
-                  style={{ color: p.color }}
-                >
+                <span className="font-mono text-xs font-semibold" style={{ color: p.color }}>
                   {p.impact}
+                </span>
+                <span className="font-mono text-[10px] tracking-mono text-stone">
+                  Role-isolated view
                 </span>
               </div>
             </motion.div>

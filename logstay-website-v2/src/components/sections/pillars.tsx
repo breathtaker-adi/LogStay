@@ -1,57 +1,58 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Database, ScanLine, Radar, ShieldCheck, KeyRound } from "lucide-react";
+import { Zap, ScanLine, DollarSign, ShieldCheck, Lock } from "lucide-react";
 
 /**
- * PillarsSection — the 5 things that make LogStay different.
- * Plain language translation of the technical pillars.
+ * PillarsSection — What makes LogStay different.
+ * High-converting product showcase translating technical superiority into direct business advantages.
+ * Built with the sticky stacking card scroll animation from index.html (02 — THE SYSTEM).
  */
 const PILLARS = [
   {
-    icon: Database,
-    num: "P—01",
-    subtitle: "0MS UI BLOCKING · OFFLINE-NATIVE",
-    title: "It works on the phone, not in the cloud.",
-    body: "Every tap, check-in, and room assignment runs against an embedded SQLite database on the device itself via synchronous C++ bindings — 0ms blocking. When the internet returns, mutations replicate bidirectionally to Supabase automatically.",
-    proof: "0ms response time · zero cloud gatekeeper",
+    icon: Zap,
+    num: "01",
+    subtitle: "OFFLINE-NATIVE SPEED · ZERO CLOUD CRASHES",
+    title: "Never Drops. Never Freezes. Zero Downtime.",
+    body: "Every check-in, bed assignment, and receipt processes in 0ms on your phone. Even when heavy storms take down local fiber lines, your front desk keeps moving at full speed. All changes sync silently the instant you're back online.",
+    proof: "Instant 0ms taps · 100% operational in storms",
     color: "#C2683D",
   },
   {
     icon: ScanLine,
-    num: "P—02",
-    subtitle: "120MS EDGE SCAN · $0.00 PER SCAN",
-    title: "Scan a passport in 3 seconds.",
-    body: "Point the camera at any international passport. Native on-device inference decodes the ICAO 9303 machine-readable zone in 120ms without third-party API fees or internet access. The guest is checked in before they finish saying their name.",
-    proof: "120ms optical scan · $0 cost per scan",
+    num: "02",
+    subtitle: "INSTANT PASSPORT SCAN · $0.00 PER SCAN",
+    title: "Point, Scan, Done in 3 Seconds. Zero Typos.",
+    body: "Hold your phone over any international passport. The built-in scanner decodes names, passport IDs, nationalities, and birthdates in 120ms with 100% optical accuracy. Your guests are checked in before they even set their backpacks down.",
+    proof: "3-second check-in · $0 scan fees",
     color: "#E89968",
   },
   {
-    icon: Radar,
-    num: "P—03",
-    subtitle: "ANTI-THEFT DRAWER RECONCILIATION",
-    title: "Cash that doesn't go missing.",
-    body: "At every shift handover, incoming and outgoing clerks co-sign the cash drawer. LogStay evaluates Δ = Physical − (Opening + Inflows − Outflows). Zero variance signs the ledger; any discrepancy locks the handover and alerts the owner instantly.",
-    proof: "Catches 100% of cash anomalies",
+    icon: DollarSign,
+    num: "03",
+    subtitle: "DUAL-KEY CASH RECONCILIATION",
+    title: "Total Cash Accountability. Zero Mystery Discrepancies.",
+    body: "Stop unexplained drawer shortages. Incoming and outgoing staff co-verify the cash drawer during shift changes. If a single dollar is missing, the shift locks, requires an explanation, and notifies the owner immediately on their personal device.",
+    proof: "Eliminates 100% of shift cash leaks",
     color: "#B89A6E",
   },
   {
     icon: ShieldCheck,
-    num: "P—04",
-    subtitle: "DETERMINISTIC 02:00 UTC AUTO PURGE",
-    title: "Guest photos auto-delete at 2 AM.",
-    body: "Identity snapshots are temporary verification buffers, not trophies. LogStay permanently shreds expired passport photos from storage, zeroes DB pointers, and records an immutable audit receipt. Your DPDP Act compliance happens while you sleep.",
-    proof: "Automated DPDP Act 90-day purge",
-    color: "#6B7A5A",
+    num: "04",
+    subtitle: "AUTOMATED 02:00 AM COMPLIANCE SHREDDER",
+    title: "Automated Peace of Mind. Auto-Shreds ID Photos at 2 AM.",
+    body: "Storing guest IDs on staff phones creates massive legal risks under data privacy laws. LogStay automatically scrubs expired passport photos from memory every night at 2:00 AM and records cryptographic proof. Stay completely audit-proof without doing any work.",
+    proof: "100% automated DPDP Act compliance",
+    color: "#5B8C67",
   },
   {
-    icon: KeyRound,
-    num: "P—05",
-    subtitle: "ZERO-PIN · RLS DATABASE SANDBOX",
-    title: "Each staff member sees only what they need.",
-    body: "Owner, Co-Admin, Front Desk, and Housekeeping — enforced strictly at the PostgreSQL Row Level Security layer. Receptionists cannot see profit margins, admins cannot purge financial ledgers, and housekeeping cannot alter bills. No shared PINs.",
-    proof: "Cryptographic invite codes · strict RBAC",
-    color: "#D8CDB8",
+    icon: Lock,
+    num: "05",
+    subtitle: "ROLE-BASED STAFF ISOLATION",
+    title: "Each Team Member Sees Exactly What They Need.",
+    body: "Receptionists check in guests, housekeepers manage their cleaning queue, and only owners see financial revenue and profit margins. Zero shared passwords, zero confusing menus, and zero risk of accidental bill alterations.",
+    proof: "Instant 1-tap staff onboarding · Complete security",
+    color: "#4E7B5C",
   },
 ];
 
@@ -63,13 +64,12 @@ export function PillarsSection() {
           02 — THE SYSTEM · What makes LogStay different
         </div>
         <h2 className="font-headline text-4xl leading-tight text-bone md:text-5xl">
-          Five structural pillars. <br />
-          <span className="italic text-ember-readable">Not features — physics.</span>
+          Five structural advantages. <br />
+          <span className="italic text-ember-readable">Built to protect your revenue and sanity.</span>
         </h2>
         <p className="mt-4 font-body-serif text-base text-stone">
-          LogStay isn't a booking widget with an offline mode bolted on. Five load-bearing
-          architectural decisions make it an inertial navigation system for hospitality —
-          each one verified in production.
+          LogStay isn't clunky desktop software repackaged into an app. Five proprietary design choices
+          turn your front desk into an unstoppable operational engine.
         </p>
       </div>
 
@@ -100,34 +100,41 @@ export function PillarsSection() {
                     {p.num}
                   </span>
                   <div
-                    className="flex h-12 w-12 items-center justify-center rounded-xl border transition-transform duration-300 group-hover:scale-105"
-                    style={{ borderColor: `${p.color}55`, background: `${p.color}15` }}
+                    className="flex h-11 w-11 items-center justify-center rounded-xl border"
+                    style={{ borderColor: `${p.color}40`, background: `${p.color}15` }}
                   >
                     <Icon className="h-5 w-5" style={{ color: p.color }} />
                   </div>
                 </div>
 
-                {/* Main title & technical pill */}
+                {/* Subtitle + title */}
                 <div>
-                  <div className="mb-2 font-mono text-[10px] font-semibold tracking-mono text-stone">
+                  <div
+                    className="mb-2 font-mono text-[10px] font-bold tracking-widest uppercase"
+                    style={{ color: p.color }}
+                  >
                     {p.subtitle}
                   </div>
-                  <h3 className="font-subsection text-2xl font-bold leading-snug text-bone">
+                  <h3 className="font-subsection text-xl font-bold leading-snug text-bone md:text-2xl">
                     {p.title}
                   </h3>
-                  <div
-                    className="mt-4 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[10px] font-medium tracking-mono"
-                    style={{ borderColor: `${p.color}55`, color: p.color, background: `${p.color}08` }}
-                  >
-                    <span>{p.proof}</span>
-                  </div>
                 </div>
 
-                {/* Narrative body */}
-                <div className="border-t border-border/60 pt-4 md:border-l md:border-t-0 md:pl-8 md:pt-0">
-                  <p className="text-sm font-light leading-relaxed text-stone">
+                {/* Body + proof badge */}
+                <div>
+                  <p className="font-body-serif text-sm leading-relaxed text-stone">
                     {p.body}
                   </p>
+                  <div
+                    className="mt-4 inline-flex items-center rounded-full border px-3 py-1 font-mono text-[10px] font-semibold tracking-mono"
+                    style={{
+                      borderColor: `${p.color}50`,
+                      background: `${p.color}08`,
+                      color: p.color,
+                    }}
+                  >
+                    {p.proof}
+                  </div>
                 </div>
               </div>
             </motion.div>

@@ -1,44 +1,44 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { CloudOff, Hand, DollarSign, ShieldAlert } from "lucide-react";
+import { CloudOff, Zap, DollarSign, ShieldAlert } from "lucide-react";
 
 /**
- * ProblemSection — the 4 pain points LogStay solves.
- * Plain language, no technical jargon.
+ * ProblemSection — The 4 costly headaches LogStay solves for property owners.
+ * Direct, relatable sales messaging that demonstrates immediate ROI.
  */
 const PROBLEMS = [
   {
     icon: CloudOff,
-    title: "The internet goes down. Your desk freezes.",
-    body: "Most hotel software stops working the moment the wifi drops. Check-in queues back up. Double-bookings spike. You scribble bookings on paper napkins and hope for the best.",
-    stat: "0%",
-    statLabel: "of cloud-only tools work offline",
+    title: "The Wi-Fi drops. Your entire reception paralyzes.",
+    body: "Standard cloud systems lock up the moment a storm hits or your local provider glitches. Queues spill out the front door, tired guests get furious, and accidental double-bookings destroy your reviews. LogStay keeps running at full speed with zero internet.",
+    stat: "100%",
+    statLabel: "operational reliability in offline mode",
     color: "#C2683D",
   },
   {
-    icon: Hand,
-    title: "Typing in passport details by hand.",
-    body: "A foreign guest arrives. Your clerk types 12 to 18 fields by hand — name, passport number, nationality, dates. A 10-person backpacker group means a 45-minute reception gridlock.",
-    stat: "45 min",
-    statLabel: "to check in a group of 10",
+    icon: Zap,
+    title: "Manual passport typing creates 45-minute check-in jams.",
+    body: "Typing guest names, passport numbers, birth dates, and nationalities into 18 tiny fields by hand causes constant typos and painful delays. When a minibus of 10 backpackers arrives, your desk is frozen for nearly an hour. LogStay captures everything in 120ms.",
+    stat: "3 sec",
+    statLabel: "check-in vs 4+ minutes by hand",
     color: "#E89968",
   },
   {
     icon: DollarSign,
-    title: "Cash goes missing between shifts.",
-    body: "Cash is 35–65% of hostel transactions. When shift handovers aren't tracked, uncounted extensions and drawer skimming quietly cost you 4–9% of revenue every year.",
-    stat: "4–9%",
-    statLabel: "of revenue leaked annually",
+    title: "Cash leaks and unrecorded extensions drain your profit.",
+    body: "Cash accounts for 40–65% of revenue in budget hospitality. Without mandatory shift reconciliation, untracked cash extensions and drawer skimming silently bleed 5–9% of gross revenue every year. LogStay's dual-key verification catches every cent.",
+    stat: "5–9%",
+    statLabel: "average annual revenue recovered",
     color: "#B89A6E",
   },
   {
     icon: ShieldAlert,
-    title: "Guest passports sitting in staff phones.",
-    body: "Receptionists photograph foreign passports on their personal phones. When a device is lost or audited, you face ruinous fines under privacy laws — and no way to prove the photos were deleted.",
-    stat: "∞",
-    statLabel: "liability if photos aren't purged",
-    color: "#8A7E6C",
+    title: "Passport photos on personal staff phones are a legal liability.",
+    body: "Having receptionists snap passport photos on their personal WhatsApp exposes your property to massive statutory fines under data protection laws. LogStay scans directly on-device and automatically shreds expired photos every night at 2:00 AM.",
+    stat: "100%",
+    statLabel: "audit-clean compliance guarantee",
+    color: "#5B8C67",
   },
 ];
 
@@ -50,15 +50,14 @@ export function ProblemSection() {
           The reality of running a property
         </div>
         <h2 className="font-headline text-4xl leading-tight text-bone md:text-5xl">
-          You already know these problems.
+          You already know these headaches.
           <br />
-          <span className="italic text-ember-readable">You just didn't think software could fix them.</span>
+          <span className="italic text-ember-readable">Now you have the software that ends them.</span>
         </h2>
         <p className="mt-4 font-body-serif text-base text-stone">
-          Most hospitality software was built between 1995 and 2012 for big
-          hotels with stable internet. It doesn't fit a surf camp on a
-          Thai island, a guesthouse in the Himalayas, or a boutique resort
-          where the monsoon takes the fiber cable down for three days.
+          Legacy hotel software was designed in the 2000s for big chain hotels with stable gigabit fiber.
+          It was never built for guesthouses, surf camps, or vibrant hostels where staff rotate seasonally
+          and monsoons knock out internet cables for days.
         </p>
       </div>
 

@@ -1,17 +1,13 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowDown, ScanLine } from "lucide-react";
+import { ArrowDown, ScanLine, Sparkles, CheckCircle2 } from "lucide-react";
 import { MagneticButton } from "@/components/magnetic-button";
 
 /**
  * Hero — LogStay's first viewport.
- *
- * Premium dark hero with:
- * - Multi-layered background: aurora + perspective grid floor + ember particles
- * - Fraunces display headline with gradient ember accent
- * - Magnetic CTAs
- * - Offline-native messaging
+ * High-converting product showcase hero highlighting 3-second passport check-in,
+ * 100% offline reliability, and zero cloud extortion fees.
  */
 export function Hero() {
   const line1 = ["Your front desk,"];
@@ -27,14 +23,6 @@ export function Hero() {
         <div className="absolute inset-0 bg-gradient-to-b from-slate-50/60 via-white to-white dark:hidden" />
         {/* Perspective grid floor */}
         <div className="absolute inset-x-0 bottom-0 h-[60vh] grid-floor opacity-30 dark:opacity-60" />
-        {/* Top vignette to deepen the sky in dark mode */}
-        <div
-          className="absolute inset-x-0 top-0 h-[40vh] hidden dark:block"
-          style={{
-            background:
-              "linear-gradient(to bottom, rgba(14,12,10,0.9), transparent)",
-          }}
-        />
         {/* Bottom fade into page bg */}
         <div
           className="absolute inset-x-0 bottom-0 h-[30vh]"
@@ -49,7 +37,20 @@ export function Hero() {
 
       {/* Content */}
       <div className="relative z-10 flex flex-col items-center">
-        {/* Hero headline — two lines */}
+        {/* Branded pill with new combined logo */}
+        <motion.div
+          initial={{ opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="mb-8 flex items-center gap-2.5 rounded-full border border-border/90 bg-card/90 px-4 py-1.5 shadow-sm backdrop-blur-md"
+        >
+          <img src="/LogStay/logo.svg" alt="LogStay Logo" className="h-5 w-5 rounded-md shadow-sm" />
+          <span className="font-mono text-xs font-semibold tracking-mono text-foreground">LogStay</span>
+          <span className="h-1 w-1 rounded-full bg-border" />
+          <span className="font-mono text-xs text-stone">The Hospitality OS</span>
+        </motion.div>
+
+        {/* Hero headline */}
         <h1 className="font-display max-w-5xl text-5xl leading-[0.95] tracking-tight text-bone sm:text-7xl md:text-8xl">
           {line1.map((word, i) => (
             <motion.span
@@ -59,7 +60,7 @@ export function Hero() {
               transition={{
                 duration: 0.64,
                 ease: [0.16, 1, 0.3, 1],
-                delay: 0.2 + i * 0.08,
+                delay: 0.15 + i * 0.08,
               }}
               className="block"
             >
@@ -75,7 +76,7 @@ export function Hero() {
                 transition={{
                   duration: 0.64,
                   ease: [0.16, 1, 0.3, 1],
-                  delay: 0.4 + i * 0.1,
+                  delay: 0.3 + i * 0.1,
                 }}
                 className="mr-[0.25em] inline-block"
               >
@@ -89,77 +90,78 @@ export function Hero() {
           </span>
         </h1>
 
-        {/* Subtitle */}
+        {/* High-impact sales subhead */}
         <motion.p
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: 0.7 }}
-          className="mt-8 max-w-xl font-body-serif text-lg text-bone-muted md:text-xl"
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: 0.55 }}
+          className="mt-8 max-w-2xl font-body-serif text-lg leading-relaxed text-bone-muted md:text-xl"
         >
-          LogStay is the operating system for hostels, guesthouses, and
-          boutique hotels. Check in guests with a passport scan, track every
-          room in real time, and never lose a night's revenue to a
-          dropped internet connection again.
+          Check in guests in 3 seconds, eliminate front desk cash leaks, and run your entire property
+          100% offline. Built for hostels, guesthouses, and boutique hotels that refuse to lose bookings to dropped Wi-Fi.
         </motion.p>
 
         {/* CTA row */}
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: 0.9 }}
-          className="mt-12 flex flex-col items-center gap-4 sm:flex-row"
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: 0.75 }}
+          className="mt-10 flex flex-col items-center gap-4 sm:flex-row"
         >
           <MagneticButton
             as="a"
             href="#how-it-works"
-            className="group inline-flex items-center gap-2 rounded-full border border-ember bg-ember px-6 py-3 font-mono text-xs tracking-mono text-background transition-colors hover:bg-ember-bright"
+            className="group inline-flex items-center gap-2 rounded-full border border-ember bg-ember px-7 py-3.5 font-mono text-xs font-semibold tracking-mono text-white transition-all hover:bg-ember-bright hover:shadow-[0_0_20px_rgba(194,104,61,0.4)]"
           >
-            <ScanLine className="h-3.5 w-3.5" />
-            See how it works
+            <ScanLine className="h-4 w-4" />
+            See the 3-Second Check-In
           </MagneticButton>
           <MagneticButton
             as="a"
             href="#rooms"
-            className="inline-flex items-center gap-2 rounded-full border border-border bg-card/60 px-6 py-3 font-mono text-xs tracking-mono text-bone-muted backdrop-blur transition-colors hover:border-ember/50 hover:text-bone"
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-7 py-3.5 font-mono text-xs font-semibold tracking-mono text-foreground backdrop-blur shadow-sm transition-all hover:border-ember/60 hover:text-foreground"
             strength={0.25}
           >
-            Try the live demo
+            Explore Live Room Grid
           </MagneticButton>
         </motion.div>
 
-        {/* Trust line */}
+        {/* Value proof points */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.6, delay: 1.2 }}
-          className="mt-10 flex items-center gap-6 font-mono text-[10px] tracking-mono text-stone"
+          transition={{ duration: 0.6, delay: 0.95 }}
+          className="mt-10 flex flex-wrap items-center justify-center gap-6 font-mono text-xs text-stone"
         >
-          <span>3-second check-in</span>
+          <span className="flex items-center gap-1.5">
+            <CheckCircle2 className="h-3.5 w-3.5 text-ember" />
+            <span>3-Second Passport Scan</span>
+          </span>
           <span className="text-border">·</span>
-          <span>0ms response time</span>
+          <span className="flex items-center gap-1.5">
+            <CheckCircle2 className="h-3.5 w-3.5 text-ember" />
+            <span>100% Works Offline</span>
+          </span>
           <span className="text-border">·</span>
-          <span>Set up in 10 minutes</span>
+          <span className="flex items-center gap-1.5">
+            <CheckCircle2 className="h-3.5 w-3.5 text-ember" />
+            <span>Zero Per-Bed Monthly Fees</span>
+          </span>
         </motion.div>
       </div>
 
-      {/* Scroll cue */}
-      <motion.div
+      {/* Scroll indicator */}
+      <motion.a
+        href="#problem"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: 0.6, delay: 1.4 }}
-        className="absolute bottom-8 left-1/2 z-10 -translate-x-1/2"
+        transition={{ duration: 0.5, delay: 1.2 }}
+        className="absolute bottom-8 inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-mono text-stone hover:text-ember transition-colors"
+        aria-label="Scroll down"
       >
-        <motion.div
-          animate={{ y: [0, 6, 0] }}
-          transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }}
-          className="flex flex-col items-center gap-2"
-        >
-          <span className="font-mono text-[10px] tracking-mono text-stone">
-            SCROLL
-          </span>
-          <ArrowDown className="h-3 w-3 text-stone" />
-        </motion.div>
-      </motion.div>
+        <span>Explore the platform</span>
+        <ArrowDown className="h-3 w-3 animate-bounce" />
+      </motion.a>
     </section>
   );
 }

@@ -49,7 +49,7 @@ export const metadata: Metadata = {
       { url: "/LogStay/favicon.png", type: "image/png" },
     ],
     shortcut: "/LogStay/favicon.png",
-    apple: "/LogStay/icon.png",
+    apple: "/LogStay/apple-touch-icon.png",
   },
   openGraph: {
     title: "LogStay — Your front desk, always open.",

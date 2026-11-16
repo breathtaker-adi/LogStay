@@ -46,10 +46,10 @@ export default function Home() {
         {/* Stat strip — count-up reveal with LogStay's key numbers */}
         <StatStrip
           stats={[
-            { label: "To scan a passport", value: 3, suffix: " sec", color: "var(--ember-text)" },
-            { label: "App response time", value: 0, suffix: " ms", color: "var(--ember-text)" },
-            { label: "Cost per passport scan", value: 0, prefix: "₹ ", color: "var(--ember-text)" },
-            { label: "To set up the property", value: 10, suffix: " min", color: "var(--ember-text)" },
+            { label: "Front desk check-in speed", value: 3, suffix: " sec", color: "var(--ember-text)" },
+            { label: "Instant tap response time", value: 0, suffix: " ms", color: "var(--ember-text)" },
+            { label: "Third-party scan fees", value: 0, prefix: "₹ ", color: "var(--ember-text)" },
+            { label: "To set up your property", value: 8, suffix: " min", color: "var(--ember-text)" },
           ]}
         />
 
