@@ -112,6 +112,9 @@ describe('Performance & Scale Guards (Section 4.38)', () => {
       });
     }
 
+    // Warm-up pass to trigger JIT optimization and collator caching
+    groupByFloor(rooms.slice(0, 50) as any);
+
     const start = performance.now();
     const groups = groupByFloor(rooms as any);
     const duration = performance.now() - start;

@@ -42,6 +42,8 @@ export interface FloorGroup<T> {
   data: T[];
 }
 
+const naturalLabelCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
 export function groupByFloor<T extends { floor_no?: number | null; floor?: string | null; label: string }>(
   rooms: T[]
 ): FloorGroup<T>[] {
@@ -59,8 +61,6 @@ export function groupByFloor<T extends { floor_no?: number | null; floor?: strin
       floor: k,
       title: floorLabel(k),
       chipLabel: floorChipLabel(k),
-      data: map.get(k)!.sort((x, y) =>
-        x.label.localeCompare(y.label, undefined, { numeric: true })
-      )
+      data: map.get(k)!.sort((x, y) => naturalLabelCollator.compare(x.label, y.label))
     }));
 }

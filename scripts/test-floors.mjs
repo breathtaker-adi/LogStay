@@ -37,6 +37,8 @@ function resolveFloorNo(item) {
   return parseFloorString(item.floor);
 }
 
+const naturalLabelCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
 function groupByFloor(rooms) {
   const map = new Map();
   for (const r of rooms) {
@@ -51,9 +53,7 @@ function groupByFloor(rooms) {
       floor: k,
       title: floorLabel(k),
       chipLabel: floorChipLabel(k),
-      data: map.get(k).sort((x, y) =>
-        x.label.localeCompare(y.label, undefined, { numeric: true })
-      )
+      data: map.get(k).sort((x, y) => naturalLabelCollator.compare(x.label, y.label))
     }));
 }
 

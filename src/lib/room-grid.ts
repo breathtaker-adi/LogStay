@@ -127,6 +127,8 @@ export function compactRoomTileLabel(label: string): string {
  * Groups property rooms and bed units into descending architectural floor sections
  * (highest floor at top down to Ground / Basement, unassigned last).
  */
+const naturalLabelCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
 export function buildFloorMapSections(
   rooms: GridRoomRecord[],
   units: GridUnitRecord[],
@@ -212,9 +214,7 @@ export function buildFloorMapSections(
   const sections: FloorGridSection[] = sortedFloorKeys.map((floorNo) => {
     const entries = byFloor
       .get(floorNo)!
-      .sort((x, y) =>
-        x.tile.rawLabel.localeCompare(y.tile.rawLabel, undefined, { numeric: true })
-      );
+      .sort((x, y) => naturalLabelCollator.compare(x.tile.rawLabel, y.tile.rawLabel));
     const totalCount = entries.length;
     return {
       key: floorNo === null ? 'floor_none' : `floor_${floorNo}`,
