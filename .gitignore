@@ -66,6 +66,7 @@ graphify-out/
 **/.hyperframes/
 brag-output/
 *.mp4
+!assets/media/*.mp4
 *.webm
 *.mov
 *.poster.*
