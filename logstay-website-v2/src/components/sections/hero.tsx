@@ -15,14 +15,20 @@ export function Hero() {
 
   return (
     <section className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 py-24 text-center md:px-12">
-      {/* Layered background */}
+      {/* Layered background — exact original from zip */}
       <div aria-hidden className="pointer-events-none absolute inset-0 z-0">
-        {/* Base aurora gradients in dark mode */}
-        <div className="absolute inset-0 aurora-bg hidden dark:block" />
-        {/* Subtle light mesh in light mode */}
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-50/60 via-white to-white dark:hidden" />
+        {/* Base aurora gradients */}
+        <div className="absolute inset-0 aurora-bg" />
         {/* Perspective grid floor */}
-        <div className="absolute inset-x-0 bottom-0 h-[60vh] grid-floor opacity-30 dark:opacity-60" />
+        <div className="absolute inset-x-0 bottom-0 h-[60vh] grid-floor opacity-60" />
+        {/* Top vignette to deepen the sky */}
+        <div
+          className="absolute inset-x-0 top-0 h-[40vh]"
+          style={{
+            background:
+              "linear-gradient(to bottom, rgba(14,12,10,0.9), transparent)",
+          }}
+        />
         {/* Bottom fade into page bg */}
         <div
           className="absolute inset-x-0 bottom-0 h-[30vh]"
@@ -32,24 +38,11 @@ export function Hero() {
           }}
         />
         {/* Film grain */}
-        <div className="absolute inset-0 grain hidden dark:block" />
+        <div className="absolute inset-0 grain" />
       </div>
 
       {/* Content */}
       <div className="relative z-10 flex flex-col items-center">
-        {/* Branded pill with new combined logo */}
-        <motion.div
-          initial={{ opacity: 0, y: -12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mb-8 flex items-center gap-2.5 rounded-full border border-border/90 bg-card/90 px-4 py-1.5 shadow-sm backdrop-blur-md"
-        >
-          <img src="/LogStay/logo.svg" alt="LogStay Logo" className="h-5 w-5 rounded-md shadow-sm" />
-          <span className="font-mono text-xs font-semibold tracking-mono text-foreground">LogStay</span>
-          <span className="h-1 w-1 rounded-full bg-border" />
-          <span className="font-mono text-xs text-stone">The Hospitality OS</span>
-        </motion.div>
-
         {/* Hero headline */}
         <h1 className="font-display max-w-5xl text-5xl leading-[0.95] tracking-tight text-bone sm:text-7xl md:text-8xl">
           {line1.map((word, i) => (

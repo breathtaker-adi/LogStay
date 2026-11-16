@@ -55,14 +55,11 @@ export function EmberParticles({ count = 30 }: { count?: number }) {
     const onVisibility = () => { isHidden = document.hidden; };
     document.addEventListener("visibilitychange", onVisibility);
 
-    const isLight = () => !document.documentElement.classList.contains("dark");
-
     const render = (now: number) => {
       rafRef.current = requestAnimationFrame(render);
       if (isHidden) return;
 
       ctx.clearRect(0, 0, W(), H());
-      const light = isLight();
 
       particles.forEach((p) => {
         p.y -= p.vy;
@@ -78,37 +75,21 @@ export function EmberParticles({ count = 30 }: { count?: number }) {
         const flicker = 0.6 + Math.sin(now * 0.003 + p.flicker) * 0.4;
         const alpha = p.alpha * flicker;
 
-        // Glow gradient adapted for light & dark themes
+        // Glow
         const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 6);
-        if (light) {
-          grad.addColorStop(0, `rgba(217, 95, 41, ${alpha * 0.75})`);
-          grad.addColorStop(0.5, `rgba(194, 104, 61, ${alpha * 0.35})`);
-          grad.addColorStop(1, "rgba(194, 104, 61, 0)");
-          ctx.fillStyle = grad;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.r * 6, 0, Math.PI * 2);
-          ctx.fill();
+        grad.addColorStop(0, `rgba(240, 168, 120, ${alpha})`);
+        grad.addColorStop(0.4, `rgba(194, 104, 61, ${alpha * 0.4})`);
+        grad.addColorStop(1, "rgba(194, 104, 61, 0)");
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * 6, 0, Math.PI * 2);
+        ctx.fill();
 
-          // Core
-          ctx.fillStyle = `rgba(180, 80, 30, ${alpha * 0.9})`;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.r * 1.1, 0, Math.PI * 2);
-          ctx.fill();
-        } else {
-          grad.addColorStop(0, `rgba(240, 168, 120, ${alpha})`);
-          grad.addColorStop(0.4, `rgba(194, 104, 61, ${alpha * 0.4})`);
-          grad.addColorStop(1, "rgba(194, 104, 61, 0)");
-          ctx.fillStyle = grad;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.r * 6, 0, Math.PI * 2);
-          ctx.fill();
-
-          // Core
-          ctx.fillStyle = `rgba(255, 220, 180, ${alpha})`;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        // Core
+        ctx.fillStyle = `rgba(255, 220, 180, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
       });
     };
     rafRef.current = requestAnimationFrame(render);

@@ -45,11 +45,12 @@ export const metadata: Metadata = {
   authors: [{ name: "LogStay Technologies" }],
   icons: {
     icon: [
-      { url: "/LogStay/logo.svg", type: "image/svg+xml" },
-      { url: "/LogStay/favicon.png", type: "image/png" },
+      { url: "/LogStay/favicon.ico?v=4" },
+      { url: "/LogStay/favicon.png?v=4", type: "image/png" },
+      { url: "/LogStay/favicon.svg?v=4", type: "image/svg+xml" },
     ],
-    shortcut: "/LogStay/favicon.png",
-    apple: "/LogStay/apple-touch-icon.png",
+    shortcut: "/LogStay/favicon.ico?v=4",
+    apple: "/LogStay/apple-touch-icon.png?v=4",
   },
   openGraph: {
     title: "LogStay — Your front desk, always open.",
@@ -72,13 +73,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="light" suppressHydrationWarning>
+    <html lang="en" className="dark" suppressHydrationWarning>
       <body
         className={`${fraunces.variable} ${inter.variable} ${jetbrainsMono.variable} antialiased bg-background text-foreground`}
       >
         <ThemeProvider
           attribute="class"
-          defaultTheme="light"
+          defaultTheme="dark"
           enableSystem={false}
           disableTransitionOnChange
         >
