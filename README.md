@@ -4,7 +4,7 @@
   </a>
 </p>
 
-<h1 align="center">LogStay Mobile 🏨</h1>
+<h1 align="center">LogStay Mobile </h1>
 
 <p align="center">
   <b>The High-Reliability, Offline-First Hospitality OS for Independent Hotels, Hostels & Boutiques</b>
