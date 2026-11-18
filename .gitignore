@@ -11,8 +11,11 @@ expo-env.d.ts
 
 # Next.js Web Build
 .next/
+**/.next/
+logstay-website-v2/.next/
 logstay-website-v2/out/
 logstay-website-v2/.env
+logstay-website-v2/.env*.local
 
 # Native
 .kotlin/
